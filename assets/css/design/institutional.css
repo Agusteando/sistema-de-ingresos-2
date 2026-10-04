@@ -79,3 +79,22 @@ body.students-route-active .new-student-button:hover:not(:disabled),
   background: var(--action-primary-hover);
   border-color: var(--action-primary-hover);
 }
+
+/* The two principal student actions share every color and surface state. */
+.students-screen .new-student-button.btn.btn-primary,
+.student-details-shell .profile-action-button.profile-action-button--document-primary {
+  background: var(--action-primary);
+  background-image: none;
+  border-color: var(--action-primary);
+  color: #fff;
+  box-shadow: none;
+  filter: none;
+}
+.students-screen .new-student-button.btn.btn-primary:hover:not(:disabled),
+.student-details-shell .profile-action-button.profile-action-button--document-primary:hover:not(:disabled) {
+  background: var(--action-primary-hover);
+  background-image: none;
+  border-color: var(--action-primary-hover);
+  box-shadow: none;
+  filter: none;
+}

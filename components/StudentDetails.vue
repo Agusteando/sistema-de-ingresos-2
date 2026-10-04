@@ -129,14 +129,7 @@
                 </h2>
                 <p>
                   <span class="student-code">{{ student.matricula }}</span>
-                  <span
-                    v-if="student.hasForeignPlantelConcept"
-                    class="student-plantel-warning"
-                    :title="foreignConceptTitle(student)"
-                    aria-label="Concepto de otro plantel"
-                  >
-                    <LucideFlag :size="11" :stroke-width="2.5" />
-                  </span>
+
                   <i></i>
                   {{ resolvedNivelLabel }} · {{ gradeVisualTitle(student) }} ·
                   {{ studentGroupInlineLabel(student) }}
@@ -1032,7 +1025,7 @@
 </template>
 
 <script setup>
-import { loadStudentPhoto } from "~/utils/studentPhotos";
+import { loadStudentPhoto, readStudentPhoto } from "~/utils/studentPhotos";
 import {
   ref,
   computed,
@@ -1069,7 +1062,6 @@ import {
   LucideBadgeDollarSign,
   LucideReceiptText,
   LucideDownload,
-  LucideFlag,
 } from "lucide-vue-next";
 import { useState, useCookie } from "#app";
 import { useToast } from "~/composables/useToast";
@@ -1790,11 +1782,7 @@ const selectedCicloLabel = computed(() =>
 );
 const resolvedNivelLabel = computed(() => studentNivelLabel(props.student));
 const studentMissingGroup = (student) => !studentGroupLabel(student);
-const foreignConceptTitle = (student) => {
-  const rows = Array.isArray(student?.foreignPlantelConcepts) ? student.foreignPlantelConcepts : []
-  if (!rows.length) return 'Concepto de otro plantel'
-  return rows.slice(0, 4).map((row) => `${row.nombre || `Concepto ${row.conceptoId || ''}`} · ${row.plantelLabel || row.plantel || ''}`.trim()).join('\n')
-}
+
 const studentGroupInlineLabel = (student) => {
   const group = studentGroupLabel(student);
   return group ? group : "Sin grupo";
@@ -2240,20 +2228,37 @@ const clearSiblingLinks = async () => {
   }
 };
 
-const loadPhoto = async () => {
+let photoRetryTimer = null;
+let photoLoadVersion = 0;
+let photoDisposed = false;
+const loadPhoto = async (attempt = 0, version = ++photoLoadVersion) => {
   const matricula = normalizePhotoMatricula(props.student?.matricula);
-  if (!matricula || !process.client) return;
+  if (!matricula || !process.client || photoDisposed) return;
+  if (attempt === 0) {
+    clearTimeout(photoRetryTimer);
+    photoRetryTimer = null;
+    photoUrl.value = readStudentPhoto(matricula) || props.student?.photoUrl || null;
+  }
+  const isCurrent = () => !photoDisposed && version === photoLoadVersion && normalizePhotoMatricula(props.student?.matricula) === matricula;
   photoLoading.value = true;
-  photoUrl.value = null;
   try {
-    const photo = await loadStudentPhoto(matricula);
-    if (normalizePhotoMatricula(props.student?.matricula) !== matricula) return;
-    photoUrl.value = photo;
-    if (photo) emit("photo-loaded", { matricula, photoUrl: photo });
-  } catch {
-    if (normalizePhotoMatricula(props.student?.matricula) === matricula) photoUrl.value = null;
+    const photo = await loadStudentPhoto(matricula, { refreshMissing: attempt === 0 });
+    if (!isCurrent()) return;
+    if (photo) {
+      photoUrl.value = photo;
+      emit("photo-loaded", { matricula, photoUrl: photo });
+    }
+  } catch (error) {
+    if (isCurrent() && attempt < 3) {
+      photoRetryTimer = setTimeout(() => {
+        photoRetryTimer = null;
+        if (isCurrent()) loadPhoto(attempt + 1, version);
+      }, [4000, 12000, 30000][attempt]);
+    } else if (isCurrent()) {
+      console.warn("[StudentPhoto] Detail lookup did not recover", { matricula, status: error?.statusCode || error?.response?.status || 0 });
+    }
   } finally {
-    if (normalizePhotoMatricula(props.student?.matricula) === matricula) photoLoading.value = false;
+    if (isCurrent()) photoLoading.value = false;
   }
 };
 
@@ -2292,6 +2297,9 @@ watch(
 );
 
 onBeforeUnmount(() => {
+  photoDisposed = true;
+  photoLoadVersion++;
+  clearTimeout(photoRetryTimer);
   if (typeof window !== "undefined") {
     window.removeEventListener("resize", scheduleExpandedShellBoundsUpdate);
     window.visualViewport?.removeEventListener?.(

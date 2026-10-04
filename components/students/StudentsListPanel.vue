@@ -146,14 +146,7 @@
                   <em class="student-matricula-chip">
                     <span>{{ student.matricula }}</span>
                   </em>
-                  <span
-                    v-if="student.hasForeignPlantelConcept"
-                    class="student-plantel-warning"
-                    :title="foreignConceptTitle(student)"
-                    aria-label="Concepto de otro plantel"
-                  >
-                    <LucideFlag :size="11" :stroke-width="2.5" />
-                  </span>
+
                   <span class="student-type-line">
                     <span :class="['student-tipo-chip', resolvedTipoIngreso(student).value]" :title="resolvedTipoIngreso(student).reason">
                       <component :is="tipoIngresoIcon(student)" :size="11" :stroke-width="2.4" />
@@ -196,7 +189,7 @@
 <script setup>
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { loadStudentPhoto, readStudentPhoto } from '~/utils/studentPhotos'
-import { LucideBuilding2, LucideChevronRight, LucideExternalLink, LucideFlag, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
+import { LucideBuilding2, LucideChevronRight, LucideExternalLink, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
 import StudentGradePhotoCard from '~/components/students/StudentGradePhotoCard.vue'
@@ -293,11 +286,7 @@ const studentGroupTitle = (student) => {
   return group ? `Grupo ${group}` : 'Sin grupo'
 }
 
-const foreignConceptTitle = (student) => {
-  const rows = Array.isArray(student?.foreignPlantelConcepts) ? student.foreignPlantelConcepts : []
-  if (!rows.length) return 'Concepto de otro plantel'
-  return rows.slice(0, 4).map((row) => `${row.nombre || `Concepto ${row.conceptoId || ''}`} · ${row.plantelLabel || row.plantel || ''}`.trim()).join('\n')
-}
+
 
 const rowPhotos = ref({})
 const listScroll = ref(null)

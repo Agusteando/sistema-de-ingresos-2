@@ -211,6 +211,10 @@ const accountDebtsByMatricula = {
   ]
 }
 
+// Exercise flag removal with a student that still retains the underlying foreign-plantel metadata.
+students.value[0].hasForeignPlantelConcept = true
+students.value[0].foreignPlantelConcepts = [{ nombre: 'Concepto de prueba', plantelLabel: 'SM' }]
+
 const selectedStudent = ref(route.query.summary === '1' ? null : students.value[0])
 const activeSummaryGrade = ref('')
 const activeSummaryGroup = ref('')

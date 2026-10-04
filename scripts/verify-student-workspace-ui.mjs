@@ -28,7 +28,7 @@ try {
    headers:{'access-control-allow-origin':'*','access-control-allow-methods':'GET,POST,OPTIONS'},
    body:route.request().url().includes('/image/') ? decodeURIComponent(photoFixture.split(',')[1]) : JSON.stringify({ok:true,imageKey:'visual-fixture',maskAvailable:false})
  }));
- let activePhotos=0,maxActivePhotos=0, transientPhotoAttempts=0;
+ let activePhotos=0,maxActivePhotos=0, transientPhotoAttempts=0,selectedPhotoAttempts=0,emptyPhotoAttempts=0;
  const requests=[];
  await p.route('http://127.0.0.1:3004/api/**',async route=>{const u=new URL(route.request().url());requests.push(u.pathname);let body={};let status=200;
  if(u.pathname==='/api/control-escolar/options')body={activePlantel:'PT',planteles:[{id:'PT',nombre:'Primaria Toluca'}],access:{controlEscolar:true,financial:true,superAdmin:true}};
@@ -44,7 +44,9 @@ try {
      await new Promise(resolve=>setTimeout(resolve,150));
      activePhotos--;
    }
-   if(u.pathname.includes('/PTO161/') && (!measure || ++transientPhotoAttempts===1)) { status=503;body={message:'Synthetic transient photo failure'}; }
+   if(measure && u.pathname.includes('/PTO574/') && ++selectedPhotoAttempts===1) { status=503;body={message:'Synthetic selected portrait failure'}; }
+   else if(measure && u.pathname.includes('/PTO696/') && ++emptyPhotoAttempts===1) { body={}; }
+   else if(u.pathname.includes('/PTO161/') && (!measure || ++transientPhotoAttempts===1)) { status=503;body={message:'Synthetic transient photo failure'}; }
    else if(u.pathname.includes('/PTO799/')) { status=404;body={message:'Synthetic missing photo'}; }
    else body={photoUrl: photoFixture};
  }
@@ -101,6 +103,14 @@ try {
  const fills=await p.evaluate(()=>[document.querySelector('.new-student-button'),document.querySelector('.profile-action-button--document-primary')].map(e=>({background:getComputedStyle(e).backgroundColor,image:getComputedStyle(e).backgroundImage})));
  if(fills[0].background!==fills[1].background||fills.some(x=>x.image!=='none'))throw Error(`Inconsistent filled CTA colors: ${JSON.stringify(fills)}`);
  console.log('CTA FILLS',fills);
+ const primaryButtons=[p.locator('.new-student-button'),p.locator('.profile-action-button--document-primary')];
+ const hoverFills=[];
+ for(const button of primaryButtons){await button.hover();await p.waitForTimeout(250);hoverFills.push(await button.evaluate(e=>({background:getComputedStyle(e).backgroundColor,shadow:getComputedStyle(e).boxShadow,image:getComputedStyle(e).backgroundImage})));}
+ if(hoverFills[0].background!==hoverFills[1].background||hoverFills.some(x=>x.shadow!=='none'||x.image!=='none'))throw Error(`CTA hover mismatch: ${JSON.stringify(hoverFills)}`);
+ await p.mouse.move(1000,700);
+ if(await p.locator('.student-plantel-warning').count())throw Error('Student name flags were not removed');
+ console.log('CTA HOVER AND NAME FLAGS PASSED',hoverFills);
+
  const logoPalette=await p.locator('.sidebar-system-logo').evaluate(async img=>{
    await img.decode();const canvas=document.createElement('canvas');canvas.width=600;canvas.height=200;
    const ctx=canvas.getContext('2d');ctx.drawImage(img,0,0,600,200);const pixels=ctx.getImageData(0,0,600,200).data;
@@ -113,10 +123,16 @@ try {
  await p.screenshot({path:`${output}/identity-restored.png`,timeout:10000});
  // Fresh session exercises production loading, not seeded photo-cache entries.
  await p.evaluate(()=>sessionStorage.clear());
- transientPhotoAttempts=0;
+ transientPhotoAttempts=0;selectedPhotoAttempts=0;emptyPhotoAttempts=0;
+ await p.evaluate(()=>{sessionStorage.setItem('foto_PTO696','none');sessionStorage.setItem('foto_PTO696_checked',String(Date.now()));});
  const startRequests=requests.length;
  await p.goto('http://127.0.0.1:3004/__visual-lab/students-account?chrome=0&workspace=1&dense=1&photos=uncached',{waitUntil:'domcontentloaded'});
- await p.locator('.student-row[data-matricula="PTO696"] .has-photo').waitFor();
+ await p.locator('.student-account-photo-card.has-photo').waitFor({timeout:20000});
+ await p.locator('.student-row[data-matricula="PTO696"] .has-photo').waitFor({timeout:20000});
+ if(selectedPhotoAttempts!==2||emptyPhotoAttempts!==2)throw Error(`Selected/empty-response photo recovery failed: ${JSON.stringify({selectedPhotoAttempts,emptyPhotoAttempts})}`);
+ const permanent=await p.locator('.student-account-photo-card .vision-face-image').evaluate(e=>({opacity:getComputedStyle(e).opacity,animations:e.getAnimations({subtree:true}).length}));
+ if(permanent.opacity!=='1'||permanent.animations!==0)throw Error('Detail portrait is not permanently visible');
+ console.log('LEGACY CACHE, EMPTY RESPONSE AND SELECTED PHOTO RECOVERY PASSED',permanent);
  await p.locator('.student-row[data-matricula="LAB0000"] .has-photo').waitFor();
  const visibleRequests=requests.slice(startRequests).filter(x=>x.endsWith('/photo'));
  if(!visibleRequests.includes('/api/students/PTO696/photo')||visibleRequests.includes('/api/students/LAB0047/photo'))throw Error(`Visible-row loading gate failed: ${JSON.stringify(visibleRequests)}`);
@@ -130,7 +146,7 @@ try {
  }
  if(phases[0].grade!=='1'||phases[1].photo!=='1'||phases[2].grade!=='1')throw Error(`Grade/photo cycle failed: ${JSON.stringify(phases)}`);
  const photoCache=await p.evaluate(()=>({failed:sessionStorage.getItem('foto_PTO161'),missing:sessionStorage.getItem('foto_PTO799'),missingChecked:sessionStorage.getItem('foto_PTO799_checked')}));
- if(photoCache.failed||photoCache.missing!=='none'||!photoCache.missingChecked||maxActivePhotos<1||maxActivePhotos>3||visibleRequests.filter(x=>x==='/api/students/PTO574/photo').length!==1)throw Error(`Photo cache/concurrency gate failed: ${JSON.stringify({photoCache,maxActivePhotos,visibleRequests})}`);
+ if(photoCache.failed==='none'||photoCache.missing!=='none'||!photoCache.missingChecked||maxActivePhotos<1||maxActivePhotos>3||visibleRequests.filter(x=>x==='/api/students/PTO574/photo').length!==2)throw Error(`Photo cache/concurrency gate failed: ${JSON.stringify({photoCache,maxActivePhotos,visibleRequests})}`);
  console.log('FRESH PHOTO CYCLE',JSON.stringify({visibleRequests,phases,photoCache,maxActivePhotos}));
  await p.locator('.student-row[data-matricula="PTO161"] .has-photo').waitFor({timeout:15000});
  if(transientPhotoAttempts!==2)throw Error(`Visible transient photo retry failed: ${transientPhotoAttempts}`);
