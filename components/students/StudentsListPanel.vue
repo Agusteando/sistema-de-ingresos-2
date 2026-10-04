@@ -42,7 +42,7 @@
         <strong v-if="selectedCount > 0">{{ selectedCount }} {{ selectedCount === 1 ? 'seleccionado' : 'seleccionados' }}</strong>
       </div>
 
-      <div :class="['student-list-scroll', { 'is-source-unavailable': sourceUnavailable }]">
+      <div ref="listScroll" :class="['student-list-scroll', { 'is-source-unavailable': sourceUnavailable }]">
         <div v-if="loading" class="empty-state loading-state">
           <span class="liquid-loader" aria-hidden="true"><i></i><i></i><i></i></span>
           Cargando estudiantes...
@@ -88,6 +88,8 @@
           <div
             v-for="student in displayedStudents"
             :key="student.matricula"
+            :ref="element => observeStudentRow(element, student)"
+            :data-matricula="student.matricula"
             role="button"
             tabindex="0"
             :style="studentPresentationStyle(student)"
@@ -192,7 +194,8 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { loadStudentPhoto, readStudentPhoto } from '~/utils/studentPhotos'
 import { LucideBuilding2, LucideChevronRight, LucideExternalLink, LucideFlag, LucideGlobe2, LucideRotateCcw, LucideTags } from 'lucide-vue-next'
 import { formatTipoIngresoValue, resolveTipoIngreso } from '~/shared/utils/tipoIngreso'
 import UiGroupIcon from '~/components/ui/UiGroupIcon.vue'
@@ -204,7 +207,6 @@ import {
   hiddenStudentSectionsCount,
   isStudentEnrolled,
   normalizeStudentMatricula,
-  photoStorageKey,
   sectionBadgeTitle,
   studentGroupLabel,
   studentPresentationStyle,
@@ -297,15 +299,52 @@ const foreignConceptTitle = (student) => {
   return rows.slice(0, 4).map((row) => `${row.nombre || `Concepto ${row.conceptoId || ''}`} · ${row.plantelLabel || row.plantel || ''}`.trim()).join('\n')
 }
 
+const rowPhotos = ref({})
+const listScroll = ref(null)
+const rows = new Map()
+const attempts = new Map()
+let photoObserver
+let disposed = false
+
+function observeStudentRow(element, student) {
+  const matricula = normalizeStudentMatricula(student?.matricula)
+  const previous = rows.get(matricula)
+  if (previous === element) return
+  if (previous) photoObserver?.unobserve(previous)
+  if (element) {
+    rows.set(matricula, element)
+    photoObserver?.observe(element)
+  } else rows.delete(matricula)
+}
+
+onMounted(() => {
+  photoObserver = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue
+      const matricula = normalizeStudentMatricula(entry.target.dataset.matricula)
+      const student = props.displayedStudents.find(row => normalizeStudentMatricula(row.matricula) === matricula)
+      if (!student || activeStudentPhotoUrl(student)) continue
+      if (Date.now() - (attempts.get(matricula) || 0) < 30000) continue
+      attempts.set(matricula, Date.now())
+      loadStudentPhoto(matricula).then(photo => {
+        if (!disposed) rowPhotos.value[matricula] = photo || 'none'
+      }).catch(() => { /* Keep the grade tile; a later visibility change can retry. */ })
+    }
+  }, { root: listScroll.value, threshold: 0.01 })
+  for (const element of rows.values()) photoObserver.observe(element)
+})
+
+onBeforeUnmount(() => { disposed = true; photoObserver?.disconnect(); rows.clear() })
+
 const activeStudentPhotoUrl = (student) => {
   const matricula = normalizeStudentMatricula(student?.matricula)
   if (!matricula) return ''
   const cached = props.photoCache?.[matricula]
   if (cached && cached !== 'none') return cached
-  if (process.client) {
-    const stored = sessionStorage.getItem(photoStorageKey(matricula))
-    if (stored && stored !== 'none') return stored
-  }
+  const loaded = rowPhotos.value[matricula]
+  if (loaded && loaded !== 'none') return loaded
+  const stored = readStudentPhoto(matricula)
+  if (stored) return stored
   return student?.photoUrl && student.photoUrl !== 'none' ? student.photoUrl : ''
 }
 </script>
@@ -475,7 +514,7 @@ const activeStudentPhotoUrl = (student) => {
 
 .source-retry {
   border: 0;
-  background: linear-gradient(135deg, #2f8f46, #52b343);
+  background: var(--action-primary);
   color: #fff;
   box-shadow: 0 16px 28px rgba(45, 142, 66, 0.2);
 }

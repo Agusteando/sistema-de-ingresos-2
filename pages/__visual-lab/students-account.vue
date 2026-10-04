@@ -289,7 +289,7 @@ const visualInvoicesByMatricula = {
   ],
 }
 const selectedVisualInvoices = computed(() => visualInvoicesByMatricula[selectedStudent.value?.matricula] || [])
-const photoCache = computed(() => labMatriculas.reduce((cache, matricula) => {
+const photoCache = computed(() => route.query.photos === 'uncached' ? {} : labMatriculas.reduce((cache, matricula) => {
   cache[matricula] = ['PTO574', 'PTO696'].includes(matricula) ? visualPhotoUrl : 'none'
   return cache
 }, {}))
@@ -409,7 +409,7 @@ function seedVisualCache() {
         savedAt: new Date().toISOString(),
         debts: accountDebtsByMatricula[matricula] || []
       }))
-      sessionStorage.setItem(`foto_${matricula}`, photoCache.value[matricula] || 'none')
+      if (route.query.photos !== 'uncached') sessionStorage.setItem(`foto_${matricula}`, photoCache.value[matricula] || 'none')
     })
   })
 }

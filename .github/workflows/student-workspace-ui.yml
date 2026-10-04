@@ -6,6 +6,7 @@ on:
       - 'assets/css/**'
       - 'layouts/default.vue'
       - 'components/students/**'
+      - 'utils/studentPhotos.js'
       - 'components/StudentDetails.vue'
       - 'components/ui/UiVisionFaceImage.vue'
       - 'pages/control-escolar.vue'

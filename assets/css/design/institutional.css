@@ -12,39 +12,17 @@
   --brand-preschool: #e83f4b;
   --brand-elementary: #fcbf2c;
   --brand-middle: #66a8d8;
+  --action-primary: #507728;
+  --action-primary-hover: #446622;
   --brand-pattern: url('/brand/institutional-pattern.webp');
 }
 
 /* The shared shell carries the identity; data and financial statuses stay clear. */
 .income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-sheen {
   inset: 0;
-  background: var(--brand-pattern) center top / auto 320px repeat-y;
-  opacity: .2;
+  background: var(--brand-pattern) center top / auto 100% no-repeat;
+  opacity: .09;
   pointer-events: none;
-}
-.income-shell.font-sans .income-sidebar {
-  background: linear-gradient(145deg, #edf3df, #f7faf1 28%, #edf6f6 58%, #bcd6ee);
-  background-size: 250% 250%;
-  animation: aurora-institutional-drift 72s ease-in-out infinite alternate;
-}
-.income-shell.font-sans .sidebar-design-canvas .sidebar-brand {
-  background: linear-gradient(180deg, #ffffffed, #ffffff80);
-  border-bottom: 1px solid #ffffffb3;
-}
-.income-shell.font-sans .sidebar-design-canvas .nav-item.router-link-active {
-  background: #ffffffcf;
-  color: #004f60;
-  box-shadow: inset 3px 0 #007f92;
-}
-.income-shell.font-sans .sidebar-design-canvas .sidebar-footer { background: #ffffff94; }
-.income-shell .app-header {
-  background: linear-gradient(110deg, #f4f8ed, #fff 40%, #f0f7fa);
-  background-size: 240% 100%;
-  animation: aurora-institutional-drift 72s ease-in-out infinite alternate;
-}
-@keyframes aurora-institutional-drift {
-  from { background-position: 0% 20%; }
-  to { background-position: 100% 80%; }
 }
 .income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-rings,
 .income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-arc,
@@ -53,24 +31,25 @@
   border-top: 2px solid transparent;
   border-image: linear-gradient(90deg, var(--brand-iecs), var(--brand-iedis)) 1;
 }
-body.students-route-active .ui-button--primary,
-body.students-route-active .new-student-button,
-.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary {
-  background: linear-gradient(115deg, #547a29, #00692f, #007483, #00497b);
-  background-size: 300% 100%;
-  animation: aurora-institutional-drift 72s ease-in-out infinite alternate;
-  border-color: transparent;
-  color: #fff;
-}
-.student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary:hover { background: #507728; }
-
-@media (prefers-reduced-motion: reduce) {
-  .income-shell.font-sans .income-sidebar, .income-shell .app-header,
-  body.students-route-active .ui-button--primary,
-  body.students-route-active .new-student-button,
-  .student-details-shell:not(.student-details-shell--expanded) .profile-action-button--document-primary { animation: none; background-position: 50% 50%; }
-}
-
 @media (max-width: 760px) {
   .income-shell.font-sans .income-sidebar .sidebar-design-canvas .sidebar-sheen { display: none; }
+}
+
+/* One stable primary fill across shared buttons and bespoke student actions. */
+.btn.btn-primary,
+body.students-route-active .new-student-button,
+.student-details-shell .profile-action-button.profile-action-button--primary,
+.control-escolar-screen .ce-detail-footer-actions .btn-primary,
+.control-escolar-screen .ce-pending-save-button,
+.control-escolar-screen .ce-row-draft-save,
+.control-escolar-screen .ce-group-modal__primary {
+  background: var(--action-primary);
+  border-color: var(--action-primary);
+  color: #fff;
+}
+.btn.btn-primary:hover:not(:disabled),
+body.students-route-active .new-student-button:hover:not(:disabled),
+.student-details-shell .profile-action-button.profile-action-button--primary:hover:not(:disabled) {
+  background: var(--action-primary-hover);
+  border-color: var(--action-primary-hover);
 }

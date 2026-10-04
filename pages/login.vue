@@ -2203,19 +2203,4 @@ onBeforeUnmount(() => {
     margin-left: 0;
   }
 }
-/* The shared identity uses the official geometric pattern, with both campus palettes. */
-.brand-panel {
-  background: linear-gradient(145deg, #eef4df, #f7faf3 35%, #e3f0f5);
-  background-size: 250% 250%;
-  animation: aurora-institutional-drift 72s ease-in-out infinite alternate;
-}
-.brand-panel::before {
-  inset: 0;
-  width: auto;
-  height: auto;
-  background: url('/brand/institutional-pattern.webp') center / cover;
-  opacity: .16;
-}
-.brand-panel::after { display: none; }
-@media (prefers-reduced-motion: reduce) { .brand-panel { animation: none; background-position: 50% 50%; } }
 </style>
