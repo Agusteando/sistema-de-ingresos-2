@@ -456,6 +456,7 @@
                     <span
                       :class="['ce-row-health', recordHealth(student).tone]"
                       :aria-label="recordHealth(student).aria"
+                      :title="recordHealth(student).aria"
                     >
                       <span
                         :class="['ce-quality-score', recordHealth(student).tone]"
@@ -7374,7 +7375,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #10203a;
   font-size: 22px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.035em;
 }
 
@@ -7399,7 +7400,7 @@ onBeforeUnmount(() => {
 .ce-selected-plantel span {
   color: #6b758f;
   font-size: 9.5px;
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: 0.045em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -7408,7 +7409,7 @@ onBeforeUnmount(() => {
 .ce-selected-plantel strong {
   color: #1d912d;
   font-size: 20px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -7566,7 +7567,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #15233c;
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 600;
   box-shadow: 0 5px 12px rgba(21, 35, 60, 0.035);
   cursor: pointer;
 }
@@ -7594,7 +7595,7 @@ onBeforeUnmount(() => {
   gap: 7px;
   border-radius: 11px;
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -7688,7 +7689,7 @@ onBeforeUnmount(() => {
 .ce-chip-label {
   color: #6f7b95;
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.045em;
   text-transform: uppercase;
   white-space: nowrap;
@@ -7713,7 +7714,7 @@ onBeforeUnmount(() => {
   background: rgba(32, 136, 45, 0.12);
   color: #20882d;
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 @media (max-height: 800px) {
@@ -7882,7 +7883,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #26364b;
   font-size: 14px;
-  font-weight: 820;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
 
@@ -7906,7 +7907,7 @@ onBeforeUnmount(() => {
   padding: 0 12px;
   color: #486544;
   font-size: 11.5px;
-  font-weight: 780;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color 140ms ease, background-color 140ms ease;
 }
@@ -7944,7 +7945,7 @@ onBeforeUnmount(() => {
   display: block;
   color: #718096;
   font-size: 0.72rem;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -7953,7 +7954,7 @@ onBeforeUnmount(() => {
   margin: 4px 0 0;
   color: #172033;
   font-size: 1.06rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .ce-diagnostics-body {
@@ -7981,7 +7982,7 @@ onBeforeUnmount(() => {
 .ce-diagnostics-section-card__head small {
   color: #5b6f8f;
   font-size: 0.7rem;
-  font-weight: 820;
+  font-weight: 600;
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -7991,7 +7992,7 @@ onBeforeUnmount(() => {
   margin: 4px 0 0;
   color: #172033;
   font-size: 1rem;
-  font-weight: 880;
+  font-weight: 600;
 }
 
 .ce-diagnostics-hero-card p {
@@ -8013,7 +8014,7 @@ onBeforeUnmount(() => {
 .ce-diagnostics-query-pill span {
   color: #264061;
   font-size: 0.92rem;
-  font-weight: 820;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -8067,7 +8068,7 @@ onBeforeUnmount(() => {
 .ce-diagnostics-facts-grid dd {
   color: #25324a;
   font-size: 0.84rem;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .ce-diagnostics-section-card {
@@ -8098,7 +8099,7 @@ onBeforeUnmount(() => {
   background: rgba(236, 244, 255, 0.95);
   color: #2b5faa;
   font-size: 0.74rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .ce-diagnostics-tree {
@@ -8110,7 +8111,7 @@ onBeforeUnmount(() => {
   justify-self: center;
   color: #7f93ad;
   font-size: 1.35rem;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .ce-diagnostics-node {
@@ -8143,7 +8144,7 @@ onBeforeUnmount(() => {
   padding: 0 10px;
   border-radius: 999px;
   font-size: 0.72rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .ce-diagnostics-node__lane {
@@ -8188,7 +8189,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #172033;
   font-size: 0.94rem;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .ce-diagnostics-node__body header p,
@@ -8224,7 +8225,7 @@ onBeforeUnmount(() => {
 .ce-diagnostics-node__meta span {
   color: #7b8aa0;
   font-size: 0.66rem;
-  font-weight: 820;
+  font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
@@ -8232,7 +8233,7 @@ onBeforeUnmount(() => {
 .ce-diagnostics-node__meta strong {
   color: #25324a;
   font-size: 0.82rem;
-  font-weight: 760;
+  font-weight: 600;
   overflow-wrap: anywhere;
 }
 
@@ -8394,7 +8395,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--ce-ink);
   font-size: 14px;
-  font-weight: 920;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -8421,7 +8422,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #536277;
   font-size: 10.5px;
-  font-weight: 880;
+  font-weight: 600;
   cursor: pointer;
   transition: border-color .18s ease, background .18s ease, color .18s ease, box-shadow .18s ease, transform .18s ease;
 }
@@ -8527,7 +8528,7 @@ onBeforeUnmount(() => {
   box-shadow: 0 8px 18px rgba(21, 35, 60, 0.055);
   color: #1f5c2f;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: -0.01em;
   cursor: pointer;
   transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease, color 0.18s ease;
@@ -8551,7 +8552,7 @@ onBeforeUnmount(() => {
   gap: 6px;
   color: #63728a;
   font-size: 10.5px;
-  font-weight: 850;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-pagination-mini button {
@@ -8590,7 +8591,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #647188;
   font-size: 9px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: uppercase;
 }
@@ -8659,7 +8660,7 @@ onBeforeUnmount(() => {
   overflow: visible;
   color: var(--ce-ink);
   font-size: 13.5px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1.12;
   text-overflow: clip;
   white-space: normal;
@@ -8677,7 +8678,7 @@ onBeforeUnmount(() => {
   min-height: 20px;
   padding-inline: 7px;
   font-size: 9.5px;
-  font-weight: 840;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-state-card {
@@ -8689,7 +8690,7 @@ onBeforeUnmount(() => {
   gap: 10px;
   color: var(--ce-muted);
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 600;
   text-align: center;
 }
 
@@ -8701,7 +8702,7 @@ onBeforeUnmount(() => {
   border: 0;
   background: transparent;
   color: var(--ce-green-strong);
-  font-weight: 900;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -8783,7 +8784,7 @@ onBeforeUnmount(() => {
   z-index: 1;
   color: var(--ce-ink);
   font-size: 10px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -8798,7 +8799,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-ink);
   font-size: 10.8px;
-  font-weight: 920;
+  font-weight: 600;
   line-height: 1.12;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8808,7 +8809,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-health-accent);
   font-size: 9.8px;
-  font-weight: 840;
+  font-weight: 600;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -8836,7 +8837,7 @@ onBeforeUnmount(() => {
   background: color-mix(in srgb, var(--ce-health-accent) 10%, #fff);
   color: var(--ce-health-accent);
   font-size: 8.8px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -8896,7 +8897,7 @@ onBeforeUnmount(() => {
   background: #fff8eb;
   color: #916014;
   font-size: 8.5px;
-  font-weight: 900;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
 }
@@ -8948,7 +8949,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.92), #fff 48%);
   color: #66758c;
   font-size: 10.5px;
-  font-weight: 720;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-list-pages {
@@ -8968,7 +8969,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #60708a;
   font-size: 9.5px;
-  font-weight: 880;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-list-pages button.active {
@@ -9065,7 +9066,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #65738c;
   font-size: 10px;
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: 0;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9084,7 +9085,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-ink);
   font-size: 17px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1.08;
   text-overflow: ellipsis;
@@ -9098,7 +9099,7 @@ onBeforeUnmount(() => {
   padding: 0 9px;
   border-radius: 999px;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -9164,7 +9165,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-access-header-card strong {
   color: #173052;
   font-size: 11.5px;
-  font-weight: 920;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -9173,7 +9174,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #67758c;
   font-size: 10px;
-  font-weight: 720;
+  font-weight: 600;
   line-height: 1.22;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -9209,7 +9210,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-ink);
   font-size: 11px;
-  font-weight: 920;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9218,7 +9219,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #687790;
   font-size: 9.8px;
-  font-weight: 720;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9226,7 +9227,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-progress-cluster--health b {
   color: var(--ce-detail-accent);
   font-size: 17px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1;
 }
@@ -9414,7 +9415,7 @@ onBeforeUnmount(() => {
   z-index: 1;
   color: var(--ce-ink);
   font-size: 10.5px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -9450,7 +9451,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #708098;
   font-size: 9.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0;
   text-overflow: ellipsis;
   text-transform: none;
@@ -9462,7 +9463,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-ink);
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
   line-height: 1.14;
   text-overflow: ellipsis;
@@ -9476,7 +9477,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #647188;
   font-size: 10px;
-  font-weight: 720;
+  font-weight: 600;
   line-height: 1.18;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 1;
@@ -9506,7 +9507,7 @@ onBeforeUnmount(() => {
   color: #56657a;
   font-size: 9.8px;
   font-style: normal;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-health-link,
@@ -9519,7 +9520,7 @@ onBeforeUnmount(() => {
   border: 1px solid rgba(212, 223, 234, 0.98);
   background: #fff;
   color: var(--ce-green-strong);
-  font-weight: 900;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -9581,7 +9582,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-health-missing-chips span {
   background: #eef2f6;
   color: #5f6f84;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-status-signal-grid {
@@ -9631,7 +9632,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-status-signal-card b {
   color: #5c6a80;
   font-size: 10px;
-  font-weight: 950;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -9695,7 +9696,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #647188;
   font-size: 10.5px;
-  font-weight: 860;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -9722,7 +9723,7 @@ onBeforeUnmount(() => {
   background: #eef2f6;
   color: #5f6f84;
   font-size: 9.5px;
-  font-weight: 950;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-detail-tabs button.is-warning .ce-tab-badge {
@@ -9773,7 +9774,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--ce-ink);
   font-size: 12.5px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -9782,7 +9783,7 @@ onBeforeUnmount(() => {
   margin: 3px 0 0;
   color: var(--ce-muted);
   font-size: 10.5px;
-  font-weight: 700;
+  font-weight: 600;
   line-height: 1.28;
 }
 
@@ -9796,7 +9797,7 @@ onBeforeUnmount(() => {
   background: #eef2f6;
   color: #5f6f84;
   font-size: 9.5px;
-  font-weight: 950;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -9839,7 +9840,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-wide-field span {
   color: #6b788e;
   font-size: 9.7px;
-  font-weight: 890;
+  font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
 }
@@ -9853,7 +9854,7 @@ onBeforeUnmount(() => {
   background: #fbfdff;
   color: var(--ce-ink);
   font-size: 11.5px;
-  font-weight: 700;
+  font-weight: 600;
   letter-spacing: 0;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
@@ -9873,7 +9874,7 @@ onBeforeUnmount(() => {
   min-height: 13px;
   color: #718095;
   font-size: 9.5px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-smart-field.is-ok input,
@@ -9898,7 +9899,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-smart-field.is-missing small,
 .control-escolar-screen .ce-smart-field.is-invalid small {
   color: var(--ce-danger);
-  font-weight: 880;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-derived-card {
@@ -9952,7 +9953,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #708098;
   font-size: 9.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0;
   text-overflow: ellipsis;
   text-transform: none;
@@ -9963,7 +9964,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: var(--ce-ink);
   font-size: 12px;
-  font-weight: 930;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -9973,7 +9974,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #647188;
   font-size: 10px;
-  font-weight: 720;
+  font-weight: 600;
   line-height: 1.25;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10018,7 +10019,7 @@ onBeforeUnmount(() => {
   align-self: start;
   color: currentColor;
   font-size: 10.5px;
-  font-weight: 950;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -10041,7 +10042,7 @@ onBeforeUnmount(() => {
   background: #f9fdf9;
   color: var(--ce-green-strong);
   font-size: 10px;
-  font-weight: 880;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-metric-chip.missing {
@@ -10102,7 +10103,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-family-siblings-card dt {
   color: #708098;
   font-size: 9.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .035em;
   text-transform: uppercase;
 }
@@ -10111,7 +10112,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--ce-ink);
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.015em;
   line-height: 1.1;
 }
@@ -10127,7 +10128,7 @@ onBeforeUnmount(() => {
   background: #f6f9fc;
   color: #647188;
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-siblings-count.has-links {
@@ -10186,7 +10187,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: var(--ce-ink);
   font-size: 11.5px;
-  font-weight: 880;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -10235,7 +10236,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-family-siblings-list strong {
   color: var(--ce-ink);
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-siblings-state {
@@ -10251,7 +10252,7 @@ onBeforeUnmount(() => {
   background: #f6f9fc;
   color: #647188;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-siblings-state.is-clear {
@@ -10359,7 +10360,7 @@ onBeforeUnmount(() => {
   padding: 0 11px;
   border-radius: 999px;
   font-size: 10px;
-  font-weight: 920;
+  font-weight: 600;
   letter-spacing: 0;
 }
 
@@ -10439,7 +10440,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #10203a;
   font-size: clamp(18px, 2vw, 24px);
-  font-weight: 920;
+  font-weight: 600;
   letter-spacing: -0.035em;
 }
 
@@ -10447,7 +10448,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #5f6e86;
   font-size: 13px;
-  font-weight: 680;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -10464,7 +10465,7 @@ onBeforeUnmount(() => {
   margin-bottom: 6px;
   color: #5d6b83;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.035em;
   line-height: 1.1;
   text-transform: uppercase;
@@ -10536,7 +10537,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #66758c;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -10625,7 +10626,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #5d6b83;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: 0.025em;
   line-height: 1.1;
   text-overflow: ellipsis;
@@ -10812,7 +10813,7 @@ onBeforeUnmount(() => {
   min-height: auto;
   color: #5b6880;
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: 0.02em;
   line-height: 1.2;
 }
@@ -10824,7 +10825,7 @@ onBeforeUnmount(() => {
   padding: 0 14px;
   border-radius: 13px;
   font-size: 13px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-form-grid label > small,
@@ -10991,7 +10992,7 @@ onBeforeUnmount(() => {
   color: transparent;
   box-shadow: inset 0 1px 0 rgba(255,255,255,.92);
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 600;
   transition: all .18s ease;
 }
 
@@ -11035,7 +11036,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #4c5b75;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-profile-cue b {
@@ -11074,7 +11075,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-picker-group > small {
   color: #6f7d93;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-grade-picker-grid,
@@ -11096,7 +11097,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #4b5b72;
   font-size: 12px;
-  font-weight: 780;
+  font-weight: 600;
   transition: all .18s ease;
 }
 
@@ -11132,7 +11133,7 @@ onBeforeUnmount(() => {
   background: rgba(240, 247, 239, .98);
   color: #36843c;
   font-size: 11px;
-  font-weight: 820;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-grid {
@@ -11267,7 +11268,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-baja-details label > span {
   color: #80606a;
   font-size: 10.5px;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -11275,7 +11276,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-baja-details-card__heading strong {
   color: #6f302d;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-baja-details {
@@ -11300,7 +11301,7 @@ onBeforeUnmount(() => {
   color: #2f2630;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 720;
+  font-weight: 600;
   outline: 0;
 }
 
@@ -11344,7 +11345,7 @@ onBeforeUnmount(() => {
   color: #6b7a90;
   font-size: 11.5px;
   line-height: 1.4;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-school-current-pill {
@@ -11360,14 +11361,14 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-school-current-pill small {
   color: #5f7085;
   font-size: 10.5px;
-  font-weight: 820;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .04em;
 }
 
 .control-escolar-screen .ce-school-current-pill strong {
   font-size: 16px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 
@@ -11411,7 +11412,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-picker-card__heading small {
   color: #6f7d93;
   font-size: 10.5px;
-  font-weight: 820;
+  font-weight: 600;
   letter-spacing: .04em;
   text-transform: uppercase;
 }
@@ -11420,7 +11421,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #14233c;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -11433,7 +11434,7 @@ onBeforeUnmount(() => {
   margin-top: 2px;
   color: #3f8b43;
   font-size: 9px;
-  font-weight: 880;
+  font-weight: 600;
   line-height: 1.1;
 }
 
@@ -11479,7 +11480,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #15233a;
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-combobox__input button {
@@ -11555,7 +11556,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-option strong {
   overflow: hidden;
   font-size: 12.5px;
-  font-weight: 860;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -11564,7 +11565,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-empty {
   color: #718096;
   font-size: 11px;
-  font-weight: 720;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-empty {
@@ -11630,7 +11631,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-modal__header small {
   color: #4c8d51;
   font-size: 11px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .07em;
   text-transform: uppercase;
 }
@@ -11639,7 +11640,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #13213a;
   font-size: 24px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.04em;
 }
 
@@ -11648,7 +11649,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #6c7a91;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -11720,7 +11721,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-modal__preview small {
   color: #4c8d51;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .07em;
   text-transform: uppercase;
 }
@@ -11729,7 +11730,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #14233c;
   font-size: 22px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.035em;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11739,7 +11740,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #6f7d93;
   font-size: 12px;
-  font-weight: 740;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-modal__search {
@@ -11770,7 +11771,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #15233a;
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-modal__search button {
@@ -11802,13 +11803,13 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-modal__slider-heading strong {
   color: #14233c;
   font-size: 13px;
-  font-weight: 930;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-modal__slider-heading small {
   color: #7b8798;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-group-sigil-slider {
@@ -11892,7 +11893,7 @@ onBeforeUnmount(() => {
   max-width: 100%;
   color: #15233a;
   font-size: 12px;
-  font-weight: 920;
+  font-weight: 600;
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -11902,7 +11903,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-empty {
   color: #718096;
   font-size: 10.5px;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1.15;
 }
 
@@ -11934,7 +11935,7 @@ onBeforeUnmount(() => {
   border-radius: 15px;
   font-family: inherit;
   font-size: 13px;
-  font-weight: 900;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -11964,7 +11965,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-group-picker-chip {
   min-height: 42px;
   border-radius: 14px;
-  font-weight: 820;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-family-card {
@@ -12070,14 +12071,14 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-advanced-upload-copy strong {
   color: #203147;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-advanced-upload-copy small {
   overflow: hidden;
   color: #65758a;
   font-size: 11px;
-  font-weight: 720;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -12086,7 +12087,7 @@ onBeforeUnmount(() => {
   color: #c24135;
   font-size: 10.5px;
   font-style: normal;
-  font-weight: 820;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-system-panel {
@@ -12135,7 +12136,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-husky-credentials small {
   color: #65758a;
   font-size: 10.5px;
-  font-weight: 850;
+  font-weight: 600;
   text-transform: uppercase;
   letter-spacing: .035em;
 }
@@ -12144,13 +12145,13 @@ onBeforeUnmount(() => {
   overflow-wrap: anywhere;
   color: #1f2f45;
   font-size: 14px;
-  font-weight: 920;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-husky-empty {
   color: #65758a;
   font-size: 12px;
-  font-weight: 760;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-husky-actions {
@@ -12166,7 +12167,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #65758a;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -12181,13 +12182,13 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-husky-empty strong {
   color: #1f2f45;
   font-size: 12px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-husky-empty small {
   color: #65758a;
   font-size: 11px;
-  font-weight: 720;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-husky-manual-form {
@@ -12207,7 +12208,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-husky-manual-form label span {
   color: #65758a;
   font-size: 10.5px;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .035em;
   text-transform: uppercase;
 }
@@ -12221,7 +12222,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #1f2f45;
   font-size: 13px;
-  font-weight: 780;
+  font-weight: 600;
   outline: none;
 }
 
@@ -12304,7 +12305,7 @@ onBeforeUnmount(() => {
   background: #f4fbf2;
   color: #286f32;
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 600;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -14001,7 +14002,7 @@ onBeforeUnmount(() => {
   margin-bottom: 5px;
   color: #718098;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-title-row {
@@ -14015,7 +14016,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #13213a;
   font-size: clamp(18px, 1.15vw, 22px);
-  font-weight: 950;
+  font-weight: 600;
   line-height: 1.04;
   letter-spacing: -0.035em;
   white-space: normal;
@@ -14026,7 +14027,7 @@ onBeforeUnmount(() => {
   padding-inline: 12px;
   border-radius: 999px;
   font-size: 10.5px;
-  font-weight: 920;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-profile-identity-cues {
@@ -14045,7 +14046,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-access-header-card strong {
   color: #13213a;
   font-size: 12px;
-  font-weight: 940;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-access-header-card small {
@@ -14078,7 +14079,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-progress-label-row strong {
   color: #13213a;
   font-size: 11.5px;
-  font-weight: 940;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-progress-label-row small {
@@ -14092,7 +14093,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-progress-label-row b {
   color: var(--ce-detail-accent);
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-detail-menu-button {
@@ -14133,7 +14134,7 @@ onBeforeUnmount(() => {
   border-radius: 0;
   color: #6a788f;
   font-size: 11px;
-  font-weight: 850;
+  font-weight: 600;
   box-shadow: none;
 }
 
@@ -14220,7 +14221,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-panel-heading h3 {
   color: #13213a;
   font-size: 15px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -0.015em;
 }
 
@@ -14229,7 +14230,7 @@ onBeforeUnmount(() => {
   margin-top: 3px;
   color: #66758c;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1.32;
 }
 
@@ -14241,7 +14242,7 @@ onBeforeUnmount(() => {
   background: transparent;
   color: #d63f35;
   font-size: 10.5px;
-  font-weight: 900;
+  font-weight: 600;
   cursor: pointer;
 }
 
@@ -14306,7 +14307,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-pending-summary-primary-copy strong {
   color: #1b8d32;
   font-size: 16px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -0.02em;
 }
 
@@ -14322,7 +14323,7 @@ onBeforeUnmount(() => {
   margin: 0;
   color: #66758c;
   font-size: 11.5px;
-  font-weight: 740;
+  font-weight: 600;
   line-height: 1.45;
 }
 
@@ -14374,7 +14375,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-pending-summary-metric strong {
   color: #1f9338;
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -0.015em;
 }
 
@@ -14395,12 +14396,12 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-pending-summary-metric small {
   font-size: 10.5px;
-  font-weight: 780;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-pending-summary-metric em {
   font-size: 10px;
-  font-weight: 700;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-primary-pending-grid {
@@ -14478,14 +14479,14 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-primary-pending-copy strong {
   color: #15233b;
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 600;
   line-height: 1.1;
 }
 
 .control-escolar-screen .ce-primary-pending-copy b {
   color: currentColor;
   font-size: 18px;
-  font-weight: 950;
+  font-weight: 600;
   line-height: 1.05;
 }
 
@@ -14493,7 +14494,7 @@ onBeforeUnmount(() => {
   justify-self: end;
   color: currentColor;
   font-size: 13px;
-  font-weight: 950;
+  font-weight: 600;
   line-height: 1;
 }
 
@@ -14509,7 +14510,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-primary-pending-meta {
   color: #66758c;
   font-size: 11.5px;
-  font-weight: 740;
+  font-weight: 600;
   line-height: 1.55;
 }
 
@@ -14531,7 +14532,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: currentColor;
   font-size: 11px;
-  font-weight: 930;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-primary-pending-checkmark {
@@ -14560,7 +14561,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-wide-field span {
   color: #65738b;
   font-size: 11px;
-  font-weight: 860;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-smart-field input,
@@ -14574,7 +14575,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: #13213a;
   font-size: 13px;
-  font-weight: 820;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-smart-field.is-ok input,
@@ -14610,7 +14611,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-last-update-text {
   color: #7a879a;
   font-size: 11px;
-  font-weight: 760;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -14624,7 +14625,7 @@ onBeforeUnmount(() => {
   min-height: 40px;
   min-width: 132px;
   border-radius: 12px;
-  font-weight: 900;
+  font-weight: 600;
 }
 
 .control-escolar-screen .ce-detail-footer :deep(.ui-button.primary),
@@ -14770,7 +14771,7 @@ onBeforeUnmount(() => {
   overflow: visible;
   color: #13213a;
   font-size: clamp(25px, 2.1vw, 38px);
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 1.03;
   text-wrap: balance;
@@ -14784,7 +14785,7 @@ onBeforeUnmount(() => {
   gap: 0 18px;
   color: #6f7d92;
   font-size: clamp(14px, 1.08vw, 18px);
-  font-weight: 860;
+  font-weight: 600;
   line-height: 1.25;
 }
 
@@ -14818,7 +14819,7 @@ onBeforeUnmount(() => {
   color: #5e6f86;
   font: inherit;
   font-size: clamp(13px, .98vw, 16px);
-  font-weight: 900;
+  font-weight: 600;
   cursor: pointer;
   box-shadow: 0 8px 18px rgba(16, 32, 58, 0.04), inset 0 1px 0 rgba(255, 255, 255, .92);
   transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease, color .18s ease;
@@ -14866,7 +14867,7 @@ onBeforeUnmount(() => {
   background: rgba(247, 250, 252, 0.9);
   color: #66758b;
   font-size: clamp(12px, 0.9vw, 14px);
-  font-weight: 870;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.84);
@@ -15040,7 +15041,7 @@ onBeforeUnmount(() => {
   overflow: hidden;
   color: #15233a;
   font-size: clamp(13px, 1vw, 15px);
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.025em;
   line-height: 1.05;
   text-overflow: ellipsis;
@@ -15052,7 +15053,7 @@ onBeforeUnmount(() => {
   color: currentColor;
   font-size: 10.5px;
   font-style: normal;
-  font-weight: 920;
+  font-weight: 600;
   letter-spacing: .045em;
   line-height: 1;
   text-transform: uppercase;
@@ -15096,7 +15097,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-student-hero-group-cta strong {
   font-size: 12px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: .04em;
   white-space: nowrap;
 }
@@ -15104,7 +15105,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-hero-group-cta small {
   color: #6f9272;
   font-size: 10.5px;
-  font-weight: 820;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -15132,7 +15133,7 @@ onBeforeUnmount(() => {
   background: #eaf7e8;
   color: var(--ce-green-strong);
   font-size: clamp(14px, 1.15vw, 20px);
-  font-weight: 940;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -15204,7 +15205,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-hero-progress > strong {
   color: #13213a;
   font-size: clamp(18px, 1.35vw, 24px);
-  font-weight: 930;
+  font-weight: 600;
   letter-spacing: -0.025em;
   line-height: 1.1;
   white-space: nowrap;
@@ -15233,7 +15234,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-hero-progress-state b {
   color: var(--hero-accent-strong);
   font-size: clamp(17px, 1.35vw, 24px);
-  font-weight: 930;
+  font-weight: 600;
   letter-spacing: -0.025em;
 }
 
@@ -15241,7 +15242,7 @@ onBeforeUnmount(() => {
   justify-self: end;
   color: var(--hero-accent-strong);
   font-size: clamp(20px, 1.8vw, 30px);
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -0.055em;
   line-height: 1;
 }
@@ -15289,7 +15290,7 @@ onBeforeUnmount(() => {
   background: #fff;
   color: var(--hero-accent-strong);
   font-size: clamp(14px, 1vw, 18px);
-  font-weight: 930;
+  font-weight: 600;
   white-space: nowrap;
   cursor: pointer;
   transition: transform 0.16s ease, box-shadow 0.16s ease, background 0.16s ease;
@@ -15504,7 +15505,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #ffffff 0%, #f8fbfd 100%);
   color: #657286;
   font-size: clamp(11.5px, 0.78vw, 13px);
-  font-weight: 860;
+  font-weight: 600;
   line-height: 1;
   white-space: nowrap;
   box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255, 255, 255, 0.84);
@@ -15842,7 +15843,7 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-student-hero-group-action strong {
   color: #16243b;
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.01em;
   line-height: 1;
 }
@@ -15853,7 +15854,7 @@ onBeforeUnmount(() => {
   gap: 3px;
   color: currentColor;
   font-size: 10px;
-  font-weight: 900;
+  font-weight: 600;
   letter-spacing: .03em;
   line-height: 1;
   text-transform: uppercase;
@@ -15897,7 +15898,7 @@ onBeforeUnmount(() => {
 
 .control-escolar-screen .ce-student-hero-group-cta strong {
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: .015em;
   white-space: nowrap;
 }
@@ -15906,7 +15907,7 @@ onBeforeUnmount(() => {
   display: block;
   color: #6f9272;
   font-size: 9.5px;
-  font-weight: 820;
+  font-weight: 600;
   white-space: nowrap;
 }
 
@@ -15993,7 +15994,7 @@ onBeforeUnmount(() => {
   background: linear-gradient(180deg, #ffffff 0%, #faf8ff 100%);
   color: #6b5ca8;
   font-size: clamp(11px, .74vw, 12.5px);
-  font-weight: 880;
+  font-weight: 600;
   line-height: 1;
   box-shadow: 0 7px 15px rgba(16, 32, 58, 0.025), inset 0 1px 0 rgba(255,255,255,.9);
 }
@@ -16063,7 +16064,7 @@ onBeforeUnmount(() => {
   order: 1;
   color: #738198;
   font-size: 9px;
-  font-weight: 850;
+  font-weight: 600;
   letter-spacing: .035em;
   line-height: 1;
   text-transform: uppercase;
@@ -16076,7 +16077,7 @@ onBeforeUnmount(() => {
   gap: 3px;
   color: #16243b;
   font-size: 11px;
-  font-weight: 950;
+  font-weight: 600;
   letter-spacing: -.01em;
   line-height: 1.05;
 }
@@ -16670,7 +16671,7 @@ onBeforeUnmount(() => {
     background: rgba(255, 255, 255, 0.96);
     color: #23405e;
     font-size: 13px;
-    font-weight: 900;
+    font-weight: 600;
     text-align: left;
     backdrop-filter: blur(16px);
   }
@@ -17054,7 +17055,7 @@ onBeforeUnmount(() => {
     overflow: hidden;
     color: #647188;
     font-size: 10px;
-    font-weight: 760;
+    font-weight: 600;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
@@ -17395,7 +17396,7 @@ onBeforeUnmount(() => {
   overflow: visible;
   color: #14223b;
   font-size: 13.6px;
-  font-weight: 930;
+  font-weight: 600;
   line-height: 1.12;
   letter-spacing: -0.012em;
   text-align: left;
@@ -17532,7 +17533,7 @@ onBeforeUnmount(() => {
   box-shadow: none;
   color: color-mix(in srgb, var(--grade-accent, var(--ce-green)) 70%, #16321f);
   font-size: 12px;
-  font-weight: 880;
+  font-weight: 600;
   letter-spacing: 0.018em;
   line-height: 1;
   text-transform: uppercase;
@@ -17622,5 +17623,228 @@ onBeforeUnmount(() => {
     min-height: 0;
   }
 }
+
+
+.control-escolar-screen :is(.ce-pending-save-button, .ce-row-draft-save, .ce-group-modal__primary) { background: var(--action-primary); border-color: var(--action-primary); color: #fff; }
+.control-escolar-screen :is(.ce-pending-save-button, .ce-row-draft-save, .ce-group-modal__primary):hover:not(:disabled) { background: var(--action-primary-hover); border-color: var(--action-primary-hover); }
+/* Readable record hierarchy: reserve emphasis for names and values. */
+.control-escolar-screen .ce-student-row .student-copy strong.student-name,
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-copy strong.student-name,
+.control-escolar-screen .ce-workspace.is-browsing .ce-student-row .student-copy strong.student-name { font-weight: 500; letter-spacing: -.015em; }
+.control-escolar-screen .ce-student-hero-copy h2 { font-family: Montserrat, sans-serif; font-weight: 600; font-size: 22px; line-height: 1.25; letter-spacing: -.025em; }
+.control-escolar-screen .ce-student-hero-copy { gap: 8px; }
+.control-escolar-screen .ce-student-hero-meta,
+.control-escolar-screen .ce-student-identity-chip,
+.control-escolar-screen .ce-detail-tabs button { font-weight: 500; }
+.control-escolar-screen .ce-detail-shell { background: #fff; box-shadow: none; }
+.control-escolar-screen .ce-detail-tabs { min-height: 42px; }
+.control-escolar-screen .ce-detail-tabs button { height: 41px; font-size: 12px; }
+.control-escolar-screen .ce-edit-form { background: #fff; }
+.control-escolar-screen .ce-form-card.ce-tab-panel,
+.control-escolar-screen .ce-primary-pending-panel { box-shadow: none; border-radius: 12px; }
+.control-escolar-screen .ce-primary-pending-meta,
+.control-escolar-screen .ce-pending-summary-primary-copy p,
+.control-escolar-screen .ce-pending-summary-metric small,
+.control-escolar-screen .ce-panel-heading p { color: #526175; font-weight: 450; font-size: 12px; line-height: 1.45; }
+.control-escolar-screen .ce-edit-form label > span { font-weight: 500; }
+.control-escolar-screen .ce-edit-form input,
+.control-escolar-screen .ce-edit-form select,
+.control-escolar-screen .ce-edit-form textarea { font-weight: 450; font-size: 14px; }
+.control-escolar-screen .ce-pending-summary-strip { border-radius: 12px; background: #fff; box-shadow: none; }
+.control-escolar-screen .ce-primary-pending-grid { gap: 8px; }
+.control-escolar-screen .ce-primary-pending-card { min-height: 126px; padding: 12px; border-radius: 12px; box-shadow: none; }
+.control-escolar-screen .ce-primary-pending-card-head { gap: 8px; }
+.control-escolar-screen .ce-primary-pending-icon { width: 28px; height: 28px; }
+.control-escolar-screen .ce-primary-pending-icon svg { width: 16px; height: 16px; }
+.control-escolar-screen .ce-primary-pending-copy strong { font-size: 12px; font-weight: 500; line-height: 1.3; }
+.control-escolar-screen .ce-primary-pending-copy b { font-size: 14px; line-height: 1.3; }
+.control-escolar-screen .ce-primary-pending-card-body { min-height: 42px; margin-top: 8px; padding: 8px 0; }
+.control-escolar-screen .ce-primary-pending-action { min-width: 0; min-height: 28px; padding: 0 10px; font-size: 11px; }
+@media (min-width: 821px) {
+  .control-escolar-screen .ce-student-hero-main { min-height: 100px; padding: 14px 18px; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 14px; background: #fff; }
+  .control-escolar-screen .ce-student-hero-side { grid-column: 3; grid-row: 1; margin-top: 0; }
+  .control-escolar-screen .ce-student-hero-photo { --student-grade-photo-width: 60px; --student-grade-photo-height: 66px; --student-grade-photo-radius: 14px; box-shadow: none; }
+  .control-escolar-screen .ce-student-hero-progress { min-height: 44px; padding: 8px 18px; grid-template-columns: auto auto auto minmax(60px, 1fr) auto; grid-template-rows: auto; gap: 10px; background: #fafbfc; }
+  .control-escolar-screen .ce-student-hero-progress-icon,
+  .control-escolar-screen .ce-student-hero-progress-divider { display: none; }
+  .control-escolar-screen .ce-student-hero-progress > strong,
+  .control-escolar-screen .ce-student-hero-progress-state b { font-size: 14px; letter-spacing: 0; }
+  .control-escolar-screen .ce-student-hero-progress-state { gap: 6px; }
+  .control-escolar-screen .ce-student-hero-progress-state svg { width: 16px; height: 16px; stroke-width: 2; }
+  .control-escolar-screen .ce-student-hero-progress-percent { font-size: 16px; }
+  .control-escolar-screen .ce-student-hero-progress-track { grid-column: auto; min-width: 60px; height: 6px; }
+  .control-escolar-screen .ce-student-hero-progress-action { min-height: 28px; padding: 0 10px; border-width: 1px; border-radius: 8px; font-size: 12px; }
+  .control-escolar-screen .ce-primary-pending-panel { padding: 12px; }
+  .control-escolar-screen .ce-primary-pending-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-student-hero-copy h2 { font-size: 18px; line-height: 1.3; }
+  .control-escolar-screen .ce-detail-shell.is-mobile-detail-scrolled .ce-student-hero-copy h2 { font-size: 16px; }
+  .control-escolar-screen .ce-detail-tabs button { font-size: 12px; }
+  .control-escolar-screen .ce-student-hero-main { grid-template-columns: 48px minmax(0, 1fr); grid-template-rows: auto auto; min-height: 0; padding: 10px; gap: 8px 10px; background: #fff; align-items: start; }
+  .control-escolar-screen .ce-student-hero-photo { --student-grade-photo-width: 48px; --student-grade-photo-height: 56px; --student-grade-photo-radius: 12px; }
+  .control-escolar-screen .ce-student-hero-side { grid-column: 2; grid-row: 2; display: flex; justify-self: start; margin-top: 0; }
+  .control-escolar-screen .ce-student-hero-group-sigil { width: auto; height: 32px; display: flex; gap: 6px; }
+  .control-escolar-screen .ce-student-hero-group-art,
+  .control-escolar-screen .ce-student-hero-group-art .ui-group-icon { --group-icon-size: 30px; width: 30px; height: 30px; }
+  .control-escolar-screen .ce-student-hero-group-action { display: flex; align-items: center; gap: 6px; }
+  .control-escolar-screen .ce-student-hero-group-action small { font-size: 11px; }
+  .control-escolar-screen .ce-student-hero-group-action strong { font-size: 10px; }
+  .control-escolar-screen .ce-student-hero-progress { min-height: 0; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-rows: auto auto; gap: 6px; margin-top: 0; border-radius: 8px; background: #fafbfc; }
+  .control-escolar-screen .ce-student-hero-progress-track { grid-column: 1 / 3; grid-row: 2; min-width: 0; }
+  .control-escolar-screen .ce-student-hero-progress-action { grid-column: 3; grid-row: 2; min-height: 26px; }
+  .control-escolar-screen .ce-detail-footer-meta { display: flex !important; align-items: center; gap: 8px; }
+  .control-escolar-screen .ce-detail-footer { min-height: 0; gap: 6px; padding: 8px 10px; box-shadow: none; }
+}
+
+/* Adapt the workspace rather than shrinking text and controls. */
+.control-escolar-screen { width: 100%; height: 100%; transform: none; will-change: auto; container: control-workspace / inline-size; }
+.control-escolar-screen .students-design-canvas { width: 100%; min-width: 0; }
+.control-escolar-screen .ce-workspace.has-detail,
+.control-escolar-screen .ce-workspace.has-empty-detail { min-width: 0; grid-template-columns: minmax(360px, 38fr) minmax(0, 62fr); }
+.control-escolar-screen .ce-student-row .student-identity { min-width: 0; grid-template-columns: 28px 44px 28px minmax(0, 1fr); gap: 8px; }
+.control-escolar-screen .ce-student-row .student-copy,
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-copy,
+.control-escolar-screen .ce-workspace.is-browsing .ce-student-row .student-copy { width: auto; min-width: 0; max-width: 100%; }
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row .student-copy strong.student-name { font-size: 14px; line-height: 1.25; }
+.control-escolar-screen .ce-student-row .student-row-grade-card { --student-grade-photo-width: 44px; --student-grade-photo-height: 50px; }
+.control-escolar-screen .ce-workspace.has-detail .ce-student-row { min-height: 70px; }
+@container control-workspace (max-width: 1049px) {
+  .control-escolar-screen .ce-workspace.has-detail { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 1fr); }
+  .control-escolar-screen .ce-workspace.has-detail > .student-list-panel { display: none; }
+  .control-escolar-screen.has-selected-student .ce-kpi-system { display: none; }
+  .control-escolar-screen .ce-mobile-detail-back { display: flex; align-items: center; gap: 6px; min-height: 36px; padding: 0 14px; border-bottom: 1px solid #e3eaf0; font-size: 13px; font-weight: 500; }
+}
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail { grid-template-columns: minmax(0, 1fr); }
+}
+
+@media (min-width: 821px) {
+  .control-escolar-screen .ce-kpi-system { margin-bottom: 8px; }
+  .control-escolar-screen .ce-kpi-strip { min-height: 64px; }
+  .control-escolar-screen .ce-kpi-strip .kpi-card { min-height: 64px; height: 64px; padding: 8px 12px; grid-template-columns: 36px minmax(0, 1fr); gap: 10px; }
+  .control-escolar-screen .ce-kpi-strip .kpi-icon { width: 34px; height: 34px; }
+  .control-escolar-screen .ce-kpi-strip .kpi-icon svg { width: 20px; height: 20px; }
+  .control-escolar-screen .ce-kpi-system .kpi-text strong { font-size: 26px; }
+  .control-escolar-screen .ce-workspace.is-browsing { min-width: 0; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar { min-width: 0; min-height: 0; margin: 0; padding: 4px 0; gap: 4px; }
+  .control-escolar-screen .ce-workspace .ce-primary-filter-row { display: flex; flex-wrap: nowrap; width: 100%; min-width: 0; gap: 6px; overflow-x: auto; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar .search-control { flex: 1 0 220px; min-width: 0; max-width: 480px; height: 34px; padding-inline: 10px; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar .search-control input { font-size: 13px; font-weight: 450; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar .ce-filter-button { flex: 0 0 auto; min-height: 34px; height: 34px; padding-inline: 10px; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar .ce-chip-cluster--quality { flex: 0 0 auto; min-width: 0; gap: 6px; }
+  .control-escolar-screen .ce-workspace .ce-secondary-filter-row { min-width: 0; max-width: 100%; display: flex; flex-wrap: nowrap; justify-content: flex-start; gap: 6px; overflow-x: auto; }
+  .control-escolar-screen .ce-workspace .ce-secondary-filter-row > * { flex: 0 0 auto; }
+  .control-escolar-screen .ce-workspace .ce-status-tabs,
+  .control-escolar-screen .ce-workspace .ce-chip-cluster { gap: 6px; padding: 2px; }
+  .control-escolar-screen .ce-workspace .ce-status-tab,
+  .control-escolar-screen .ce-workspace :deep(.ui-chip) { min-height: 28px; padding-inline: 10px; font-size: 12px; font-weight: 500; }
+  .control-escolar-screen .ce-workspace .student-list-panel { gap: 8px; }
+  .control-escolar-screen .ce-workspace .ce-list-card { display: flex; flex-direction: column; min-width: 0; container: control-list / inline-size; }
+  .control-escolar-screen .ce-list-titlebar { flex: 0 0 auto; min-height: 40px; padding: 4px 10px; }
+  .control-escolar-screen .ce-list-header-actions { min-width: 0; overflow-x: auto; }
+  .control-escolar-screen .ce-list-scroll { flex: 1 1 0; min-height: 0; padding: 6px; gap: 6px; }
+  .control-escolar-screen .ce-list-footer { flex: 0 0 auto; min-height: 32px; padding: 0 10px; font-size: 11px; }
+}
+@container control-list (max-width: 600px) {
+  .control-escolar-screen .ce-workspace .ce-student-row { min-width: 0 !important; min-height: 68px; padding: 8px; grid-template-columns: minmax(0, 1fr) 34px 28px; grid-template-areas: 'identity health action'; gap: 6px; }
+  .control-escolar-screen .ce-workspace .ce-row-health { grid-area: health; display: flex; width: 34px; min-width: 34px; min-height: 34px; padding: 0; border: 0; background: transparent; }
+  .control-escolar-screen .ce-workspace .ce-row-health .ce-quality-score { width: 32px; height: 32px; }
+  .control-escolar-screen .ce-workspace .ce-quality-cell--expanded { display: none; }
+  .control-escolar-screen .ce-workspace .row-actions,
+  .control-escolar-screen .ce-workspace .ce-row-action { width: 28px; min-width: 28px; height: 28px; }
+  .control-escolar-screen .ce-workspace .ce-student-identity { grid-area: identity; grid-template-columns: 24px 44px 24px minmax(0, 1fr); gap: 6px; }
+  .control-escolar-screen .ce-workspace .ce-student-row .student-copy strong.student-name { font-size: 14px; line-height: 1.25; }
+}
+
+@media (min-width: 821px) and (max-height: 550px) {
+  .control-escolar-screen .ce-workspace .ce-filter-bar { padding: 2px 0; gap: 3px; }
+  .control-escolar-screen .ce-workspace .ce-filter-bar .search-control,
+  .control-escolar-screen .ce-workspace .ce-filter-bar .ce-filter-button { height: 30px; min-height: 30px; }
+  .control-escolar-screen .ce-workspace .ce-chip-cluster,
+  .control-escolar-screen .ce-workspace .ce-status-tabs { min-height: 0; padding: 0; }
+  .control-escolar-screen .ce-list-titlebar { min-height: 32px; padding: 2px 8px; }
+  .control-escolar-screen .ce-list-header-actions button { min-height: 28px; height: 28px; padding-block: 0; }
+  .control-escolar-screen .ce-list-footer { min-height: 30px; line-height: 1.2; }
+  .control-escolar-screen .ce-list-pages button { min-height: 26px; height: 26px; width: 26px; }
+}
+
+/* Give scroll and footer separate space; the old desktop grid overlaid them. */
+.control-escolar-screen .ce-detail-shell { display: flex; flex-direction: column; }
+.control-escolar-screen .ce-detail-header,
+.control-escolar-screen .ce-mobile-detail-back,
+.control-escolar-screen .ce-detail-footer { flex: 0 0 auto; position: static; }
+.control-escolar-screen .ce-detail-body { flex: 1 1 0; min-height: 0; }
+.control-escolar-screen .ce-detail-footer { min-height: 48px; padding: 6px 12px; box-shadow: none; }
+.control-escolar-screen .ce-kpi-system .ce-kpi-mass { width: 64px; max-width: 40%; gap: 3px; right: 8px; bottom: 6px; }
+.control-escolar-screen .ce-kpi-system .ce-kpi-mass i { flex: 1 1 0; min-width: 2px; max-width: 4px; }
+.control-escolar-screen .ce-pending-summary-strip { display: grid; grid-template-columns: minmax(0, 1fr); min-height: 0; padding: 12px; gap: 10px; }
+.control-escolar-screen .ce-pending-summary-primary { min-height: 0; display: flex; gap: 10px; }
+.control-escolar-screen .ce-pending-summary-primary-icon { width: 32px; height: 32px; min-width: 32px; box-shadow: none; }
+.control-escolar-screen .ce-pending-summary-primary-icon svg { width: 18px; height: 18px; }
+.control-escolar-screen .ce-pending-summary-primary-copy strong { font-size: 14px; }
+.control-escolar-screen .ce-pending-summary-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.control-escolar-screen .ce-pending-summary-metric { min-height: 0; padding: 4px 8px; gap: 6px; }
+.control-escolar-screen .ce-pending-summary-metric-icon svg { width: 16px; height: 16px; }
+@media (min-width: 821px) {
+  .control-escolar-screen .ce-student-hero-main { min-height: 0; padding: 10px 16px; grid-template-columns: 60px minmax(0, 1fr) auto; gap: 12px; }
+  .control-escolar-screen .ce-student-hero-copy { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  .control-escolar-screen .ce-student-hero-copy h2 { flex: 0 0 100%; font-size: 20px; }
+  .control-escolar-screen .ce-student-hero-meta { font-size: 12px; gap: 6px; flex: 0 1 auto; }
+  .control-escolar-screen .ce-student-hero-meta-token { min-height: 24px; padding: 3px 8px; }
+  .control-escolar-screen .ce-student-hero-pass-card { min-height: 24px; font-size: 12px; padding: 3px 6px; gap: 4px; }
+  .control-escolar-screen .ce-student-hero-pass-card img { width: 24px; height: 18px; }
+  .control-escolar-screen .ce-student-hero-cues { gap: 4px; }
+  .control-escolar-screen .ce-student-identity-chip { min-height: 26px; font-size: 11px; padding: 0 8px; }
+  .control-escolar-screen .ce-student-hero-group-sigil { width: auto; height: 40px; display: inline-flex; gap: 8px; }
+  .control-escolar-screen .ce-student-hero-group-art,
+  .control-escolar-screen .ce-student-hero-group-art .ui-group-icon { --group-icon-size: 36px; width: 36px; height: 36px; }
+  .control-escolar-screen .ce-student-hero-group-action { min-width: 0; padding: 6px 8px; border-radius: 10px; box-shadow: none; }
+  .control-escolar-screen .ce-student-hero-side { gap: 8px; }
+  .control-escolar-screen .ce-student-hero-menu { width: 32px; height: 32px; min-width: 32px; border-radius: 10px; }
+}
+@media (min-width: 821px) and (max-height: 550px) {
+  .control-escolar-screen .ce-mobile-detail-back { min-height: 30px; }
+  .control-escolar-screen .ce-student-hero-main { padding: 6px 12px; grid-template-columns: 42px minmax(0, 1fr) auto; gap: 8px; }
+  .control-escolar-screen .ce-student-hero-photo { --student-grade-photo-width: 42px; --student-grade-photo-height: 46px; --student-grade-photo-number-size: 24px; --student-grade-photo-label-size: 6px; --student-grade-photo-label-gap: 3px; }
+  .control-escolar-screen .ce-student-hero-copy h2 { font-size: 17px; }
+  .control-escolar-screen .ce-student-hero-progress { min-height: 30px; padding: 4px 12px; }
+  .control-escolar-screen .ce-student-hero-progress > strong,
+  .control-escolar-screen .ce-student-hero-progress-state b { font-size: 12px; }
+  .control-escolar-screen .ce-detail-footer { min-height: 40px; padding: 4px 10px; }
+  .control-escolar-screen .ce-detail-footer :deep(.ui-button) { min-height: 30px; height: 30px; }
+}
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-detail-footer { padding: 6px 10px; }
+  .control-escolar-screen .ce-pending-summary-metric { display: grid; align-content: start; padding: 4px; }
+  .control-escolar-screen .ce-pending-summary-metric + .ce-pending-summary-metric { border-top: 0; border-left: 1px solid #e6eaf0; }
+  .control-escolar-screen .ce-pending-summary-metric small { font-size: 11px; }
+  .control-escolar-screen .ce-primary-pending-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (min-width: 821px) and (max-height: 550px) {
+  .control-escolar-screen .ce-student-hero-main { padding: 4px 8px; }
+  .control-escolar-screen .ce-student-hero-copy { gap: 4px; }
+  .control-escolar-screen .ce-student-hero-meta-token.is-matricula,
+  .control-escolar-screen .ce-student-hero-meta-token.is-grade { min-height: 22px; padding: 0 6px; }
+  .control-escolar-screen .ce-student-hero-pass-card,
+  .control-escolar-screen .ce-student-identity-chip { min-height: 22px; }
+  .control-escolar-screen .ce-student-identity-chip.is-gender-icon { min-height: 22px; min-width: 22px; height: 22px; }
+  .control-escolar-screen .ce-student-hero-progress-action { min-height: 22px; height: 22px; font-size: 11px; }
+}
+
+.control-escolar-screen .ce-family-readiness { width: 100%; min-width: 0; grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.control-escolar-screen .ce-family-readiness-card { min-width: 0; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 8px; padding: 10px; overflow-wrap: anywhere; }
+.control-escolar-screen .ce-family-readiness-card > span { width: 32px; height: 32px; }
+.control-escolar-screen .ce-family-readiness-card > span svg { width: 18px; height: 18px; }
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-family-readiness { grid-template-columns: minmax(0, 1fr); }
+}
+
+.control-escolar-screen .ce-edit-form { width: 100%; min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.control-escolar-screen .ce-edit-form > .ce-tab-panel,
+.control-escolar-screen .ce-family-siblings-card,
+.control-escolar-screen .ce-family-grid,
+.control-escolar-screen .ce-wide-field.ce-family-address { width: 100%; min-width: 0; }
 
 </style>

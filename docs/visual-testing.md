@@ -129,8 +129,32 @@ Interaction checks covered document dialogs on desktop/mobile, KPI filtering and
 
 Run `node scripts/verify-student-workspace-ui.mjs` after installing Playwright and the Montserrat/Fredoka fontsource packages. The `Student workspace UI regression` PR workflow installs these verification-only packages without changing the application lockfile, builds the application, and verifies both screens at six widths. It captures screenshots, request paths, row dimensions and page errors in the workflow artifact. Optional local runtime overrides: `VISUAL_PLAYWRIGHT_MODULE`, `VISUAL_BROWSER_EXECUTABLE`, `VISUAL_FONT_MODULES`, `VISUAL_EVIDENCE_DIR`.
 
-The regression was reproduced on main aa155d73: the Control Escolar name column was 22px at 1920px, and the first synthetic row grew to 434px. Financial workspace overrides must exclude `.control-escolar-screen`, even though both roots use `.students-screen`. Control Escolar retains its own four-column identity grid, quality rail and group graphics. The photo fixture now includes both a selected and unselected student with a cached photo: both must retain the original grade/photo animation. Reduced motion shows the still photo and stops the institutional drift. Keep compact row capacity and account height when adjusting portrait sizes.
+The regression was reproduced on main aa155d73: the Control Escolar name column was 22px at 1920px, and the first synthetic row grew to 434px. Financial workspace overrides must exclude `.control-escolar-screen`, even though both roots use `.students-screen`. Control Escolar retains its own four-column identity grid, quality rail and group graphics. The photo fixture now includes both a selected and unselected student with a cached photo: both must retain the original grade/photo animation. Reduced motion shows the still photo. The restored shared chrome is static. Keep compact row capacity and account height when adjusting portrait sizes.
 
 These checks prove browser rendering and fixture interactions, not live API or database health. Backend, schema, roles and photo-source contracts are unchanged by this correction.
 
 At viewport heights below 550px, the Control Escolar KPI rail keeps all five indicators in a shorter composition so the first complete row remains reachable. The same browser gate requires at least one complete row at 1150×410. Its production selection, filters and quality indicators retain their existing handlers.
+
+
+## Visible photos and readable Control Escolar follow-up
+
+Rows previously read cached photo URLs without loading uncached portraits. `utils/studentPhotos.js` now shares row/detail requests through the existing photo endpoint, with three concurrent lookups, session URL reuse, a five-minute negative cache and no negative cache for transient failures. Only intersecting list rows request uncached photos. Legacy `none` entries without a check time expire; opening a record retains the existing photo preview and face-image processor. Source service, authentication and response shape are unchanged.
+
+Use `&photos=uncached` in the students-account lab to avoid seeding photo URLs. The permanent browser gate supplies synthetic photos and Vision geometry/pixels, verifies a genuinely unselected uncached row, grade/photo/grade phases, processed image rendering, scroll loading, selected/row request deduplication, concurrency, missing-photo caching and transient failure handling. All API/Vision responses in this gate are fixtures, not live service verification.
+
+Control Escolar now lays out at rendered size rather than scaling the desktop canvas. Narrow available workspaces focus the selected record with a return control. Its sidebar role permissions, student selection, filters, draft/save/discard handlers, group masks, tabs, progress actions and fields retain their original data flows. At narrow list widths the quality score stays visible; its existing accessible health description is also available as a tooltip, while the complete record keeps every health field.
+
+Compared with main `56ac11b5`, using the same synthetic records and fonts:
+
+| Viewport | Complete Control rows before / after | Visible record body before / after |
+| --- | ---: | ---: |
+| 1920×1080 detail (1920×941 list) | 4 / 5 | 533px / 695px |
+| 1366×768 | 4 / 5 | 349px / 407px |
+| 1024×768 | 5 / 5 | 283px / 433px |
+| 900×640 | 3 / 3 | 189px / 305px |
+| 390×844 | 1 / 1 | 168px / 300px |
+| 1150×410 | 1 / 1 | 89px / 126px |
+
+Visible record body excludes the previous footer overlap. The new footer occupies separate layout space. Student names use weight 500, detail titles 600 and supporting copy 450–500; the original KPI medallions, grade imagery and group graphics remain. Alumnos retains 8 / 13 / 5 complete rows at 1366 / 1920 / 1024, with unchanged account body heights across all six sizes.
+
+The browser gate checks all seven Control detail tabs, local edit → enabled save → discard without sending a mutation, and return → reopen. It also requires identical solid primary fills for Nuevo Alumno, Agregar documento and enabled Control save. Institutional chrome returns to the prior pale/sidebar palette; both official marks and the Aurora v2 logo remain. No backend, schema, production runtime configuration, roles or authentication changes are part of this follow-up.

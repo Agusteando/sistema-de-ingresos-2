@@ -1031,13 +1031,8 @@
   </Teleport>
 </template>
 
-<script>
-// Photo requests stay detail-only: opening Estado de Cuenta resolves the photo,
-// then the matrícula-keyed session cache lets the list reuse it later.
-const studentPhotoRequests = new Map();
-</script>
-
 <script setup>
+import { loadStudentPhoto } from "~/utils/studentPhotos";
 import {
   ref,
   computed,
@@ -1528,8 +1523,6 @@ const normalizePhotoMatricula = (value) =>
   String(value || "")
     .trim()
     .toUpperCase();
-const photoStorageKey = (matricula) =>
-  `foto_${normalizePhotoMatricula(matricula)}`;
 const validDebts = computed(() => debts.value.filter((d) => d.saldo > 0));
 const accountDebtTotal = computed(() =>
   validDebts.value.reduce((acc, debt) => acc + Number(debt?.saldo || 0), 0),
@@ -2249,54 +2242,18 @@ const clearSiblingLinks = async () => {
 
 const loadPhoto = async () => {
   const matricula = normalizePhotoMatricula(props.student?.matricula);
-  if (!matricula) return;
-  if (!process.client) return;
-  const key = photoStorageKey(matricula);
-
-  const cached = sessionStorage.getItem(key);
-  if (cached) {
-    photoUrl.value = cached === "none" ? null : cached;
-    if (cached !== "none")
-      emit("photo-loaded", { matricula, photoUrl: cached });
-    return;
-  }
-
+  if (!matricula || !process.client) return;
   photoLoading.value = true;
   photoUrl.value = null;
-
   try {
-    let request = studentPhotoRequests.get(matricula);
-    if (!request) {
-      request = $fetch(`/api/students/${encodeURIComponent(matricula)}/photo`, {
-        params: { format: "json" },
-      }).finally(() => {
-        studentPhotoRequests.delete(matricula);
-      });
-      studentPhotoRequests.set(matricula, request);
-    }
-
-    const res = await request;
+    const photo = await loadStudentPhoto(matricula);
     if (normalizePhotoMatricula(props.student?.matricula) !== matricula) return;
-
-    if (res && res.photoUrl) {
-      photoUrl.value = res.photoUrl;
-      sessionStorage.setItem(key, res.photoUrl);
-      emit("photo-loaded", { matricula, photoUrl: res.photoUrl });
-    } else {
-      photoUrl.value = null;
-      sessionStorage.setItem(key, "none");
-    }
-  } catch (e) {
-    if (normalizePhotoMatricula(props.student?.matricula) === matricula) {
-      photoUrl.value = null;
-      if (e?.statusCode === 404 || e?.response?.status === 404) {
-        sessionStorage.setItem(key, "none");
-      }
-    }
+    photoUrl.value = photo;
+    if (photo) emit("photo-loaded", { matricula, photoUrl: photo });
+  } catch {
+    if (normalizePhotoMatricula(props.student?.matricula) === matricula) photoUrl.value = null;
   } finally {
-    if (normalizePhotoMatricula(props.student?.matricula) === matricula) {
-      photoLoading.value = false;
-    }
+    if (normalizePhotoMatricula(props.student?.matricula) === matricula) photoLoading.value = false;
   }
 };
 
