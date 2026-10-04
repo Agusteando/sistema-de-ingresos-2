@@ -12,7 +12,7 @@ export default {
   theme: {
     extend: {
       colors: {
-        brand: { leaf: '#618B2F', campus: '#00692F', teal: '#007F92' },
+        brand: { leaf: '#8EC153', campus: '#4E844E', teal: '#007F92' },
         accent: { coral: '#E83F4B', gold: '#FCBF2C', sky: '#66A8D8' },
         neutral: { ink: '#1F2937', mist: '#E5E7EB', canvas: '#FFFFFF' },
         app: '#F9FAFB'

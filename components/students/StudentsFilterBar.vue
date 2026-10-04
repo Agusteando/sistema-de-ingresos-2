@@ -26,19 +26,19 @@
     </div>
 
     <div class="grade-filter">
-      <div class="grade-tabs" aria-label="Filtrar por grado">
+      <UiSlideSelect class="grade-tabs" label="Filtrar por grado" :selection="`${activeGrado}:${activeSaldoFilter}`" :active-index="activeGrado ? availableGrados.indexOf(activeGrado) + 2 : activeSaldoFilter === 'debt' ? 1 : 0">
         <UiChip :active="activeGrado === '' && activeSaldoFilter === 'all'" @click="clearGradeFilters">Todos</UiChip>
         <UiChip debt :active="activeSaldoFilter === 'debt'" @click="$emit('toggle-debt')">
           <span>Con adeudo</span><i aria-hidden="true"></i>
         </UiChip>
         <UiChip v-for="g in availableGrados" :key="g" :active="activeGrado === g" @click="selectGrade(g)">{{ g }}</UiChip>
-      </div>
+      </UiSlideSelect>
 
       <Transition name="filter-groups">
-        <div v-if="activeGrado && availableGrupos.length" class="group-tabs" aria-label="Filtrar por grupo">
+        <UiSlideSelect v-if="activeGrado && availableGrupos.length" class="group-tabs" label="Filtrar por grupo" :selection="activeGrupo" :active-index="activeGrupo ? availableGrupos.indexOf(activeGrupo) + 1 : 0">
           <UiChip :active-group="activeGrupo === ''" @click="$emit('update-active-grupo', '')">Todos los grupos</UiChip>
           <UiChip v-for="grp in availableGrupos" :key="grp" :active-group="activeGrupo === grp" @click="$emit('update-active-grupo', grp)">Grupo {{ grp }}</UiChip>
-        </div>
+        </UiSlideSelect>
       </Transition>
     </div>
 
@@ -51,6 +51,7 @@
 <script setup>
 import { LucideDownload, LucideFilter, LucideSearch } from 'lucide-vue-next'
 import UiButton from '~/components/ui/UiButton.vue'
+import UiSlideSelect from '~/components/ui/UiSlideSelect.vue'
 import UiChip from '~/components/ui/UiChip.vue'
 
 const emit = defineEmits([

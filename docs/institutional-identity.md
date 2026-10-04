@@ -59,3 +59,9 @@ Final prompt (built-in image-generation mode):
 ## Exact-color classic Aurora edition (2026-10-04)
 
 Image generation refined the classic A/orbit/star and wordmark while preserving its composition, alpha and flat shapes. `aurora-logo-institutional.webp` stores that source. Image generation approximates colors, so `aurora-logo-institutional.svg` embeds the source and maps its two flat color regions to the palette’s exact `#618B2F` and `#007F92` through an sRGB SVG filter with literal palette-color floods. The filter corrects the generated interior’s unintended near-opaque alpha while retaining transparent edges. Sidebar and login use the same self-contained SVG. No gradients, external image dependencies or institutional-logo regeneration are involved.
+
+## Product palette override — 4 October 2026
+
+The owner explicitly restored Aurora’s original green palette: leaf `#8EC153`, campus/actions `#4E844E`, hover `#3F713F`. These replace the dark printed IECS green in application tokens, active pills, actions and the flat Aurora mark. Both principal student CTAs use the same fill and hover. The official combined emblem and fingerprint assets remain intact. Printed source values above document the supplied guide, not the current product color decision.
+
+Alumnos photo resolution now reads the central `matricula.foto` path first, as Control Escolar does, with the existing external endpoint retained as fallback. A bounded path query avoids loading binary attachment payloads. Legacy negative photo-cache entries from the old external-only source are invalidated. The original row grade/photo cycle and permanent detail portrait remain unchanged.

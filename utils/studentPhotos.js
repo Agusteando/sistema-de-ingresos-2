@@ -1,6 +1,6 @@
 import { normalizeStudentMatricula, photoStorageKey } from '~/shared/utils/studentPresentation'
 
-// Row and detail consumers share requests. Only visible rows ask for photos.
+// Row and detail consumers share the same three-request queue and positive session cache.
 const requests = new Map()
 const queue = []
 let active = 0
@@ -14,8 +14,8 @@ export function readStudentPhoto(matricula) {
     if (!value) return undefined
     if (value !== 'none') return value
     const checked = Number(sessionStorage.getItem(`${key}_checked`))
-    // Older consumers also wrote 'none' for empty/error responses. Trust only a confirmed 404.
-    const confirmedMissing = sessionStorage.getItem(`${key}_missing`) === '404'
+    // Older consumers also wrote 'none' for empty/error responses. Trust only a confirmed 404 after the central-photo source fix.
+    const confirmedMissing = sessionStorage.getItem(`${key}_missing`) === '404-central'
     return confirmedMissing && checked && Date.now() - checked < MISSING_PHOTO_TTL ? null : undefined
   } catch { return undefined }
 }
@@ -26,7 +26,7 @@ function rememberPhoto(matricula, photo) {
     sessionStorage.setItem(key, photo || 'none')
     sessionStorage.setItem(`${key}_checked`, String(Date.now()))
     if (photo) sessionStorage.removeItem(`${key}_missing`)
-    else sessionStorage.setItem(`${key}_missing`, '404')
+    else sessionStorage.setItem(`${key}_missing`, '404-central')
   } catch { /* Private mode or full storage must not prevent rendering. */ }
 }
 
@@ -59,7 +59,7 @@ export function loadStudentPhoto(value, { refreshMissing = false } = {}) {
         const cached = readStudentPhoto(matricula)
         if (cached !== undefined && !(cached === null && refreshMissing)) { resolve(cached); return }
         const result = await $fetch(`/api/students/${encodeURIComponent(matricula)}/photo`, {
-          params: { format: 'json' }, cache: 'no-store', timeout: 12000, retry: 0
+          params: { format: 'json' }
         })
         const photo = typeof result?.photoUrl === 'string' && result.photoUrl && result.photoUrl !== 'none' ? result.photoUrl : null
         // Only the endpoint's explicit 404 establishes that a photo does not exist.

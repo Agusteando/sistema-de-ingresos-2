@@ -382,12 +382,12 @@ body.students-route-active .income-content { padding: 12px 16px; }
 :where(.students-screen:not(.control-escolar-screen)) .filter-bar { grid-template-columns: minmax(180px, 26%) minmax(0, 1fr) auto; gap: 10px; }
 :where(.students-screen:not(.control-escolar-screen)) .grade-filter { display: flex; flex-direction: row; align-items: center; min-width: 0; gap: 8px; }
 :where(.students-screen:not(.control-escolar-screen)) .grade-tabs { flex: 1 1 0; min-width: 0; gap: 5px; padding-block: 2px; }
-:where(.students-screen:not(.control-escolar-screen)) .group-tabs { flex: 0 1 38%; min-width: 140px; gap: 5px; border-left: 1px solid #dce4df; padding-left: 8px; }
+:where(.students-screen:not(.control-escolar-screen)) .group-tabs { flex: 0 1 38%; --slide-select-min: 242px; min-width: 242px; gap: 5px; border-left: 1px solid #dce4df; padding-left: 8px; }
 :where(.students-screen:not(.control-escolar-screen)) .filter-bar .ui-chip { flex-shrink: 0; min-height: 34px; padding: 0 12px; font-size: 13px; }
 @media (max-width: 760px) {
  :where(.students-screen:not(.control-escolar-screen)) .filter-bar { grid-template-columns: minmax(0, 1fr) auto; }
  :where(.students-screen:not(.control-escolar-screen)) .filter-bar .search-control { grid-column: 1; }
  :where(.students-screen:not(.control-escolar-screen)) .filter-bar .export-button { grid-column: 2; grid-row: 1; }
  :where(.students-screen:not(.control-escolar-screen)) .grade-filter { grid-column: 1 / -1; flex-direction: column; align-items: stretch; gap: 4px; }
- :where(.students-screen:not(.control-escolar-screen)) .grade-tabs, :where(.students-screen:not(.control-escolar-screen)) .group-tabs { flex: none; width: 100%; border: 0; padding-left: 0; }
+ :where(.students-screen:not(.control-escolar-screen)) .grade-tabs, :where(.students-screen:not(.control-escolar-screen)) .group-tabs { flex: none; width: 100%; --slide-select-min: 0; border: 0; padding-left: 0; }
 }

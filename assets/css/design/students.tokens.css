@@ -5,8 +5,8 @@ body.students-route-active {
   --students-surface: #ffffff;
   --students-border: #dfe7f0;
   --students-border-soft: #edf2f7;
-  --students-green: var(--brand-iecs, #618b2f);
-  --students-green-strong: var(--brand-iecs-secondary, #00692f);
+  --students-green: var(--brand-iecs, #8ec153);
+  --students-green-strong: var(--brand-iecs-secondary, #4e844e);
   --students-green-soft: #eef8eb;
   --students-teal: var(--brand-iedis, #007f92);
   --students-blue: #3478d8;

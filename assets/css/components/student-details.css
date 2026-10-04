@@ -2636,7 +2636,7 @@ button.student-service-mini {
 }
 
 .student-services-catalog button:hover:not(:disabled) {
-  border-bottom-color: #618b2f;
+  border-bottom-color: #8ec153;
   color: #2e7f33;
 }
 

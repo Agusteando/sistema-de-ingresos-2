@@ -2071,9 +2071,9 @@ onMounted(loadAdmin)
 }
 .workshop-chip-grid button:hover { color: #2e7f33; }
 .workshop-chip-grid button.selected {
-  border-bottom-color: #618b2f;
+  border-bottom-color: #8ec153;
   color: #2e7f33;
-  box-shadow: inset 0 -2px #618b2f;
+  box-shadow: inset 0 -2px #8ec153;
 }
 .workshop-chip-grid span {
   overflow: hidden;

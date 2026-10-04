@@ -300,7 +300,7 @@ let disposed = false
 
 function loadVisiblePhoto(matricula) {
   const student = props.displayedStudents.find(row => normalizeStudentMatricula(row.matricula) === matricula)
-  if (disposed || !visibleRows.has(matricula) || !student || activeStudentPhotoUrl(student) || pendingPhotos.has(matricula) || retryTimers.has(matricula)) return
+  if (disposed || !student || activeStudentPhotoUrl(student) || pendingPhotos.has(matricula) || retryTimers.has(matricula)) return
   const attempt = attempts.get(matricula) || 0
   if (attempt >= 4) return
   attempts.set(matricula, attempt + 1)
@@ -331,7 +331,14 @@ function observeStudentRow(element, student) {
   }
 }
 
+// Prime the first screen independently of observer geometry. Keep the rest lazy
+// so a large financial list does not issue a photo query for every student.
+watch(() => props.displayedStudents, students => {
+  if (import.meta.client) for (const student of students.slice(0, 16)) loadVisiblePhoto(normalizeStudentMatricula(student.matricula))
+}, { immediate: true, deep: false })
+
 onMounted(() => {
+  for (const student of props.displayedStudents.slice(0, 16)) loadVisiblePhoto(normalizeStudentMatricula(student.matricula))
   photoObserver = new IntersectionObserver(entries => {
     for (const entry of entries) {
       const matricula = normalizeStudentMatricula(entry.target.dataset.matricula)
@@ -352,7 +359,7 @@ onBeforeUnmount(() => {
   retryTimers.clear()
 })
 
-const activeStudentPhotoUrl = (student) => {
+function activeStudentPhotoUrl(student) {
   const matricula = normalizeStudentMatricula(student?.matricula)
   if (!matricula) return ''
   const cached = props.photoCache?.[matricula]

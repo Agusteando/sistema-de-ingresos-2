@@ -8,11 +8,11 @@ const output = process.env.VISUAL_EVIDENCE_DIR || '/tmp/aurora-ui-evidence';
 mkdirSync(output,{recursive:true});
 const log = openSync(`${output}/dev.log`,'w');
 const server = spawn(process.execPath,['node_modules/nuxt/bin/nuxt.mjs','dev','--host','127.0.0.1','--port','3004'],{cwd:repo,detached:true,env:{...process.env,NITRO_NO_UNIX_SOCKET:'1',NODE_USE_ENV_PROXY:'0',DB_TRANSPORT:'bridge'},stdio:['ignore',log,log]});
-let b;
+let b, p;
 const deadline=setTimeout(()=>{console.error('UI verification exceeded eight minutes');try{process.kill(-server.pid,'SIGTERM')}catch{}process.exit(1)},480000);
 try {
  b=await chromium.launch({headless:true,...(process.env.VISUAL_BROWSER_EXECUTABLE ? {executablePath:process.env.VISUAL_BROWSER_EXECUTABLE,args:['--no-sandbox','--no-zygote','--single-process','--disable-dev-shm-usage','--use-gl=angle','--use-angle=swiftshader']} : {})});
- const p=await b.newPage();
+ p=await b.newPage();
  const fontCss=['montserrat','fredoka'].flatMap(family=>[500,600,700].map(weight=>{
  const file=`${family}/files/${family}-latin-${weight}-normal.woff2`;
  const path=process.env.VISUAL_FONT_MODULES ? `${process.env.VISUAL_FONT_MODULES}/@fontsource/${file}` : require.resolve(`@fontsource/${file}`);
@@ -77,17 +77,36 @@ try {
    await p.locator('.grade-tabs button').last().waitFor({state:'attached'});
    await p.locator('.students-back-button').evaluate(e=>e.click());
    await p.locator('.grade-filter').waitFor({state:'visible'});
-   const pills=p.locator('.grade-tabs button');
+   const pills=p.locator('.grade-tabs .ui-chip');
    if(await pills.count()!==8||await p.locator('.filter-bar select').count()||!await p.locator('.grade-filter').isVisible())throw Error(`Original pills unavailable at ${w}`);
    await pills.filter({hasText:/^Primero$/}).click();
    if(await pills.filter({hasText:/^Primero$/}).getAttribute('aria-pressed')!=='true')throw Error('Grade pill does not activate');
    const group=p.locator('.group-tabs button').filter({hasText:'Grupo ASIA'});await group.click();
    if(await group.getAttribute('aria-pressed')!=='true'||await p.locator('.student-row').count()<1)throw Error('Group pill does not filter');
+   await group.press('End');
+   await p.waitForTimeout(150);
+   const lastGroup=p.locator('.group-tabs .ui-chip').last();
+   const groupVisible=await lastGroup.evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return {visible:r.left>=v.left-2&&r.right<=v.right+2,left:r.left,right:r.right,viewportLeft:v.left,viewportRight:v.right,pressed:e.getAttribute('aria-pressed')};});
+   if(!groupVisible.visible||groupVisible.pressed!=='true')throw Error(`Final group clipped/unselected at ${w}: ${JSON.stringify(groupVisible)}`);
+   await lastGroup.press('Home');
+   await p.waitForTimeout(150);
+   const allGroupsVisible=await p.locator('.group-tabs .ui-chip').first().evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return r.left>=v.left-2&&r.right<=v.right+2;});
+   if(!allGroupsVisible)throw Error(`All groups pill clipped at ${w}`);
    await pills.filter({hasText:/^Todos$/}).click();
    await p.locator('.group-tabs').waitFor({state:'detached'});
    await pills.filter({hasText:'Con adeudo'}).click();
    if(await pills.filter({hasText:'Con adeudo'}).getAttribute('aria-pressed')!=='true')throw Error('Debt pill does not activate');
    await pills.filter({hasText:/^Todos$/}).click();
+   // Keyboard selection must reach the final grade, keep it fully in view, and return.
+   const first=p.locator('.grade-tabs .ui-chip').filter({hasText:/^Todos$/});
+   await first.press('End');
+   await p.waitForTimeout(150);
+   const last=p.locator('.grade-tabs .ui-chip').last();
+   const visible=await last.evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return r.left>=v.left-2&&r.right<=v.right+2;});
+   if(!visible||await last.getAttribute('aria-pressed')!=='true')throw Error(`Final grade clipped/unselected at ${w}: ${JSON.stringify(await last.evaluate(e=>{const r=e.getBoundingClientRect(),v=e.closest('.slide-select__viewport').getBoundingClientRect();return {left:r.left,right:r.right,vl:v.left,vr:v.right,pressed:e.getAttribute('aria-pressed')};}))}`);
+   await last.press('ArrowLeft');
+   await p.locator('.grade-tabs .ui-chip[aria-pressed="true"]').press('Home');
+   console.log('SLIDE SELECT KEYBOARD',w,'passed');
    console.log('ORIGINAL FILTER PILLS',w,'passed');
  }
  await p.setViewportSize({width:1366,height:768});
@@ -117,7 +136,7 @@ try {
    const counts={};for(let i=0;i<pixels.length;i+=4){if(pixels[i+3]!==255)continue;const key=[pixels[i],pixels[i+1],pixels[i+2]].join(',');counts[key]=(counts[key]||0)+1;}
    return counts;
  });
- if((logoPalette['97,139,47']||0)<100||(logoPalette['0,127,146']||0)<100)throw Error(`Logo does not render the institutional palette: ${JSON.stringify(logoPalette)}`);
+ if((logoPalette['142,193,83']||0)<100||(logoPalette['0,127,146']||0)<100)throw Error(`Logo does not render the institutional palette: ${JSON.stringify(logoPalette)}`);
  console.log('EXACT RENDERED LOGO COLORS',logoPalette);
 
  await p.screenshot({path:`${output}/identity-restored.png`,timeout:10000});
@@ -135,7 +154,7 @@ try {
  console.log('LEGACY CACHE, EMPTY RESPONSE AND SELECTED PHOTO RECOVERY PASSED',permanent);
  await p.locator('.student-row[data-matricula="LAB0000"] .has-photo').waitFor();
  const visibleRequests=requests.slice(startRequests).filter(x=>x.endsWith('/photo'));
- if(!visibleRequests.includes('/api/students/PTO696/photo')||visibleRequests.includes('/api/students/LAB0047/photo'))throw Error(`Visible-row loading gate failed: ${JSON.stringify(visibleRequests)}`);
+ if(!visibleRequests.includes('/api/students/PTO696/photo')||visibleRequests.includes('/api/students/LAB0047/photo'))throw Error(`Displayed-row loading gate failed: ${JSON.stringify(visibleRequests)}`);
  await p.waitForFunction(()=>document.querySelector('.student-row[data-matricula="PTO696"] .vision-face-image img')?.src.startsWith('data:image/png'));
  const phases=[];
  for(const time of [0,5500,8750]) {
@@ -174,7 +193,7 @@ try {
  },time));
  if(controlPhases[0].grade!=='1'||controlPhases[1].photo!=='1'||controlPhases[2].grade!=='1')throw Error(`Control grade/photo cycle lost: ${JSON.stringify(controlPhases)}`);
  console.log('CONTROL GRADE/PHOTO CYCLE',controlPhases);
- await p.setViewportSize({width:1366,height:768});await p.locator('.sidebar-nav a[href="/control-escolar"]').click();await p.locator('.ce-student-row').first().waitFor();await p.locator('.ce-student-row').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});await p.waitForTimeout(500);await p.screenshot({path:`${output}/${label}-control-detail.png`,timeout:10000});
+ await p.setViewportSize({width:1366,height:768});await p.locator('.sidebar-nav a[href="/control-escolar"]').click();await p.locator('.ce-student-row').first().waitFor();await p.locator('.ce-student-row .student-name').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});await p.waitForTimeout(500);await p.screenshot({path:`${output}/${label}-control-detail.png`,timeout:10000});
  for(const [w,h] of [[1920,1080],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]) {
    await p.setViewportSize({width:w,height:h});await p.waitForTimeout(500);
    const detail=await p.evaluate(()=>({width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,bodyHeight:Math.max(0,Math.min(document.querySelector('.ce-detail-body').getBoundingClientRect().bottom,document.querySelector('.ce-detail-footer').getBoundingClientRect().top)-document.querySelector('.ce-detail-body').getBoundingClientRect().top),titleWeight:getComputedStyle(document.querySelector('.ce-student-hero-copy h2')).fontWeight,nameWeight:getComputedStyle(document.querySelector('.student-name')).fontWeight,tabs:[...document.querySelectorAll('.ce-detail-tabs button')].map(e=>e.textContent.trim())}));
@@ -216,12 +235,12 @@ try {
  const nameInput=p.locator('[data-ce-field="nombres"] input');const originalName=await nameInput.inputValue();
  await nameInput.fill('Alumno Prueba Editado');
  const save=p.locator('.ce-detail-footer-actions .btn-primary');if(!await save.isEnabled())throw Error('Editing no longer enables save');
- if(await save.evaluate(e=>getComputedStyle(e).backgroundColor)!=='rgb(0, 105, 47)')throw Error('Control Escolar save fill differs from primary CTAs');
+ if(await save.evaluate(e=>getComputedStyle(e).backgroundColor)!=='rgb(78, 132, 78)')throw Error('Control Escolar save fill differs from primary CTAs');
  await p.locator('.ce-detail-footer-actions .btn-secondary').click();if(await nameInput.inputValue()!==originalName||await save.isEnabled())throw Error('Discard did not restore the record');
- await p.setViewportSize({width:900,height:640});await p.locator('.ce-mobile-detail-back').click();await p.locator('.ce-student-row').first().waitFor({state:'visible'});await p.locator('.ce-student-row').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});
+ await p.setViewportSize({width:900,height:640});await p.locator('.ce-mobile-detail-back').click();await p.locator('.ce-student-row').first().waitFor({state:'visible'});await p.locator('.ce-student-row .student-name').first().click();await p.locator('.ce-detail-shell').waitFor({state:'visible'});
  console.log('CONTROL EDIT, DISCARD AND RETURN PASSED');
  if(requests.some(path=>path.includes('/save')))throw Error('Visual check unexpectedly submitted a record');
  await p.context().clearCookies();await p.goto('http://127.0.0.1:3004/login',{waitUntil:'domcontentloaded'});await p.locator('.brand-system-logo').waitFor();if(await p.locator('.brand-system-logo').getAttribute('src')!=='/brand/aurora-logo-institutional.svg')throw Error('Login logo regressed');await p.screenshot({path:`${output}/login.png`,timeout:10000});
  console.log('ERRORS',errors);console.log('ENDPOINTS',[...new Set(requests)]);writeFileSync(`${output}/${label}-control-results.json`,JSON.stringify({results,errors,requests},null,2));if(errors.length)throw Error(errors.join(';'));
-} catch(e) { console.error(e.stack); process.exitCode=1; }
+} catch(e) { console.error(e.stack); if(p){console.error('PAGE',p.url());console.error((await p.locator('body').innerText()).slice(0,2000));await p.screenshot({path:`${output}/failure.png`});} process.exitCode=1; }
 finally { if(b)await b.close();try{process.kill(-server.pid,'SIGTERM')}catch{}setTimeout(()=>process.exit(process.exitCode||0),1500); }

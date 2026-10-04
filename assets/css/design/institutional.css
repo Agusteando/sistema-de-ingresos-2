@@ -1,7 +1,7 @@
 /* IECS–IEDIS institutional identity. Source inventory: docs/institutional-identity.md. */
 :root {
-  --brand-iecs: #618b2f;
-  --brand-iecs-secondary: #00692f;
+  --brand-iecs: #8ec153;
+  --brand-iecs-secondary: #4e844e;
   --brand-iecs-tertiary: #6d5f24;
   --brand-iedis: #007f92;
   --brand-iedis-secondary: #00497b;
@@ -12,8 +12,8 @@
   --brand-preschool: #e83f4b;
   --brand-elementary: #fcbf2c;
   --brand-middle: #66a8d8;
-  --action-primary: #00692f;
-  --action-primary-hover: #00497b;
+  --action-primary: #4e844e;
+  --action-primary-hover: #3f713f;
   --brand-pattern: url('/brand/institutional-pattern.webp');
 }
 

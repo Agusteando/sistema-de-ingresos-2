@@ -10,8 +10,8 @@
     --soft-line: #edf2f7;
     --canvas: #f9fbfa;
     --mint: #eaf8e7;
-    --leaf: #618b2f;
-    --leaf-dark: #00692f;
+    --leaf: #8ec153;
+    --leaf-dark: #4e844e;
     --teal: #007f92;
     --sky: #397fe8;
     --coral: #ff4d38;
@@ -117,12 +117,12 @@
   }
   .btn-primary {
     @apply text-white focus:ring-brand-leaf;
-    background: var(--action-primary, #00692f);
+    background: var(--action-primary, #4e844e);
     box-shadow: 0 12px 24px rgba(78, 148, 67, 0.22);
   }
   .btn-secondary {
     @apply bg-white focus:ring-brand-campus;
-    color: var(--brand-iecs-secondary, #00692f);
+    color: var(--brand-iecs-secondary, #4e844e);
     border-color: rgba(78, 132, 78, 0.28);
     box-shadow: 0 8px 20px rgba(22, 38, 65, 0.05);
   }

@@ -10,12 +10,14 @@ const source = readFileSync(new URL('../server/api/students/[matricula]/photo.ge
   .replace('export default defineEventHandler', 'globalThis.handler = defineEventHandler')
 const javascript = ts.transpile(source, { target: ts.ScriptTarget.ES2022 })
 
-function setup(config, externalStatus = 200) {
+function setup(config, externalStatus = 200, storedPhoto = null) {
   const requests = []
   const headers = {}
   const event = { context: { params: { matricula: 'PT123' } }, status: 200 }
   const context = createContext({
     URL, AbortController, setTimeout, clearTimeout, crypto,
+    getCentralTableColumns: async () => new Set(['matricula', 'foto']),
+    controlEscolarCentralQuery: async () => storedPhoto === null ? [] : [{ foto: storedPhoto }],
     console: { error() {} },
     useRuntimeConfig: () => config,
     getExternalSyncConfig: () => ({ apiKey: config.externalSyncApiKey || '' }),
@@ -66,5 +68,20 @@ test('source rejection is retryable; only genuine missing photos return 404', as
     await s.invoke()
     assert.equal(s.event.status, status === 404 ? 404 : 502)
     assert.equal(s.headers['Cache-Control'], status === 404 ? 'private, max-age=60' : 'no-store')
+  }
+})
+
+// Exercise the actual handler: a matricula photo must work without an external key.
+test('Alumnos resolves matricula.foto first, with no external photo service dependency', async () => {
+  for (const [stored, expected] of [
+    ['https://example.invalid/student.jpg', 'https://example.invalid/student.jpg'],
+    ['/uploads/student.jpg', 'https://matricula.casitaapps.com/uploads/student.jpg'],
+    ['student.jpg', 'https://matricula.casitaapps.com/uploads/student.jpg']
+  ]) {
+    const s = setup({}, 503, stored)
+    const result = await s.invoke()
+    assert.equal(result.photoUrl, expected)
+    assert.equal(s.requests.length, 0)
+    assert.equal(s.event.status, 200)
   }
 })

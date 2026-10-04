@@ -1,5 +1,6 @@
 import { runWithBridgeAgentId } from '../../../utils/db'
 import crypto from 'node:crypto'
+import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
 import { buildExternalHeaders, cleanApiKey, getExternalSyncConfig } from '../../../utils/externalBaseSync'
 
 type PhotoCacheEntry = {
@@ -197,6 +198,26 @@ const fetchExternalPhoto = async (matricula: string): Promise<PhotoCacheEntry | 
   }
 }
 
+// Control Escolar renders matricula.foto before consulting the external fallback.
+// Resolve that same stored path here so Alumnos rows and details share its source.
+const fetchStudentPhoto = async (matricula: string): Promise<PhotoCacheEntry | null> => {
+  try {
+    const columns = await getCentralTableColumns('matricula')
+    if (columns.has('foto') && columns.has('matricula')) {
+      const rows = await controlEscolarCentralQuery<any[]>(
+        'SELECT CASE WHEN OCTET_LENGTH(`foto`) BETWEEN 1 AND 2048 THEN CAST(`foto` AS CHAR) ELSE NULL END AS foto FROM `matricula` WHERE UPPER(TRIM(`matricula`)) = ? LIMIT 1',
+        [matricula]
+      )
+      const stored = String(rows[0]?.foto || '').trim()
+      const photoUrl = stored && !/^data:/i.test(stored) ? resolvePhotoUrl(stored) : null
+      if (photoUrl) return { matricula, photoUrl, etag: createEtag(matricula, photoUrl), expiresAt: Date.now() + SUCCESS_TTL_MS }
+    }
+  } catch {
+    // A disconnected central DB may still have a photo in the existing external source.
+  }
+  return await fetchExternalPhoto(matricula)
+}
+
 const resolveEntry = async (matricula: string, refresh: boolean) => {
   const cached = photoCache.get(matricula)
 
@@ -209,7 +230,7 @@ const resolveEntry = async (matricula: string, refresh: boolean) => {
     return await pending
   }
 
-  const lookup = fetchExternalPhoto(matricula)
+  const lookup = fetchStudentPhoto(matricula)
     .then(entry => {
       if (entry) {
         photoCache.set(matricula, entry)
