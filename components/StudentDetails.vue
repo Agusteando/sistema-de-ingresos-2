@@ -65,6 +65,7 @@
           {
             'account-card--embedded': !detailsExpanded,
             'account-card--workspace': detailsExpanded,
+            'account-card--invoices': detailsExpanded && accountViewMode === 'invoices',
             'is-account-transitioning': detailTransitioning,
             'is-account-refreshing': isAccountRefreshing,
             'is-account-stale':
@@ -3748,25 +3749,6 @@ const handleInvoiceSuccess = (invoice) => {
   border-radius: 9px;
 }
 
-.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row) {
-  min-height: 42px;
-  grid-template-columns: 24px minmax(0, 1fr) minmax(70px, auto) 96px;
-  gap: 7px;
-  padding: 5px 8px;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row.has-pay-action) {
-  grid-template-columns: 24px minmax(0, 1fr) minmax(70px, auto) 128px;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row__title strong) {
-  font-size: 0.64rem;
-}
-
-.student-details-shell:not(.student-details-shell--expanded) :deep(.payment-ledger-row__subline) {
-  font-size: 0.54rem;
-}
-
 @container student-details (max-width: 520px) {
   .student-details-shell:not(.student-details-shell--expanded) .debt-payment-ledger-row {
     display: block;
@@ -3876,4 +3858,23 @@ const handleInvoiceSuccess = (invoice) => {
 .student-talleres-info textarea { width:100%; resize:vertical; border:1px solid #dfe4e8; border-radius:9px; padding:8px 9px; font:inherit; font-size:11px; background:#fff; }
 .student-talleres-info-save { margin-top:8px; min-height:34px; padding:0 12px; border:0; border-radius:9px; background:#27323a; color:#fff; display:inline-flex; align-items:center; gap:5px; font-size:11px; font-weight:800; cursor:pointer; }
 .student-talleres-info-save:disabled { opacity:.55; cursor:default; }
+
+/* Invoices omit summary cards, so their expanded grid has one fewer row. */
+.account-card--workspace.account-card--invoices { grid-template-rows: 94px 40px minmax(0, 1fr) 48px; }
+
+/* Ledger summaries use the same typography as their payment and invoice rows. */
+.student-details-shell .account-timeline-wrap { border-radius: 10px; box-shadow: none; }
+.student-details-shell .timeline-card-copy .timeline-card-title-row > strong { font-size: 13px; font-weight: 500; line-height: 1.35; white-space: normal; overflow-wrap: anywhere; letter-spacing: normal; }
+.student-details-shell .timeline-card-copy .timeline-card-subline { font-size: 11px; font-weight: 450; white-space: normal; }
+.student-details-shell .timeline-card-status { font-size: 10px; font-weight: 500; }
+.student-details-shell .timeline-card-amount { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; color: #263c33; }
+.student-details-shell .timeline-action { width: 30px; height: 30px; border-radius: 7px; }
+
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-header--ledger,
+.student-details-shell--expanded .timeline-card-header--ledger { grid-template-columns: 24px minmax(0, 1fr) auto auto; min-height: 48px; padding: 6px 10px; }
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy .timeline-card-title-row > strong { font-size: 13px; font-weight: 500; }
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-copy .timeline-card-subline { font-size: 11px; font-weight: 450; }
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-status { font-size: 10px; font-weight: 500; }
+.student-details-shell:not(.student-details-shell--expanded) .timeline-card-amount { font-size: 13px; font-weight: 600; }
+.student-details-shell:not(.student-details-shell--expanded) .timeline-action { width: 30px; height: 30px; border-radius: 7px; }
 </style>

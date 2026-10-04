@@ -1,0 +1,22 @@
+/* Shared financial record language. Layout belongs to each ledger. */
+.account-ledger-row { min-width: 0; align-items: center; gap: 10px; min-height: 48px; padding: 5px 10px; border-bottom: 1px solid #e8edf0; background: #fff; transition: background 150ms ease; }
+.account-ledger-row:last-child { border-bottom: 0; }
+.account-ledger-row:hover, .account-ledger-row:focus-within { background: #f7faf6; }
+.account-ledger-row.is-selected, .account-ledger-row.is-highlighted { background: #f0f7ea; box-shadow: inset 3px 0 var(--action-primary, #4e844e); }
+.account-ledger-title { display: flex; flex-wrap: nowrap; align-items: center; min-width: 0; gap: 4px 8px; }
+.account-ledger-title strong { min-width: 0; color: #263c33; font-size: 13px; line-height: 1.3; font-weight: 500; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.account-ledger-meta { display: flex; flex-wrap: wrap; gap: 2px 9px; margin-top: 2px; color: #68766f; font-size: 11px; font-weight: 450; line-height: 1.25; overflow-wrap: anywhere; }
+.account-ledger-meta b { font-weight: 500; color: #495e52; }
+.account-ledger-status { flex: none; border-radius: 6px; padding: 1px 6px; font-size: 10px; font-weight: 500; line-height: 1.4; }
+.account-ledger-status.is-active { color: var(--action-primary, #4e844e); background: #edf5e8; }
+.account-ledger-status.is-pending { color: #206a80; background: #edf6fa; }
+.account-ledger-status.is-warning, .account-ledger-status.is-audit { color: #916016; background: #fff6e5; }
+.account-ledger-status.is-cancelled { color: #a84d45; background: #fff0ee; }
+.account-ledger-amount { align-self: center; color: #263c33; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; text-align: right; }
+.account-ledger-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 4px; opacity: 1; transform: none; }
+.account-ledger-actions button { display: inline-grid; flex: none; width: 30px; height: 30px; place-items: center; padding: 0; border: 1px solid #dfe7e0; border-radius: 7px; color: #4e6858; background: #fff; cursor: pointer; }
+.account-ledger-actions button:hover:not(:disabled) { border-color: #9fba91; color: var(--action-primary, #4e844e); background: #f0f7ea; }
+.account-ledger-actions button.is-danger, .account-ledger-actions button.payment-ledger-action--danger { color: #a84d45; }
+.account-ledger-actions button.is-danger:hover:not(:disabled), .account-ledger-actions button.payment-ledger-action--danger:hover:not(:disabled) { color: #a03830; border-color: #e7b5af; background: #fff3f1; }
+.account-ledger-actions button:disabled { cursor: not-allowed; opacity: .38; }
+.account-ledger-actions button:focus-visible { outline: 2px solid var(--action-primary, #4e844e); outline-offset: 2px; }
