@@ -17847,4 +17847,10 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-family-grid,
 .control-escolar-screen .ce-wide-field.ce-family-address { width: 100%; min-width: 0; }
 
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-edit-form input,
+  .control-escolar-screen .ce-edit-form select,
+  .control-escolar-screen .ce-edit-form textarea { font-size: 16px; }
+}
+
 </style>

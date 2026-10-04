@@ -132,6 +132,14 @@ try {
    if(clipped.length)throw Error(`Control tab ${i} clipped fields: ${JSON.stringify(clipped)}`);
    await p.screenshot({path:`${output}/control-tab-${i}.png`,timeout:10000});
  }
+ await p.setViewportSize({width:390,height:844});
+ for(let i=0;i<await tabs.count();i++) {
+   await tabs.nth(i).click();await p.waitForTimeout(100);
+   const invalidFields=await p.evaluate(()=>{const box=document.querySelector('.ce-detail-body').getBoundingClientRect();return [...document.querySelectorAll('.ce-tab-panel input,.ce-tab-panel select,.ce-tab-panel textarea')].filter(e=>e.getBoundingClientRect().height>1).filter(e=>{const r=e.getBoundingClientRect();return r.left<box.left-1||r.right>box.right+1||parseFloat(getComputedStyle(e).fontSize)<16}).map(e=>({className:e.className,font:getComputedStyle(e).fontSize}));});
+   if(invalidFields.length)throw Error(`Mobile Control tab ${i} has clipped or undersized fields: ${JSON.stringify(invalidFields)}`);
+ }
+ console.log('MOBILE CONTROL TABS AND FIELD SIZES PASSED');
+ await p.setViewportSize({width:1366,height:768});
  await tabs.nth(1).click();
  const nameInput=p.locator('[data-ce-field="nombres"] input');const originalName=await nameInput.inputValue();
  await nameInput.fill('Alumno Prueba Editado');
