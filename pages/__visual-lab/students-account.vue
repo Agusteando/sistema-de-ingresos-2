@@ -290,7 +290,7 @@ const visualInvoicesByMatricula = {
 }
 const selectedVisualInvoices = computed(() => visualInvoicesByMatricula[selectedStudent.value?.matricula] || [])
 const photoCache = computed(() => labMatriculas.reduce((cache, matricula) => {
-  cache[matricula] = matricula === 'PTO574' ? visualPhotoUrl : 'none'
+  cache[matricula] = ['PTO574', 'PTO696'].includes(matricula) ? visualPhotoUrl : 'none'
   return cache
 }, {}))
 

@@ -38,7 +38,7 @@
           class="sidebar-logo"
         />
         <img
-          src="/aurora-logo.png"
+          src="/brand/aurora-logo-v2.webp"
           alt="Aurora"
           class="sidebar-system-logo"
         />
@@ -3524,8 +3524,8 @@ const logout = async () => {
   .income-sidebar { border-radius: 0; background: linear-gradient(180deg, #fff, #f5faf4); box-shadow: none; }
   .sidebar-design-canvas { min-height: 0; will-change: auto; }
   .sidebar-design-canvas .sidebar-brand { display: flex; align-items: center; gap: 9px; min-height: 86px; flex: 0 0 auto; padding: 16px 12px; }
-  .sidebar-design-canvas .sidebar-logo { width: 43px; max-height: 40px; margin: 0; flex: 0 0 auto; }
-  .sidebar-design-canvas .sidebar-system-logo { width: 142px; margin: 0; }
+  .sidebar-design-canvas .sidebar-logo { width: 72px; max-height: 54px; margin: 0; flex: 0 0 auto; }
+  .sidebar-design-canvas .sidebar-system-logo { width: 112px; margin: 0; }
   .sidebar-design-canvas .sidebar-nav { min-height: 0; flex: 1 1 0; gap: 3px; padding: 4px 10px 10px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; }
   .sidebar-design-canvas .nav-item { min-height: 38px; flex: 0 0 auto; gap: 10px; padding: 8px 10px; border-radius: 8px; font-size: 13px; font-weight: 500; line-height: 1.3; box-shadow: none; transform: none; }
   .sidebar-design-canvas .nav-item svg { width: 18px; height: 18px; flex: 0 0 auto; }
