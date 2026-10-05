@@ -67,6 +67,8 @@ console.log(JSON.stringify({
     matricula: row.matricula,
     nombre: row.nombreCompleto || row.fullName || '',
     status: row.status,
+    baja: row.baja,
+    statusSource: row.statusSource,
     enrollmentState: row.enrollmentState,
     grado: row.grado,
     grupo: row.grupo || row.group,
