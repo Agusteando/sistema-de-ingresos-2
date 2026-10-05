@@ -108,3 +108,10 @@ for (const row of anomalies) {
 }
 
 // Runtime probe retriggered after main deployment of baja trace. retry 2
+
+
+const auditUrl = new URL('https://aurora.casitaiedis.edu.mx/api/external/v1/control-escolar/ui-audit-latest')
+auditUrl.searchParams.set('plantel', 'PM')
+auditUrl.searchParams.set('ciclo', '2026')
+const auditResponse = await fetch(auditUrl, { headers: authHeaders })
+console.log('UI_AUDIT_LATEST', auditResponse.status, await auditResponse.text())
