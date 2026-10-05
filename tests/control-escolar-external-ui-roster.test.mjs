@@ -59,3 +59,13 @@ test('external operator roster emits safe parity diagnostics for UI snapshot and
   assert.doesNotMatch(source, /actor_email/)
   assert.doesNotMatch(source, /actor_name/)
 })
+
+
+test('operator roster exposes explicit matricula baja trace without changing membership', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'server/api/external/v1/control-escolar/operator-roster.get.ts'),
+    'utf8'
+  )
+  assert.match(source, /baja:\s*Number\(student\?\.baja \|\| 0\) === 1 \? 1 : 0/)
+  assert.match(source, /statusSource:\s*clean\(student\?\.statusSource/)
+})
