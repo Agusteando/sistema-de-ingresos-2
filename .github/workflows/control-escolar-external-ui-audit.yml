@@ -1,0 +1,36 @@
+name: Control Escolar external UI audit trace
+
+on:
+  pull_request:
+    paths:
+      - 'server/api/external/v1/control-escolar/ui-audit-latest.get.ts'
+      - 'tests/control-escolar-external-ui-audit.test.mjs'
+      - '.github/workflows/control-escolar-external-ui-audit.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/api/external/v1/control-escolar/ui-audit-latest.get.ts'
+      - 'tests/control-escolar-external-ui-audit.test.mjs'
+      - '.github/workflows/control-escolar-external-ui-audit.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  ui-audit-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify audit trace contract
+        run: node --test tests/control-escolar-external-ui-audit.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
