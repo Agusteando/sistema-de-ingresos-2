@@ -75,3 +75,32 @@ console.log(JSON.stringify({
     updatedAt: row.updatedAt
   }))
 }, null, 2))
+
+
+const authHeaders = {
+  Authorization: `Bearer ${token}`,
+  'x-aurora-token': token,
+  'x-api-key': token,
+  Accept: 'application/json',
+  'Cache-Control': 'no-cache'
+}
+
+const kpisUrl = new URL('https://aurora.casitaiedis.edu.mx/api/external/v1/control-escolar/kpis')
+kpisUrl.searchParams.set('plantel', 'PM')
+kpisUrl.searchParams.set('ciclo', '2026')
+kpisUrl.searchParams.set('concepts', '878')
+kpisUrl.searchParams.set('enrollmentConcepts', '878')
+
+const kpisResponse = await fetch(kpisUrl, { headers: authHeaders })
+console.log('EXTERNAL_KPIS', kpisResponse.status, await kpisResponse.text())
+
+for (const row of anomalies) {
+  const detailUrl = new URL(`https://aurora.casitaiedis.edu.mx/api/external/v1/control-escolar/students/${encodeURIComponent(row.matricula)}`)
+  detailUrl.searchParams.set('plantel', 'PM')
+  detailUrl.searchParams.set('ciclo', '2026')
+  detailUrl.searchParams.set('concepts', '878')
+  detailUrl.searchParams.set('enrollmentConcepts', '878')
+  const detailResponse = await fetch(detailUrl, { headers: authHeaders })
+  const detailText = await detailResponse.text()
+  console.log('DETAIL', row.matricula, detailResponse.status, detailText)
+}
