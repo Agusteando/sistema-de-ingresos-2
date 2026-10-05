@@ -105,6 +105,8 @@ const safeStudent = (student: any, publicPlantel: string) => ({
   grupo: clean(student?.group || student?.grupo, 80),
   group: clean(student?.group || student?.grupo, 80),
   status: clean(student?.status, 80),
+  baja: Number(student?.baja || 0) === 1 ? 1 : 0,
+  statusSource: clean(student?.statusSource, 40),
   enrollmentState: clean(student?.enrollmentState, 80),
   cicloBase: clean(student?.cicloBase, 20),
   updatedAt: student?.updatedAt || null
