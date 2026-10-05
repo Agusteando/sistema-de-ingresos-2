@@ -107,7 +107,7 @@ for (const row of anomalies) {
   console.log('DETAIL', row.matricula, detailResponse.status, detailText)
 }
 
-// Runtime probe retriggered after main deployment of baja trace. retry 2
+// Runtime probe retriggered after main deployment of baja trace. retry 3
 
 
 const auditUrl = new URL('https://aurora.casitaiedis.edu.mx/api/external/v1/control-escolar/ui-audit-latest')
