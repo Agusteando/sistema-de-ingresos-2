@@ -1,0 +1,26 @@
+name: Diagnose PM Control Escolar roster
+
+on:
+  push:
+    branches:
+      - 'diag/pm-control-roster-716'
+    paths:
+      - 'scripts/diagnose-pm-operator-roster.mjs'
+      - '.github/workflows/pm-roster-diagnosis.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Probe PM live operator roster
+        run: node scripts/diagnose-pm-operator-roster.mjs
