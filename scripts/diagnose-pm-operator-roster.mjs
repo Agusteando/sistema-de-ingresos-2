@@ -107,4 +107,4 @@ for (const row of anomalies) {
   console.log('DETAIL', row.matricula, detailResponse.status, detailText)
 }
 
-// Runtime probe retriggered after main deployment of baja trace.
+// Runtime probe retriggered after main deployment of baja trace. retry 2
