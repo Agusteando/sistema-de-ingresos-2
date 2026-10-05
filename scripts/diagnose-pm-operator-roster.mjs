@@ -49,6 +49,20 @@ console.log(JSON.stringify({
   countsByStatus,
   countsByGrade,
   enrolledButStatusBajaCount: anomalies.length,
+  mostRecentlyUpdatedEnrolled: rows
+    .filter((row) => row.updatedAt)
+    .slice()
+    .sort((a, b) => String(b.updatedAt).localeCompare(String(a.updatedAt)))
+    .slice(0, 20)
+    .map((row) => ({
+      matricula: row.matricula,
+      nombre: row.nombreCompleto || row.fullName || '',
+      status: row.status,
+      enrollmentState: row.enrollmentState,
+      grado: row.grado,
+      grupo: row.grupo || row.group,
+      updatedAt: row.updatedAt
+    })),
   enrolledButStatusBaja: anomalies.map((row) => ({
     matricula: row.matricula,
     nombre: row.nombreCompleto || row.fullName || '',
@@ -57,6 +71,7 @@ console.log(JSON.stringify({
     grado: row.grado,
     grupo: row.grupo || row.group,
     basePlantel: row.basePlantel,
-    cicloBase: row.cicloBase
+    cicloBase: row.cicloBase,
+    updatedAt: row.updatedAt
   }))
 }, null, 2))
