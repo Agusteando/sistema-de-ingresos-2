@@ -1,0 +1,39 @@
+name: Control Escolar external UI roster contract
+
+on:
+  pull_request:
+    paths:
+      - 'server/api/external/v1/control-escolar/operator-roster.get.ts'
+      - 'shared/utils/controlEscolarRosterParity.ts'
+      - 'tests/control-escolar-external-ui-roster.test.mjs'
+      - '.github/workflows/control-escolar-external-ui-roster.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/api/external/v1/control-escolar/operator-roster.get.ts'
+      - 'shared/utils/controlEscolarRosterParity.ts'
+      - 'tests/control-escolar-external-ui-roster.test.mjs'
+      - '.github/workflows/control-escolar-external-ui-roster.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  operator-roster-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Verify exact Control Escolar UI roster contract
+        run: node --experimental-strip-types --test tests/control-escolar-external-ui-roster.test.mjs
+      - name: Verify academic source
+        run: npm run verify:academic-source
+      - name: Build
+        run: npm run build
