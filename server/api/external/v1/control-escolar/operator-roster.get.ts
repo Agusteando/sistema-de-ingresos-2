@@ -3,6 +3,7 @@ import { getQuery } from 'h3'
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../utils/external-api-auth'
 import { readBestConceptosConfigPayload } from '../../../../utils/conceptos-config'
 import { runWithBridgeAgentId } from '../../../../utils/db'
+import { controlEscolarCentralQuery } from '../../../../utils/control-escolar-central'
 import { normalizeCicloKey } from '../../../../../shared/utils/ciclo'
 import {
   normalizeEnrollmentConceptIds,
@@ -29,6 +30,46 @@ const explicitCurrentConcepts = (query: any = {}) =>
 
 const explicitTipoConcepts = (query: any = {}) =>
   normalizeEnrollmentConceptIds(query.tipoConcepts || query.tipoIngresoConcepts || '')
+
+const parseJson = (value: unknown) => {
+  if (!value) return null
+  if (typeof value === 'object') return value as Record<string, any>
+  try {
+    return JSON.parse(String(value))
+  } catch {
+    return null
+  }
+}
+
+const readLatestUiSnapshotTrace = async (plantel: string, ciclo: string) => {
+  const rows = await controlEscolarCentralQuery<any[]>(
+    `SELECT created_at, total_students, payload, source_base, source_flow
+     FROM control_escolar_audit_events
+     WHERE event_type = 'page_snapshot'
+       AND plantel = ?
+       AND ciclo = ?
+     ORDER BY created_at DESC
+     LIMIT 1`,
+    [plantel, ciclo]
+  ).catch(() => [])
+
+  const row = rows[0]
+  if (!row) return null
+  const payload = parseJson(row.payload) || {}
+  const counters = payload?.counters || {}
+  const inscritos = Number(counters?.inscritos ?? counters?.totalInscritos)
+  const totalRows = Number(payload?.totalRows ?? row?.total_students)
+  const visibleRows = Number(payload?.visibleRows)
+
+  return {
+    createdAt: row.created_at ? new Date(row.created_at).toISOString() : '',
+    inscritos: Number.isFinite(inscritos) ? inscritos : null,
+    totalRows: Number.isFinite(totalRows) ? totalRows : null,
+    visibleRows: Number.isFinite(visibleRows) ? visibleRows : null,
+    sourceBase: clean(row.source_base, 180),
+    sourceFlow: clean(row.source_flow, 180)
+  }
+}
 
 const resolveOperatorConceptScope = async (query: any, bridgeAgentId: string, ciclo: string) => {
   let concepts = explicitCurrentConcepts(query)
@@ -125,6 +166,12 @@ export default defineEventHandler(async (event) => {
         .createHash('sha256')
         .update(identityKeys.join('\n'))
         .digest('hex')
+      const enrolledStatusBaja = enrolledRows
+        .filter((student: any) => clean(student?.status, 80).toLowerCase() === 'baja')
+        .map((student: any) => clean(student?.matricula || student?.studentId, 64))
+        .filter(Boolean)
+        .sort((left: string, right: string) => left.localeCompare(right, 'es', { numeric: true }))
+      const latestUiSnapshot = await readLatestUiSnapshotTrace(bridgeAgentId, ciclo)
 
       return {
         data,
@@ -144,6 +191,9 @@ export default defineEventHandler(async (event) => {
           operatorRowsTotal: operatorRows.length,
           inscritosTotal: data.length,
           fingerprint,
+          enrolledStatusBajaCount: enrolledStatusBaja.length,
+          enrolledStatusBaja,
+          latestUiSnapshot,
           generatedAt: new Date().toISOString()
         }
       }
