@@ -43,3 +43,19 @@ test('external endpoint is pinned to the same all=1 operator index contract as t
   assert.doesNotMatch(source, /isBajaStudent/)
   assert.match(source, /fingerprint/)
 })
+
+
+test('external operator roster emits safe parity diagnostics for UI snapshot and baja-state conflicts', () => {
+  const source = fs.readFileSync(
+    path.join(process.cwd(), 'server/api/external/v1/control-escolar/operator-roster.get.ts'),
+    'utf8'
+  )
+
+  assert.match(source, /readLatestUiSnapshotTrace/)
+  assert.match(source, /event_type = 'page_snapshot'/)
+  assert.match(source, /enrolledStatusBajaCount/)
+  assert.match(source, /enrolledStatusBaja/)
+  assert.match(source, /latestUiSnapshot/)
+  assert.doesNotMatch(source, /actor_email/)
+  assert.doesNotMatch(source, /actor_name/)
+})
