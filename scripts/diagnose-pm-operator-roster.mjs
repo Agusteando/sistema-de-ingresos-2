@@ -106,3 +106,5 @@ for (const row of anomalies) {
   const detailText = await detailResponse.text()
   console.log('DETAIL', row.matricula, detailResponse.status, detailText)
 }
+
+// Runtime probe retriggered after main deployment of baja trace.
