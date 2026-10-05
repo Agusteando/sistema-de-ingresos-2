@@ -24,6 +24,7 @@ import { calculateLateFeeSubtotal } from '../../../../shared/utils/recargo';
 import { loadRecargoPolicies } from '../../../utils/recargo-config';
 import { dedupePaymentTargets } from '../../../../shared/utils/paymentTarget';
 import { parseDocumentMonths, schoolMonthLabel } from '../../../../shared/utils/documentMonths';
+import { resolveInlineConceptDifference } from '../../../../shared/utils/conceptDifference';
 
 const cicloQueryValues = (cicloKey: string) => {
   const key = String(cicloKey || "").trim();
@@ -262,13 +263,28 @@ export default defineEventHandler(async (event) =>
         const costoBase = projected.baseCost;
         const totalOriginal = projected.amount;
         const rawInlineDifference = Number(activePeriod?.diferencia_monto || 0);
-        const diferenciaMonto =
+        const diferenciaMonto = resolveInlineConceptDifference({
+          activePeriod,
+          periods: periodsByDocument.get(Number(doc.documento)) || [],
+          originalConceptId: doc.concepto,
+          month: mesNumber,
+        });
+
+        if (
+          rawInlineDifference > 0 &&
+          diferenciaMonto === 0 &&
           activePeriod?.accion === "cambio" &&
           Number(activePeriod?.start_mes || 1) === mesNumber &&
-          !Number(activePeriod?.diferencial_documento || 0) &&
-          Number.isFinite(rawInlineDifference)
-            ? Math.max(0, rawInlineDifference)
-            : 0;
+          !Number(activePeriod?.diferencial_documento || 0)
+        ) {
+          console.warn("[EstadoCuentaDebug] Diferencia ignorada sin cambio real de concepto", {
+            documento: Number(doc.documento),
+            periodoId: Number(activePeriod?.id || 0) || null,
+            mes: mesNumber,
+            conceptoId: Number(activePeriod?.concepto_id || doc.concepto || 0),
+            diferenciaMonto: rawInlineDifference,
+          });
+        }
 
         // Preserve the full payment history for audit/actions, but only vigente rows affect balances.
         const historialPagosDelMes = pagosRows.filter(

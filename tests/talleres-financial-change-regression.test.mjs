@@ -7,6 +7,18 @@ import ts from 'typescript'
 
 const root = resolve('.')
 
+const loadConceptDifference = async () => {
+  const source = await readFile(resolve(root, 'shared/utils/conceptDifference.ts'), 'utf8')
+  const js = ts.transpileModule(source, {
+    compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ESNext },
+  }).outputText
+  const context = vm.createContext({ console })
+  const module = new vm.SourceTextModule(js, { context, identifier: 'conceptDifference.ts' })
+  await module.link(() => { throw new Error('conceptDifference must remain dependency-free') })
+  await module.evaluate()
+  return module.namespace
+}
+
 const loadShared = async () => {
   const source = await readFile(resolve(root, 'shared/utils/talleresServicios.ts'), 'utf8')
   const js = ts.transpileModule(source, {
@@ -284,6 +296,100 @@ test('concept adjustment keeps optional Diferencia on the same document without 
   assert.match(debts, /calculateLateFeeSubtotal\(totalOriginal,[\s\S]*?\+\s*diferenciaMonto/)
   assert.match(debts, /diferenciaMonto,/)
   assert.match(debts, /hasRecargo: appliesLateFee/)
+})
+
+test('inline Diferencia never duplicates a charge when the concept did not actually change', async () => {
+  const difference = await loadConceptDifference()
+
+  assert.equal(difference.isConceptTransition(560, 560), false)
+  assert.equal(difference.resolveInlineConceptDifference({
+    originalConceptId: 560,
+    month: 2,
+    periods: [],
+    activePeriod: {
+      id: 10,
+      accion: 'cambio',
+      start_mes: 2,
+      end_mes: null,
+      concepto_id: 560,
+      diferencia_monto: 560,
+      diferencial_documento: null,
+    },
+  }), 0, 'the October $560 + $560 duplicate must be suppressed for a self-transition')
+})
+
+test('inline Diferencia remains one-time for a real transition and legacy linked rows stay excluded', async () => {
+  const difference = await loadConceptDifference()
+  const activePeriod = {
+    id: 11,
+    accion: 'cambio',
+    start_mes: 2,
+    end_mes: null,
+    concepto_id: 700,
+    diferencia_monto: 60,
+    diferencial_documento: null,
+  }
+
+  assert.equal(difference.resolveInlineConceptDifference({
+    originalConceptId: 560,
+    month: 2,
+    periods: [activePeriod],
+    activePeriod,
+  }), 60)
+  assert.equal(difference.resolveInlineConceptDifference({
+    originalConceptId: 560,
+    month: 3,
+    periods: [activePeriod],
+    activePeriod,
+  }), 0, 'Diferencia remains one-time in the transition month')
+
+  activePeriod.diferencial_documento = 991
+  assert.equal(difference.resolveInlineConceptDifference({
+    originalConceptId: 560,
+    month: 2,
+    periods: [activePeriod],
+    activePeriod,
+  }), 0, 'legacy differential documents must not be counted inline')
+})
+
+test('a later period cannot re-add Diferencia when it keeps the already-effective concept', async () => {
+  const difference = await loadConceptDifference()
+  const previous = {
+    id: 13,
+    accion: 'cambio',
+    start_mes: 2,
+    end_mes: 3,
+    concepto_id: 700,
+    diferencia_monto: 60,
+    diferencial_documento: null,
+  }
+  const repeated = {
+    id: 14,
+    accion: 'cambio',
+    start_mes: 4,
+    end_mes: null,
+    concepto_id: 700,
+    diferencia_monto: 700,
+    diferencial_documento: null,
+  }
+
+  assert.equal(difference.resolveInlineConceptDifference({
+    originalConceptId: 560,
+    month: 4,
+    periods: [previous, repeated],
+    activePeriod: repeated,
+  }), 0)
+})
+
+test('write and read paths enforce the same transition guard for Diferencia', async () => {
+  const [period, debts] = await Promise.all([
+    readFile(resolve(root, 'server/api/documentos/period.post.ts'), 'utf8'),
+    readFile(resolve(root, 'server/api/students/[matricula]/debts.get.ts'), 'utf8'),
+  ])
+  assert.match(period, /isConceptTransition\(previousConceptoId, concepto\.id\)/)
+  assert.match(period, /Diferencia rechazada sin cambio real de concepto/)
+  assert.match(debts, /resolveInlineConceptDifference\(\{/)
+  assert.match(debts, /Diferencia ignorada sin cambio real de concepto/)
 })
 
 test('explicit removal suppresses paid financial membership without cancelling accounting evidence', async () => {

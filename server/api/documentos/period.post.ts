@@ -15,6 +15,7 @@ import {
 } from '../../utils/talleres-servicios';
 import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
 import { parseDocumentMonths } from '../../../shared/utils/documentMonths';
+import { isConceptTransition } from '../../../shared/utils/conceptDifference';
 
 const toMesNumber = (value: unknown) => {
   const raw = String(value || "")
@@ -306,6 +307,22 @@ export default defineEventHandler(async (event) =>
         throw createError({
           statusCode: 400,
           message: "La diferencia debe ser un numero entero, sin decimales.",
+        });
+      }
+
+      if (
+        diferenciaMonto > 0 &&
+        !isConceptTransition(previousConceptoId, concepto.id)
+      ) {
+        console.warn("[Documentos] Diferencia rechazada sin cambio real de concepto", {
+          documento,
+          periodoInicio: normalizedFromMes,
+          conceptoId: concepto.id,
+          diferenciaMonto,
+        });
+        throw createError({
+          statusCode: 409,
+          message: "La diferencia solo puede aplicarse cuando cambia el concepto.",
         });
       }
 
