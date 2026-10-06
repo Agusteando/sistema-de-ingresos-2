@@ -29,7 +29,10 @@
         "host": "%",
         "maxMode": "default",
         "schemas": [
-          { "id": "central", "name": "casitaiedis" }
+          {
+            "id": "central",
+            "name": "casitaiedis"
+          }
         ],
         "bindings": [
           {
@@ -51,13 +54,23 @@
     "nodeVersion": 22,
     "containerPort": 3000,
     "hostPort": "auto",
-    "networks": ["database_database_net"],
+    "networks": [
+      "database_database_net"
+    ],
     "labels": {
       "com.casita.service": "aurora"
-    }
+    },
+    "aptPackages": [
+      "perl-base"
+    ]
   },
-  "health": { "path": "/", "timeoutSeconds": 120 },
-  "observability": { "enabled": true },
+  "health": {
+    "path": "/",
+    "timeoutSeconds": 120
+  },
+  "observability": {
+    "enabled": true
+  },
   "domains": [
     {
       "hostname": "aurora.casitaiedis.edu.mx",
