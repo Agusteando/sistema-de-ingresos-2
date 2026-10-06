@@ -223,7 +223,7 @@ const runOperation = async (action, extraBody = {}) => {
       show(action === "cancel_full" ? `Documento ${result.documento || props.debt.documento} cancelado completo` : `Concepto actualizado${serviceText}`, "success");
     }
     if (result?.snapshotRefresh?.pending) {
-      show(`Documento ${result.documento || props.debt.documento} actualizado. Talleres pendiente de sincronizar.`, 'warning', { duration: 6500 });
+      show(`Documento ${result.documento || props.debt.documento} actualizado. Talleres pendiente de sincronizar.`, 'success', { title: 'Sincronización pendiente', duration: 6500 });
     }
     emit("success");
   } catch (e) {

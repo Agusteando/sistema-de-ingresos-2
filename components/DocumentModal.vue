@@ -609,7 +609,7 @@ const submit = async () => {
       }
     }
     if (result?.snapshotRefresh?.pending) {
-      show(`Documento ${result.documento} confirmado. Talleres pendiente de actualizar.`, 'warning', { duration: 6500 })
+      show(`Documento ${result.documento} confirmado. Talleres pendiente de actualizar.`, 'success', { title: 'Sincronización pendiente', duration: 6500 })
     }
     emit('success')
   } catch (e) {

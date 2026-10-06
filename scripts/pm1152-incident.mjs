@@ -63,6 +63,7 @@ try {
     assert.equal(account.conceptos.filter(row=>Number(row.documento)===57186).length,11,'the original eleven monthly entries remain')
     assert.deepEqual(account.conceptos.filter(row=>!ids.includes(Number(row.documento))),evidence.accountBefore.body.conceptos.filter(row=>!ids.includes(Number(row.documento))))
     assert.deepEqual(account.recibos,evidence.accountBefore.body.recibos,'receipts must remain unchanged')
+    assert.deepEqual(account.servicios,evidence.accountBefore.body.servicios,'the canonical TE service membership must remain unchanged')
     console.log('PM1152_RECONCILIATION_OK requestId='+evidence.reconciliation.requestId+' canonical=57186 cancelled=57189,57190,57191')
     console.log('PM1152_RUNTIME_PARITY_OK canonical_months=11 receipts_unchanged=true unrelated_documents_unchanged=true')
   }
