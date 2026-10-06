@@ -242,11 +242,13 @@ test('financial lifecycle endpoints reconcile assignment history and force Talle
   assert.match(periodChange, /syncChangedConceptMappedServicioToMatricula/)
   assert.match(periodChange, /syncCancelledConceptMappedServicioOnMatricula/)
   assert.match(periodChange, /effectiveConceptIdAt/)
-  assert.match(periodChange, /ensureCurrentTalleresSnapshotPlantel\(\{ plantel, ciclo, force: true \}\)/)
+  assert.match(periodChange, /refreshTalleresAfterCommittedWrite/)
 
   assert.match(deleteDoc, /syncCancelledConceptMappedServicioOnMatricula/)
   assert.match(deleteDoc, /ensureCurrentTalleresSnapshotPlantel/)
-  assert.match(createDoc, /ensureCurrentTalleresSnapshotPlantel/)
+  assert.match(createDoc, /refreshTalleresAfterCommittedWrite/)
+  const committedFollowup = await readFile(resolve(root, 'server/utils/financial-write-followup.ts'), 'utf8')
+  assert.match(committedFollowup, /ensureCurrentTalleresSnapshotPlantel\(\{ plantel: input.plantel, ciclo: input.ciclo, force: true \}\)/)
 
   assert.match(servicios, /source: 'financial_concept_change'/)
   assert.match(servicios, /source: 'financial_concept_cancel'/)

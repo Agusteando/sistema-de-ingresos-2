@@ -1026,6 +1026,7 @@
 </template>
 
 <script setup>
+import { isZeroChargeWithoutPayment, zeroChargeLabel } from '~/shared/utils/debtSettlement'
 import { loadStudentPhoto, readStudentPhoto } from "~/utils/studentPhotos";
 import {
   ref,
@@ -1823,7 +1824,7 @@ const resolvedTipoIngresoLabel = computed(() =>
   formatTipoIngresoValue(resolvedTipoIngreso.value),
 );
 const progressPaidWidth = (debt) =>
-  `${Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`;
+  `${isZeroChargeWithoutPayment(debt) ? 0 : Math.min(100, Number(debt.porcentajePagoReal ?? debt.porcentajePagado) || 0)}%`;
 const progressCleanupWidth = (debt) =>
   `${Math.min(100, Number(debt.porcentajeDepurado) || 0)}%`;
 const progressColor = (debt) =>
@@ -1831,6 +1832,8 @@ const progressColor = (debt) =>
     ? "#70b34f"
     : "#d8b449";
 const progressStatusLabel = (debt) => {
+  const noCharge = zeroChargeLabel(debt);
+  if (noCharge) return noCharge;
   const paid = Math.round(Number(debt.porcentajePagado) || 0);
   if (Number(debt.pagosDepurados) > 0 && debt.saldo <= 0) return "100%";
   if (paid >= 100 || debt.saldo <= 0) return "100%";

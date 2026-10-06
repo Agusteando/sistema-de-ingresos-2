@@ -202,7 +202,7 @@ const loadConcepts = async () => {
 };
 
 const runOperation = async (action, extraBody = {}) => {
-  if (!props.debt?.documento) return;
+  if (busy.value || !props.debt?.documento) return;
 
   busyAction.value = action;
   try {
@@ -220,7 +220,10 @@ const runOperation = async (action, extraBody = {}) => {
       show("Concepto actualizado, pero Control Escolar no confirmó el taller. Revísalo en Talleres.", "danger", { duration: 6500 });
     } else {
       const serviceText = result?.servicio?.mapped ? ` · ${result.servicio.servicio?.nombre || "Taller actualizado"}` : "";
-      show(`Concepto actualizado${serviceText}`, "success");
+      show(action === "cancel_full" ? `Documento ${result.documento || props.debt.documento} cancelado completo` : `Concepto actualizado${serviceText}`, "success");
+    }
+    if (result?.snapshotRefresh?.pending) {
+      show(`Documento ${result.documento || props.debt.documento} actualizado. Talleres pendiente de sincronizar.`, 'success', { title: 'Sincronización pendiente', duration: 6500 });
     }
     emit("success");
   } catch (e) {
