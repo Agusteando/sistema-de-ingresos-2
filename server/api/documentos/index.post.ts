@@ -1,11 +1,12 @@
-import { runWithBridgeAgentId, query, executeStatementTransaction, type SqlStatement } from '../../utils/db'
+import { runWithBridgeAgentId, query, type SqlStatement } from '../../utils/db'
 import { normalizeCicloKey } from '../../../shared/utils/ciclo'
 import { isWholeMoney } from '../../utils/monto-final'
 import { normalizeBecaTypes } from '../../utils/becaTypes'
 import { appendConceptMappedServicioToMatricula } from '../../utils/talleres-servicios'
 import { assertStockAvailableForConcept } from '../../utils/conceptos-stock'
 import { resolveFinancialConcept } from '../../utils/financial-concept'
-import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot'
+import { createDocumentWithRequest } from '../../utils/document-creation'
+import { refreshTalleresAfterCommittedWrite } from '../../utils/financial-write-followup'
 import { documentMonthsFromStart, parseDocumentMonths, serializeDocumentMonths } from '../../../shared/utils/documentMonths'
 
 const clampMotivo = (value: unknown) => {
@@ -71,8 +72,6 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const plantel = studentRef.plantel || user?.active_plantel || 'PT'
   const cartaFecha = body.generarCartaBeca && becaTipos.length ? new Date().toISOString().slice(0, 19).replace('T', ' ') : null
 
-  await assertStockAvailableForConcept({ conceptoId: conceptoRef.id, plantel, quantity: 1, operation: 'crear este cargo' })
-
   const documentStatement: SqlStatement = {
     sql: `
       INSERT INTO documentos (
@@ -103,8 +102,15 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     ]
   }
 
-  const [documentResult] = await executeStatementTransaction<any>([documentStatement])
-  const documento = Number(documentResult?.insertId || 0)
+  const { documento, replayed } = await createDocumentWithRequest({
+    statement: documentStatement,
+    requestKey: body.requestKey,
+    payload: { matricula: body.matricula, ciclo: cicloKey, concepto: conceptoRef.id, costo, montoFinal,
+      plazo: plazoLegacy, eventual, becaTipos: becaTiposCsv, becaMotivo, carta: Boolean(body.generarCartaBeca) },
+    matricula: body.matricula, ciclo: cicloKey, actor: user?.email || userName,
+    requestId: event.context.auroraRequestId || '',
+    beforeCreate: () => assertStockAvailableForConcept({ conceptoId: conceptoRef.id, plantel, quantity: 1, operation: 'crear este cargo' }),
+  })
 
   if (!documento) {
     throw createError({ statusCode: 500, message: 'No se pudo confirmar el documento creado.' })
@@ -129,14 +135,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     servicioSync = { ok: false, mapped: false, changed: false, servicio: null, message: error?.message || 'servicio_sync_failed' }
   }
 
-  let snapshotRefresh: any = { success: true, skipped: true, reason: 'not_talleres_servicios' }
-  if (servicioSync?.mapped || servicioSync?.ok === false) {
-    snapshotRefresh = await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo: cicloKey, force: true })
-  }
+  const snapshotRefresh = await refreshTalleresAfterCommittedWrite({
+    plantel, ciclo: cicloKey, documento, requestId: event.context.auroraRequestId,
+    shouldRefresh: Boolean(servicioSync?.mapped || servicioSync?.ok === false),
+  })
+  console.info('[Documentos] Alta confirmada', { documento, replayed, matricula: body.matricula,
+    requestKey: body.requestKey || null, requestId: event.context.auroraRequestId || null })
 
   return {
     success: true,
     documento,
+    replayed,
+    requestId: event.context.auroraRequestId || null,
     mesesAplicables: eventual ? ['ev'] : documentMonths,
     mesInicio: eventual ? null : documentMonths[0],
     servicio: servicioSync,

@@ -8,7 +8,7 @@ const CYCLES = ['2026', '2026-2027']
 const DOCUMENT_COLUMNS = [
   'documento', 'matricula', 'concepto', 'conceptoNombre', 'ciclo', 'estatus',
   'costo', 'montoFinal', 'plazo', 'meses', 'eventual', 'beca', 'becaNombre',
-  'becaTipos', 'becaMonto', 'becaPorcentaje', 'becaCartaGenerada', 'becaCartaFecha',
+  'becaTipos', 'becaMotivo', 'becaMonto', 'becaPorcentaje', 'becaCartaGenerada', 'becaCartaFecha',
   'responsable', 'fecha', 'created_at', 'updated_at', 'fecha_registro',
 ]
 const PAYMENT_COLUMNS = [
@@ -19,7 +19,7 @@ const PAYMENT_COLUMNS = [
   'depurado', 'depurado_por', 'depurado_fecha', 'pago_otro_plantel', 'plantel_pago',
 ]
 
-export default defineEventHandler(async (event) => {
+export const readPm1152Ledger = async (event: any) => {
   assertAuroraExternalApiToken(event)
   setResponseHeader(event, 'Cache-Control', 'private, no-store')
   setResponseHeader(event, 'X-Content-Type-Options', 'nosniff')
@@ -64,6 +64,11 @@ export default defineEventHandler(async (event) => {
         SELECT * FROM ${table} WHERE documento IN (${placeholders}) ORDER BY id
       `, ids) : []
     }
+    const engines: Record<string, string> = {}
+    for (const table of ['documentos', 'referenciasdepago', 'documento_concepto_periodos']) {
+      const [status] = await runRawSqlStatement<any[]>('SHOW TABLE STATUS LIKE ?', [table])
+      engines[table] = String(status?.Engine || '')
+    }
     const indexes = await runRawSqlStatement<any[]>('SHOW INDEX FROM documentos')
     return {
       ok: true,
@@ -73,8 +78,10 @@ export default defineEventHandler(async (event) => {
       source: { transport, agentId: transport === 'bridge' ? 'PM' : null },
       requestId: event.context.auroraRequestId || null,
       queriedAt: new Date().toISOString(),
-      schema: { documents: documentSchema, payments: paymentSchema, documentIndexes: indexes },
+      schema: { documents: documentSchema, payments: paymentSchema, documentIndexes: indexes, engines },
       documents, periods, payments, corrections,
     }
   })
-})
+}
+
+export default defineEventHandler(readPm1152Ledger)

@@ -409,7 +409,7 @@ export default defineEventHandler(async (event) =>
           porcentajePagoReal:
             subtotal > 0
               ? Math.min(100, (pagosTotalMes * 100) / subtotal).toFixed(1)
-              : 100,
+              : 0,
           porcentajeDepurado:
             subtotal > 0
               ? Math.min(100, (depuradoTotalMes * 100) / subtotal).toFixed(1)

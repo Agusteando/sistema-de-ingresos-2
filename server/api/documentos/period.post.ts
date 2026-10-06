@@ -13,7 +13,7 @@ import {
   syncCancelledConceptMappedServicioOnMatricula,
   syncChangedConceptMappedServicioToMatricula,
 } from '../../utils/talleres-servicios';
-import { ensureCurrentTalleresSnapshotPlantel } from '../../utils/talleres-snapshot';
+import { refreshTalleresAfterCommittedWrite } from '../../utils/financial-write-followup';
 import { parseDocumentMonths } from '../../../shared/utils/documentMonths';
 import { isConceptTransition } from '../../../shared/utils/conceptDifference';
 
@@ -73,10 +73,8 @@ const effectiveConceptIdAt = async (
   return Number(fallbackConceptoId || 0);
 };
 
-const refreshTalleresAfterFinancialWrite = async (plantel: unknown, ciclo: string, shouldRefresh = true) => {
-  if (!shouldRefresh) return { success: true, skipped: true, reason: 'not_talleres_servicios' }
-  return await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true });
-};
+const refreshTalleresAfterFinancialWrite = async (plantel: unknown, ciclo: string, shouldRefresh: boolean, documento: number, requestId: string) =>
+  await refreshTalleresAfterCommittedWrite({ plantel, ciclo, shouldRefresh, documento, requestId });
 
 const periodBoundaryStatements = (
   documento: number,
@@ -214,8 +212,10 @@ export default defineEventHandler(async (event) =>
         doc.plantel,
         cicloKey,
         Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+        documento, event.context.auroraRequestId || '',
       );
-      return { success: true, action, servicio: servicioSync, snapshotRefresh };
+      console.info('[Documentos] Cancelación completa confirmada', { documento, requestId: event.context.auroraRequestId || null });
+      return { success: true, action, documento, requestId: event.context.auroraRequestId || null, servicio: servicioSync, snapshotRefresh };
     }
 
     if (action === "cancel_from") {
@@ -264,8 +264,9 @@ export default defineEventHandler(async (event) =>
         doc.plantel,
         cicloKey,
         Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+        documento, event.context.auroraRequestId || '',
       );
-      return { success: true, action, fromMes: normalizedFromMes, servicio: servicioSync, snapshotRefresh };
+      return { success: true, action, documento, requestId: event.context.auroraRequestId || null, fromMes: normalizedFromMes, servicio: servicioSync, snapshotRefresh };
     }
 
     if (action === "change") {
@@ -377,6 +378,7 @@ export default defineEventHandler(async (event) =>
         doc.plantel,
         cicloKey,
         Boolean(servicioSync?.mapped || servicioSync?.previousServicio || servicioSync?.servicio || servicioSync?.ok === false),
+        documento, event.context.auroraRequestId || '',
       );
 
       return {

@@ -288,6 +288,8 @@ const conceptSearch = ref('')
 const conceptDropdownOpen = ref(false)
 const firstConceptOptionRef = ref(null)
 const loading = ref(false)
+let lastSubmissionPayload = ''
+let requestKey = ''
 const loadingConcepts = ref(false)
 const conceptLoadError = ref('')
 const form = ref({ costo: 0, meses: 1, eventual: false })
@@ -548,6 +550,7 @@ const openCartaWindow = () => {
 }
 
 const submit = async () => {
+  if (loading.value) return
   if (!selectedDocumentoId.value) return show('Seleccione un concepto', 'danger')
   if (isStockBlocked(selectedConcept.value)) return show('No hay stock disponible para este concepto en el plantel activo.', 'danger')
   const montoFinal = Number(montoFinalInput.value)
@@ -564,9 +567,7 @@ const submit = async () => {
   loading.value = true
 
   try {
-    const result = await $fetch('/api/documentos', {
-      method: 'POST',
-      body: { 
+    const payload = {
         matricula: props.student.matricula, 
         conceptoId: selectedDocumentoId.value, 
         costo: form.value.costo, 
@@ -577,8 +578,16 @@ const submit = async () => {
         becaMotivo: becaMotivo.value,
         generarCartaBeca: generarCartaBeca.value,
         ciclo: activeCicloKey.value, 
-        eventual: form.value.eventual 
-      }
+        eventual: form.value.eventual
+    }
+    const serializedPayload = JSON.stringify(payload)
+    if (serializedPayload !== lastSubmissionPayload || !requestKey) {
+      requestKey = crypto.randomUUID()
+      lastSubmissionPayload = serializedPayload
+    }
+    const result = await $fetch('/api/documentos', {
+      method: 'POST',
+      body: { ...payload, requestKey },
     })
 
     if (generarCartaBeca.value && result?.becaCartaUrl) {
@@ -598,6 +607,9 @@ const submit = async () => {
       } else {
         show('Documento agregado.' + serviceText)
       }
+    }
+    if (result?.snapshotRefresh?.pending) {
+      show(`Documento ${result.documento} confirmado. Talleres pendiente de actualizar.`, 'warning', { duration: 6500 })
     }
     emit('success')
   } catch (e) {
