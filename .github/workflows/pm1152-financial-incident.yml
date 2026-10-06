@@ -41,7 +41,7 @@ jobs:
             response=await fetch('https://aurora.casitaiedis.edu.mx/api/external/v1/incidents/pm1152', {headers, signal: AbortSignal.timeout(120000)});
             body=await response.json().catch(()=>({}));
             if (response.ok && body.version==='pm1152-ledger-v1') break;
-            if (![404,502,503,504].includes(response.status)) break;
+            if (![200,404,502,503,504].includes(response.status)) break;
             console.log('PM1152_DEPLOYMENT_WAIT='+attempt+' HTTP '+response.status);
             await new Promise(resolve=>setTimeout(resolve,15000));
           }
@@ -52,6 +52,6 @@ jobs:
           const envelope=Buffer.from(JSON.stringify({key:encryptedKey.toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:ciphertext.toString('base64')})).toString('base64');
           for(let offset=0,index=0;offset<envelope.length;offset+=6000,index++) console.log('PM1152_ENCRYPTED_'+index+'='+envelope.slice(offset,offset+6000));
           console.log('PM1152_PRODUCTION_HTTP_STATUS='+response.status);
-          if (!response.ok || body.ok===false) throw new Error('PM1152 raw incident ledger query failed; details are encrypted above');
+          if (!response.ok || body.ok!==true || body.version!=='pm1152-ledger-v1') throw new Error('PM1152 raw incident ledger query failed; details are encrypted above');
           console.log('PM1152_PRODUCTION_READ_OK');
           JS
