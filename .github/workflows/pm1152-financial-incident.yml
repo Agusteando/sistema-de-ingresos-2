@@ -26,7 +26,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - name: Read PM1152 production account and encrypt evidence
+      - name: Read PM1152 full production ledger and encrypt evidence
         env:
           AURORA_API_TOKEN: ${{ secrets.AURORA_API_TOKEN }}
           AUDIT_PUBLIC_KEY: LS0tLS1CRUdJTiBQVUJMSUMgS0VZLS0tLS0KTUlJQm9qQU5CZ2txaGtpRzl3MEJBUUVGQUFPQ0FZOEFNSUlCaWdLQ0FZRUFyVVhzVVoxRWRpK2tzajdTdmM4NwpaYzFGYzJIcEVLN3VudUxWV3U1bTJXdmo3UjBZUThteU00TkkzWm5jMHFCcVNKVjdHcU51aFJpVS9LRjFLNDNFCi9ERnZMZllaelMrN2p3R1E5ckxuVDlzUVVqRmxxVWpac0dqQmdZcDE4WFMwUnRBWWo4VlFTSlhFZFhlTWZ0M3IKRFROTStUa2FQNkNjM1FxbFQ4bmN3U3RiQWJuOHhHSjRvYnZQb3FSVW5XWVRZTlQvWDVNUXpraVFpYndrbXpMagpsaE9KV09LeFBBdDZ0d1BXQjYrclRDN3F0dmFTZUhNd3ZybWdhayszLys4TUMwYmFLelB3alFMVXFZbzhucUlGCmdQZ3FlNStSbWNMQWVIUU5qb1djZnVkL2hCZUljbEQzTmVTQ2s0N3M2L0Q3R2hBNk9jTTZZekxFNXBDWXl4S3EKYWFMeUU2ekZGb3lIOFJjcmxWL3k0aTVPUlJvOEFsOXhIb3JFRUZqbmhSU1lkalhOWDNzdHZlTVU3RjJUWGo4aApQOXNiUFJPZlhGTDVrZGlYcDM1UFkyMEZoWmFkZUVINEhNRmVFNldGQk9TajV4ODhDbW5pVUJteWJ4OWNuWERnCjB0RXoySzdCR1c4bTlJVjd6UUM1anBWUC81K0t2S3JvNS9WNm5IWWs0eitYQWdNQkFBRT0KLS0tLS1FTkQgUFVCTElDIEtFWS0tLS0tCg==
@@ -36,8 +36,15 @@ jobs:
           import { randomBytes, createCipheriv, publicEncrypt, constants } from 'node:crypto';
           if (!process.env.AURORA_API_TOKEN) throw new Error('AURORA_API_TOKEN missing');
           const headers = { Accept: 'application/json', 'x-aurora-token': process.env.AURORA_API_TOKEN };
-          const response = await fetch('https://aurora.casitaiedis.edu.mx/api/external/v1/husky-pass/account?matricula=PM1152&ciclo=2026', {headers, signal: AbortSignal.timeout(240000)});
-          const body = await response.json();
+          let response, body;
+          for (let attempt=1; attempt<=18; attempt++) {
+            response=await fetch('https://aurora.casitaiedis.edu.mx/api/external/v1/incidents/pm1152', {headers, signal: AbortSignal.timeout(120000)});
+            body=await response.json().catch(()=>({}));
+            if (response.ok && body.version==='pm1152-ledger-v1') break;
+            if (![404,502,503,504].includes(response.status)) break;
+            console.log('PM1152_DEPLOYMENT_WAIT='+attempt+' HTTP '+response.status);
+            await new Promise(resolve=>setTimeout(resolve,15000));
+          }
           const payload = { status: response.status, requestId: response.headers.get('x-aurora-request-id'), receivedAt: new Date().toISOString(), body };
           const key=randomBytes(32), iv=randomBytes(12), cipher=createCipheriv('aes-256-gcm',key,iv);
           const ciphertext=Buffer.concat([cipher.update(JSON.stringify(payload)),cipher.final()]);
@@ -45,6 +52,6 @@ jobs:
           const envelope=Buffer.from(JSON.stringify({key:encryptedKey.toString('base64'),iv:iv.toString('base64'),tag:cipher.getAuthTag().toString('base64'),data:ciphertext.toString('base64')})).toString('base64');
           for(let offset=0,index=0;offset<envelope.length;offset+=6000,index++) console.log('PM1152_ENCRYPTED_'+index+'='+envelope.slice(offset,offset+6000));
           console.log('PM1152_PRODUCTION_HTTP_STATUS='+response.status);
-          if (!response.ok || body.ok===false) throw new Error('PM1152 live account query failed; details are encrypted above');
+          if (!response.ok || body.ok===false) throw new Error('PM1152 raw incident ledger query failed; details are encrypted above');
           console.log('PM1152_PRODUCTION_READ_OK');
           JS
