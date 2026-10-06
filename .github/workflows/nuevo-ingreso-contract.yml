@@ -1,0 +1,25 @@
+name: Nuevo ingreso additive contract
+on:
+  pull_request:
+    paths:
+      - 'shared/utils/nuevoIngreso.ts'
+      - 'server/utils/control-escolar.ts'
+      - 'server/api/external/v1/control-escolar/students/**'
+      - 'tests/nuevo-ingreso.test.mjs'
+      - '.github/workflows/nuevo-ingreso-contract.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node tests/nuevo-ingreso.test.mjs
+      - run: npm run build
