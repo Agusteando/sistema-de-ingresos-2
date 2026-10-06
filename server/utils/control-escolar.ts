@@ -88,6 +88,7 @@ export type ControlEscolarStudentRow = {
   inSections: boolean;
   tipoIngreso: string;
   tipoIngresoValue: string;
+  tipoIngresoSource: string;
   huskyPassUsername: string;
   huskyPassPlaintext: string;
   huskyPassAvailable: boolean;
@@ -1620,6 +1621,7 @@ const overlayStudentRow = (
     currentEnrollmentConceptMatch: Boolean(base.currentEnrollmentConceptMatch),
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
     inSections: Boolean(base.externalSectionMember),
+    tipoIngresoSource: normalizeText(base.operatorTipoIngresoSource),
     tipoIngresoValue:
       normalizeText(base.operatorTipoIngreso || "").toLowerCase() === "interno"
         ? "interno"
