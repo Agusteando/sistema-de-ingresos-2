@@ -1,4 +1,5 @@
 FROM node:22-alpine3.24 AS build
+RUN apk add --no-cache openssl libstdc++
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci --legacy-peer-deps --no-audit --no-fund
