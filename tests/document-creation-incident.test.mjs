@@ -19,6 +19,25 @@ const load = async (path, exports) => {
   return module.namespace
 }
 
+
+test('HTTP LAN document request keys remain UUID v4 without crypto.randomUUID', async () => {
+  const { createRequestUuid } = await load('shared/utils/requestUuid.ts', {})
+  let sequence = 0
+  const insecureOriginCrypto = {
+    getRandomValues(bytes) {
+      for (let i = 0; i < bytes.length; i++) bytes[i] = (sequence++ * 13 + 7) & 255
+      return bytes
+    },
+  }
+  const keys = Array.from({ length: 12 }, () => createRequestUuid(insecureOriginCrypto))
+  assert.equal(new Set(keys).size, 12, 'retries and distinct submissions must receive independent keys')
+  for (const key of keys) {
+    assert.match(key, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/)
+  }
+  assert.equal(createRequestUuid({ randomUUID: () => 'secure-uuid' }), 'secure-uuid')
+  assert.throws(() => createRequestUuid(null), /identificador seguro/)
+})
+
 test('free scholarship is distinguished from an actual payment', async () => {
   const helpers = await load('shared/utils/debtSettlement.ts', {})
   assert.equal(helpers.zeroChargeLabel({ subtotal: 0, pagos: 0, beca: 100 }), 'Beca 100%')
