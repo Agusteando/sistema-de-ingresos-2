@@ -50,7 +50,7 @@
     ]
   },
   "podman": {
-    "preset": "nuxt",
+    "preset": "containerfile",
     "nodeVersion": 22,
     "containerPort": 3000,
     "hostPort": "auto",
@@ -60,9 +60,7 @@
     "labels": {
       "com.casita.service": "aurora"
     },
-    "aptPackages": [
-      "perl-base"
-    ]
+    "containerfile": "Containerfile"
   },
   "health": {
     "path": "/",
