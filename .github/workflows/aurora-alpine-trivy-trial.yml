@@ -18,15 +18,14 @@ jobs:
             test -f /app/.output/server/index.mjs
             node --check /app/.output/server/index.mjs
             node -e "
+              const {PrismaClient}=require(\"@prisma/client\");
+              const db=new PrismaClient();
+              if(typeof db.base.findMany!==\"function\")throw Error(\"Generated Prisma model unavailable\");
               const fs=require(\"node:fs\");
-              const path=require(\"node:path\");
-              const {createRequire}=require(\"node:module\");
-              const r=createRequire(\"/app/.output/server/index.mjs\");
-              let resolved;
-              try{resolved=r.resolve(\"@prisma/client\")}catch(e){
-                console.error(\"AURORA_PRISMA_RESOLUTION_MISSING\",e.message);
-              }
-              console.log(\"AURORA_PRISMA_RESOLUTION\",resolved||\"bundled-or-unresolved\");
+              const lib=fs.readdirSync(\"node_modules/.prisma/client\").filter(x=>x.includes(\"linux-musl\")&&x.endsWith(\".node\"));
+              if(!lib.length)throw Error(\"Missing Alpine Prisma native engine\");
+              console.log(\"AURORA_PRISMA_MUSL=PASS\",lib);
+              db.\$disconnect();
             "
             echo AURORA_NITRO_BUNDLE=PASS
           '
