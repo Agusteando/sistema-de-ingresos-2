@@ -272,6 +272,7 @@ import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { DEFAULT_TALLER_SERVICIO_IMAGE, normalizeServicioClave } from '~/shared/utils/talleresServicios'
 import { documentMonthsFromStart, parseDocumentMonths, schoolMonthLabel } from '~/shared/utils/documentMonths'
 import { isEventualConcept } from '~/shared/utils/conceptEventual'
+import { createRequestUuid } from '~/shared/utils/requestUuid'
 
 const props = defineProps({ student: Object })
 const emit = defineEmits(['close', 'success'])
@@ -582,7 +583,7 @@ const submit = async () => {
     }
     const serializedPayload = JSON.stringify(payload)
     if (serializedPayload !== lastSubmissionPayload || !requestKey) {
-      requestKey = crypto.randomUUID()
+      requestKey = createRequestUuid()
       lastSubmissionPayload = serializedPayload
     }
     const result = await $fetch('/api/documentos', {
@@ -614,7 +615,13 @@ const submit = async () => {
     emit('success')
   } catch (e) {
     cartaWindow?.close?.()
-    show(e?.data?.message || 'Error al agregar', 'danger')
+    console.error('[Documentos] No se pudo agregar el documento', {
+      requestKey: requestKey || null,
+      requestId: e?.data?.requestId || null,
+      statusCode: e?.statusCode || e?.status || null,
+      message: e?.message || String(e),
+    }, e)
+    show(e?.data?.message || e?.message || 'Error al agregar', 'danger')
   } finally { loading.value = false }
 }
 
