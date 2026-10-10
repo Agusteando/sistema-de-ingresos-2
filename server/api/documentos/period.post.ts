@@ -15,6 +15,7 @@ import {
 } from '../../utils/talleres-servicios';
 import { refreshTalleresAfterCommittedWrite } from '../../utils/financial-write-followup';
 import { parseDocumentMonths } from '../../../shared/utils/documentMonths';
+import { previewDocumentStart, updateDocumentStart } from "../../utils/document-start-month";
 import { isConceptTransition } from '../../../shared/utils/conceptDifference';
 
 const toMesNumber = (value: unknown) => {
@@ -128,7 +129,7 @@ export default defineEventHandler(async (event) =>
         D.documento, D.concepto, D.conceptoNombre, D.ciclo, D.meses, D.plazo, D.estatus, D.matricula,
         D.costo, D.montoFinal, D.eventual,
         D.beca, D.becaNombre, D.becaTipos, D.becaMotivo, D.becaMonto, D.becaPorcentaje,
-        B.plantel, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
+        B.nombreCompleto, B.plantel, B.nivel as nivelBase, B.grado as gradoBase, B.ciclo as cicloBase
       FROM documentos D
       LEFT JOIN base B ON B.matricula = D.matricula
       WHERE D.documento = ?
@@ -149,6 +150,14 @@ export default defineEventHandler(async (event) =>
         statusCode: 409,
         message: "El documento no esta activo.",
       });
+    }
+
+    if (action === "preview_start" || action === "change_start") {
+      if (normalizeCicloKey(doc.ciclo) !== cicloKey) {
+        throw createError({ statusCode: 409, message: "El documento pertenece a otro ciclo." });
+      }
+      if (action === "preview_start") return await previewDocumentStart(doc);
+      return await updateDocumentStart(doc, body, user, event.context.auroraRequestId || "");
     }
 
     const isEventualDocument = ["1", "true", "si", "sí", "yes", "on"].includes(
