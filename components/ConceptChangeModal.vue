@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="$emit('close')">
-      <div class="modal-container concept-modal">
+    <div class="modal-overlay" @click.self="!busy && $emit('close')">
+      <div class="modal-container concept-modal" role="dialog" aria-modal="true" aria-label="Ajustar concepto">
         <div class="modal-header">
           <div>
             <h2 class="modal-title">Ajustar concepto</h2>
@@ -13,6 +13,7 @@
             class="modal-icon-button"
             type="button"
             aria-label="Cerrar"
+            :disabled="busy"
             @click="$emit('close')"
           >
             <LucideX :size="18" />
@@ -20,6 +21,44 @@
         </div>
 
         <div class="modal-content concept-content">
+          <div v-if="canAdjustStart" class="adjust-tabs" aria-label="Tipo de ajuste">
+            <button type="button" :class="{ selected: mode === 'concept' }" :aria-pressed="mode === 'concept'" :disabled="busy" @click="mode = 'concept'">Concepto</button>
+            <button type="button" :class="{ selected: mode === 'start' }" :aria-pressed="mode === 'start'" :disabled="busy" @click="openStartAdjustment">Mes de inicio</button>
+          </div>
+
+          <section v-if="mode === 'start'" class="start-card">
+            <div class="start-heading">
+              <LucideCalendarDays :size="19" />
+              <div><h3>Comenzar la tira más adelante</h3><p>Retira únicamente los meses anteriores al nuevo inicio.</p></div>
+            </div>
+            <div v-if="loadingStart" class="start-feedback" role="status"><LucideLoader2 :size="16" class="animate-spin" /> Revisando meses y pagos…</div>
+            <div v-else-if="startError" class="start-feedback error" role="alert">{{ startError }} <button type="button" class="btn btn-outline" @click="loadStartPreview">Reintentar</button></div>
+            <template v-else-if="startPreview?.eligible">
+              <div class="start-select-row">
+                <div class="start-current"><small>Inicio actual</small><strong>{{ startPreview.months[0]?.label }}</strong></div>
+                <LucideArrowRight :size="16" class="start-arrow" />
+                <label class="field-block"><span>Nuevo inicio</span><select v-model.number="startMes" class="input-field" :disabled="busy">
+                  <option value="">Seleccionar mes</option>
+                  <option v-for="month in startOptions" :key="month.mes" :value="month.mes" :disabled="isStartBlocked(month.mes)">{{ month.label }}{{ isStartBlocked(month.mes) ? ' · meses anteriores con pagos' : '' }}</option>
+                </select></label>
+              </div>
+              <div class="start-review" aria-live="polite">
+                <template v-if="removedMonths.length">
+                  <div class="start-review-label">Se retirará{{ removedMonths.length === 1 ? '' : 'n' }}</div>
+                  <div class="start-months"><span v-for="month in removedMonths" :key="month.mes" :class="{ blocked: month.paymentCount > 0 }">{{ month.label }}<LucideLockKeyhole v-if="month.paymentCount > 0" :size="12" /></span></div>
+                  <p v-if="blockedMonths.length" class="start-warning" role="alert">{{ blockedMonths.map(month => month.label).join(', ') }} tiene pagos vigentes. Elija un inicio anterior.</p>
+                  <p v-else>Se conserva {{ keptRange }}, con sus pagos e importes actuales.</p>
+                </template>
+                <p v-else>Elija el primer mes que corresponde cobrar. Un mes con pagos vigentes no se puede retirar.</p>
+              </div>
+              <label class="field-block"><span>Motivo del ajuste</span><textarea v-model="startReason" class="input-field start-reason" rows="3" maxlength="2000" :disabled="busy" placeholder="Ej. Inicia colegiatura en octubre por cambio de categoría." /></label>
+              <p class="start-audit"><LucideHistory :size="14" /> Quedará registrado en Cancelaciones, con su nombre y motivo. No requiere código.</p>
+
+            </template>
+            <p v-else class="start-feedback">Esta tira no tiene meses anteriores que puedan retirarse conservando meses activos.</p>
+          </section>
+
+          <template v-if="mode === 'concept'">
           <section class="current-card">
             <div class="current-token">
               <small>Actual</small>
@@ -121,6 +160,13 @@
               Cancelar completo
             </button>
           </section>
+          </template>
+        </div>
+        <div v-if="mode === 'start' && startPreview?.eligible && !loadingStart && !startError" class="modal-footer start-footer">
+              <button class="btn btn-primary start-save" type="button" :disabled="busy || !startMes || !startReason.trim() || !removedMonths.length || blockedMonths.length > 0" @click="submitStart">
+                <LucideLoader2 v-if="busyAction === 'change_start'" class="animate-spin" :size="15" /><LucideCheckCircle v-else :size="15" />
+                {{ startMes ? `Guardar inicio en ${schoolMonthLabel(startMes)}` : 'Guardar mes de inicio' }}
+              </button>
         </div>
       </div>
     </div>
@@ -134,6 +180,9 @@ import {
   LucideArrowRight,
   LucideBan,
   LucideCalendarX,
+  LucideCalendarDays,
+  LucideHistory,
+  LucideLockKeyhole,
   LucideCheckCircle,
   LucideLoader2,
   LucidePlus,
@@ -142,6 +191,7 @@ import {
 import { useScrollLock } from "~/composables/useScrollLock";
 import { useToast } from "~/composables/useToast";
 import ConceptSearchSelect from "~/components/ConceptSearchSelect.vue";
+import { schoolMonthLabel } from "~/shared/utils/documentMonths";
 import { normalizeCicloKey } from "~/shared/utils/ciclo";
 
 const props = defineProps({ debt: Object, student: Object });
@@ -154,6 +204,43 @@ const state = useState("globalState");
 const { show } = useToast();
 
 useScrollLock();
+
+const mode = ref("concept");
+const startPreview = ref(null);
+const loadingStart = ref(false);
+const startError = ref("");
+const startMes = ref("");
+const startReason = ref("");
+const canAdjustStart = computed(() => !props.debt?.isEventual && String(props.debt?.mes).toLowerCase() !== 'ev' && (props.debt?.documentTimeline?.applicableMonths || props.debt?.applicableMonths || []).length > 1);
+const startOptions = computed(() => (startPreview.value?.months || []).filter(month => startPreview.value.startOptions.includes(month.mes)));
+const removedMonths = computed(() => (startPreview.value?.months || []).filter(month => startMes.value && month.mes < Number(startMes.value)));
+const blockedMonths = computed(() => removedMonths.value.filter(month => month.paymentCount > 0));
+const keptRange = computed(() => {
+  const kept = (startPreview.value?.months || []).filter(month => month.mes >= Number(startMes.value));
+  const continuous = kept.every((month, index) => index === 0 || month.mes === kept[index - 1].mes + 1);
+  return kept.length > 1 && continuous ? `${kept[0].label} a ${kept[kept.length - 1].label}` : kept.map(month => month.label).join(', ');
+});
+const isStartBlocked = (mes) => (startPreview.value?.months || []).some(month => month.mes < mes && month.paymentCount > 0);
+const loadStartPreview = async () => {
+  if (loadingStart.value) return;
+  loadingStart.value = true;
+  startError.value = "";
+  startMes.value = "";
+  try {
+    startPreview.value = await $fetch("/api/documentos/period", { method: "POST", body: { action: "preview_start", documento: props.debt.documento, ciclo: normalizeCicloKey(state.value.ciclo) } });
+  } catch (e) {
+    startPreview.value = null;
+    startError.value = e?.data?.message || "No se pudieron revisar los meses y pagos.";
+  } finally { loadingStart.value = false; }
+};
+const openStartAdjustment = () => {
+  mode.value = "start";
+  if (!startPreview.value) loadStartPreview();
+};
+const submitStart = () => {
+  if (!startMes.value || !startReason.value.trim() || blockedMonths.value.length || !removedMonths.value.length) return;
+  runOperation("change_start", { startMes: Number(startMes.value), motivo: startReason.value.trim(), coverage: startPreview.value.coverage });
+};
 
 const conceptos = ref([]);
 const selectedConceptId = ref("");
@@ -220,14 +307,16 @@ const runOperation = async (action, extraBody = {}) => {
       show("Concepto actualizado, pero Control Escolar no confirmó el taller. Revísalo en Talleres.", "danger", { duration: 6500 });
     } else {
       const serviceText = result?.servicio?.mapped ? ` · ${result.servicio.servicio?.nombre || "Taller actualizado"}` : "";
-      show(action === "cancel_full" ? `Documento ${result.documento || props.debt.documento} cancelado completo` : `Concepto actualizado${serviceText}`, "success");
+      show(action === "change_start" ? `Inicio ajustado a ${schoolMonthLabel(extraBody.startMes)} · registrado en Cancelaciones` : action === "cancel_full" ? `Documento ${result.documento || props.debt.documento} cancelado completo` : `Concepto actualizado${serviceText}`, "success");
     }
     if (result?.snapshotRefresh?.pending) {
       show(`Documento ${result.documento || props.debt.documento} actualizado. Talleres pendiente de sincronizar.`, 'success', { title: 'Sincronización pendiente', duration: 6500 });
     }
     emit("success");
   } catch (e) {
-    show(e?.data?.message || "No se pudo ajustar el concepto", "danger");
+    const requestId = e?.data?.data?.requestId || e?.data?.requestId || e?.data?.data?.diagnostic?.requestId;
+    show(`${e?.data?.message || "No se pudo ajustar el concepto"}${requestId ? ` · Ref: ${requestId}` : ''}`, "danger");
+    if (action === 'change_start') await loadStartPreview();
   } finally {
     busyAction.value = "";
   }
@@ -514,5 +603,36 @@ onMounted(loadConcepts);
   .modal-action-row {
     flex-direction: column;
   }
+}
+.adjust-tabs { display: flex; gap: 4px; padding: 4px; border: 1px solid #e1e8e4; border-radius: 12px; background: #f4f7f5; }
+.adjust-tabs button { flex: 1; padding: 10px; border: 0; border-radius: 9px; background: transparent; color: #65746d; font: inherit; font-size: .82rem; cursor: pointer; }
+.adjust-tabs button.selected { background: #fff; color: #00692f; font-weight: 650; box-shadow: 0 1px 4px #17342c0d; }
+.start-card { display: grid; gap: 16px; border: 1px solid #dfe8e3; border-radius: 16px; padding: 18px; background: #fff; }
+.start-heading { display: flex; align-items: flex-start; gap: 10px; color: #00692f; }
+.start-heading h3 { margin: 0; font-size: .92rem; font-weight: 650; color: #263752; }
+.start-heading p, .start-review p { margin: 5px 0 0; font-size: .8rem; line-height: 1.6; color: #68786f; }
+.start-select-row { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1.5fr); align-items: center; gap: 12px; }
+.start-select-row select { width: 100%; min-width: 0; }
+.start-current small, .start-review-label { display: block; font-size: .72rem; color: #68786f; }
+.start-current strong { display: block; margin-top: 6px; font-size: .9rem; font-weight: 600; }
+.start-arrow { color: #8b9a92; }
+.start-review { padding: 12px; border: 1px solid #e0e8e3; border-radius: 12px; background: #f7faf8; }
+.start-months { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.start-months span { display: inline-flex; align-items: center; gap: 5px; padding: 5px 9px; border: 1px solid #e6d9c7; border-radius: 8px; background: #fff9ef; color: #806333; font-size: .78rem; }
+.start-months span.blocked { color: #a13f35; border-color: #efcbc7; background: #fff2f0; }
+.start-review .start-warning, .start-feedback.error { color: #a13f35; }
+.start-reason { width: 100%; resize: vertical; min-height: 80px; line-height: 1.5; }
+.start-audit { display: flex; align-items: flex-start; gap: 6px; margin: 0; color: #68786f; font-size: .74rem; line-height: 1.6; }
+.start-audit svg { flex-shrink: 0; margin-top: 2px; }
+.start-feedback { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; font-size: .82rem; line-height: 1.6; }
+.start-save { justify-self: end; }
+.start-footer { background: #fff; }
+.adjust-tabs button:focus-visible { outline: 2px solid #007f92; outline-offset: 2px; }
+@media (max-width: 640px) {
+  .start-card { padding: 14px; }
+  .start-select-row { grid-template-columns: 1fr; gap: 12px; }
+  .start-arrow { display: none; }
+  .start-save { width: 100%; }
+  .start-card input, .start-card select, .start-card textarea { font-size: 16px; }
 }
 </style>

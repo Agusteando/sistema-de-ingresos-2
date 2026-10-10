@@ -343,6 +343,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
 
     const montoDecimal = Number(requestedAmount.toFixed(2))
     const letra = numeroALetras(montoDecimal)
+    // Lock and recheck the exact coverage at commit time, after any concurrent start adjustment.
     const paymentInsertIndex = statements.length
     statements.push({
       sql: `
@@ -384,11 +385,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
+        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
       `,
       params: [
         matricula,
         documento,
+        doc.plazo,
+        doc.meses,
         mes,
         p.mesLabel,
         nombreCompleto,
@@ -453,6 +456,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     results = await executeStatementTransaction<any>(statements)
   } catch (error) {
     await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por error transaccional')))
+    // A simultaneous start-month adjustment must not allow a stale payment into a retired month.
+    if ((error as any)?.code === 'ER_BAD_NULL_ERROR' && /documento/i.test(String((error as any)?.message || ''))) {
+      throw createError({ statusCode: 409, message: 'La tira cambió mientras registraba el pago. Actualice el estado de cuenta e inténtelo de nuevo.' })
+    }
     throw error
   }
 
