@@ -20,6 +20,13 @@ export const notifyDocumentAmountCorrection = async (message: string) => {
         clearTimeout(timeout)
       }
       if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`)
+      // HTTP 200 alone does not confirm success when the relay reports a logical failure.
+      const raw = await response.text().catch(() => '')
+      let payload: any = null
+      try { payload = raw ? JSON.parse(raw) : null } catch {}
+      if (payload?.success === false || payload?.ok === false || payload?.error) {
+        throw new Error('Telegram relay rejected message')
+      }
       return { delivered: true }
     } catch (error) {
       lastError = error
