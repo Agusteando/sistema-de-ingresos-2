@@ -758,14 +758,27 @@ export const refreshTalleresAfterCommittedConfigWrite = async (input: {
   const targets = Array.from(new Set(requested))
   const followup = await settleCommittedTalleresFollowup(targets, {
     invalidate: (plantel) => invalidateTalleresSnapshotPlantel({ plantel, ciclo }),
-    refresh: (plantel) => ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true }),
+    // Invalidated rows do not pass the freshness check. The read side also
+    // synchronously refreshes or fails closed until the queued rebuild succeeds.
+    refresh: (plantel) => ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: false }),
+  }, {
+    queued: true,
+    onComplete: ({ failures, refreshed }) => {
+      if (!failures.length) return
+      // The five-minute Nitro refresh pass retries invalidated campuses.
+      console.warn('[TalleresSnapshot] Background roster refresh incomplete', {
+        operation: input.operation,
+        ciclo,
+        refreshed,
+        failures,
+      })
+    },
   })
-  if (!followup.current) {
+  if (followup.failures.length) {
     // Do not log student rosters, matrícula, source errors or DB credentials.
-    console.warn('[TalleresSnapshot] Central configuration committed; roster refresh pending', {
+    console.warn('[TalleresSnapshot] Central write committed; some roster invalidations failed', {
       operation: input.operation,
       ciclo,
-      refreshed: followup.refreshed,
       failures: followup.failures,
     })
   }
