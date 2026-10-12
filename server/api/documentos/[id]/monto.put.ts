@@ -124,12 +124,9 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     periods: 0,
   })
   const message = [
-    'Aurora · Corrección de importe de documento',
-    `Usuario: ${actor}`,
-    `Documento: ${documento} · Matrícula: ${preview.matricula}`,
-    `Concepto: ${preview.conceptoNombre} · Ciclo: ${preview.ciclo}`,
-    `Importe anterior: $${actualMoney.toFixed(2)} → nuevo: $${montoFinal.toFixed(2)}`,
-    `Meses del documento con importe base: ${preview.affectedMonths} · Máximo pagado en un mes: ${preview.minimumAllowed.toFixed(2)}`,
+    `*${actor}* modificó el importe del documento *#${documento}* de *$${actualMoney.toFixed(2)}* a *$${montoFinal.toFixed(2)}*.`,
+    `Matrícula: ${preview.matricula} · Concepto: ${preview.conceptoNombre} · Ciclo: ${preview.ciclo}`,
+    `Meses con importe base: ${preview.affectedMonths} · Máximo pagado por mes: $${preview.minimumAllowed.toFixed(2)}`,
     `Motivo: ${motivo}${detalle ? ` · ${detalle}` : ''}`,
     `Auditoría: #${auditId}${requestId ? ` · Ref: ${requestId}` : ''}`,
   ].join('\n')
