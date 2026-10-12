@@ -60,63 +60,82 @@
           </section>
 
           <section v-if="mode === 'amount'" class="amount-workspace" aria-label="Corrección de importe">
-            <div v-if="loadingAmount" class="amount-feedback" role="status"><LucideLoader2 :size="17" class="animate-spin" /> Verificando documento y pagos actuales…</div>
-            <div v-else-if="amountError && !amountPreview" class="amount-feedback amount-error" role="alert">
-              <LucideAlertCircle :size="18" /><span>{{ amountError }}</span>
+            <div v-if="loadingAmount" class="amount-feedback" role="status">
+              <LucideLoader2 :size="16" class="animate-spin" /> Revisando pagos…
+            </div>
+            <div v-else-if="!amountPreview" class="amount-feedback amount-error" role="alert">
+              <span>{{ amountError || 'No se pudo revisar el documento.' }}</span>
               <button type="button" class="btn btn-outline" @click="loadAmountPreview">Reintentar</button>
             </div>
-            <template v-else-if="amountPreview">
+            <template v-else>
               <div class="amount-intro">
-                <div class="amount-intro-icon"><LucideCircleDollarSign :size="21" /></div>
+                <div class="amount-intro-icon"><LucideCircleDollarSign :size="20" /></div>
                 <div>
-                  <h3>Corregir importe registrado</h3>
-                  <p>Corrige el valor del documento sin modificar los pagos, folios ni el catálogo de conceptos.</p>
+                  <h3>Importe del documento #{{ amountPreview.documento }}</h3>
+                  <p>{{ amountPreview.conceptoNombre }}</p>
                 </div>
               </div>
-              <div class="amount-compare">
-                <div class="amount-value-before">
-                  <span>Importe actual{{ amountPreview.recurring ? ' por mes' : '' }}</span>
-                  <strong>{{ money(amountPreview.months[0]?.currentAmount) }}</strong>
+              <div v-if="!amountSelectedEditable" class="amount-feedback amount-error" role="status">
+                Este mes tiene un importe propio por un cambio de concepto. No se altera desde aquí.
+              </div>
+              <template v-else>
+                <div class="amount-compare">
+                  <div class="amount-value-before">
+                    <span>Importe actual</span>
+                    <strong>{{ money(amountSelected?.currentAmount) }}</strong>
+                  </div>
+                  <LucideArrowRight class="amount-compare-arrow" :size="20" />
+                  <label class="amount-value-after" :class="{ 'amount-input-invalid': amountBelowMinimum }">
+                    <span>Nuevo importe</span>
+                    <span class="amount-input-line">
+                      <span>$</span>
+                      <input v-model="amountInput" type="text" inputmode="decimal" autocomplete="off"
+                        aria-label="Nuevo importe de este documento" :aria-invalid="amountBelowMinimum || amountFormatInvalid"
+                        placeholder="0.00" :disabled="busy" @input="amountConfirming = false" />
+                    </span>
+                  </label>
                 </div>
-                <LucideArrowRight class="amount-compare-arrow" :size="22" />
-                <label class="amount-value-after">
-                  <span>Nuevo importe{{ amountPreview.recurring ? ' por mes' : '' }}</span>
-                  <span class="amount-input-line"><span>$</span><input v-model="amountInput" type="text" inputmode="decimal" autocomplete="off" placeholder="0.00" :disabled="busy" aria-label="Nuevo importe del documento" @input="amountConfirming = false" /></span>
-                </label>
-              </div>
-              <div class="amount-stats">
-                <div><span>Pagos vigentes{{ amountPreview.recurring ? ' (total)' : '' }}</span><strong>{{ money(amountPreview.totalPaid) }}</strong></div>
-                <div><span>Mínimo permitido por mes</span><strong>{{ money(amountPreview.minimumAllowed) }}</strong></div>
-                <div><span>Saldo {{ amountHasValidInput ? 'proyectado' : 'actual' }}{{ amountPreview.recurring ? ' (este mes)' : '' }}</span><strong :class="{ 'amount-balanced': amountProjectedBalance === 0 }">{{ money(amountHasValidInput ? amountProjectedBalance : amountCurrentBalance) }}</strong></div>
-              </div>
-              <p v-if="amountValidation" class="amount-feedback amount-error" role="alert"><LucideAlertCircle :size="16" /> {{ amountValidation }}</p>
-              <p v-else-if="amountHasValidInput && amountProjectedBalance === 0" class="amount-feedback amount-ok"><LucideCheckCircle :size="17" /> El saldo de {{ amountPreview.months[0]?.label?.toLowerCase() }} quedaría en $0.00, sujeto a recargos y otras diferencias vigentes.</p>
-              <div v-if="amountPreview.recurring" class="amount-scope">
-                <LucideLayers3 :size="18" />
-                <div><strong>{{ amountPreview.affectedMonths }} mensualidades afectadas</strong><p>Este ajuste modifica la tarifa base de todas las mensualidades activas de este documento. Los cambios de concepto y las diferencias adicionales se conservan.</p></div>
-              </div>
-              <div v-if="amountPreview.months.length > 1" class="amount-months" aria-label="Importes y pagos por mes">
-                <div v-for="month in amountPreview.months" :key="month.mes" class="amount-month-line">
-                  <span>{{ month.label }}</span><small>Registrado {{ money(month.paid) }}</small>
-                  <strong>{{ money(amountHasValidInput ? amountNumber : month.currentAmount) }}</strong>
+                <div class="amount-stats">
+                  <div><span>Pagado · {{ amountSelected?.label }}</span><strong>{{ money(amountSelected?.paid) }}</strong></div>
+                  <div><span>Mínimo permitido</span><strong>{{ money(amountPreview.minimumAllowed) }}</strong></div>
+                  <div><span>Saldo base resultante</span>
+                    <strong :class="{ 'amount-balanced': amountProjectedBalance === 0 && amountHasValidInput }">
+                      {{ amountHasValidInput ? money(amountProjectedBalance) : '—' }}
+                    </strong>
+                  </div>
                 </div>
-              </div>
-              <div class="amount-reason-fields">
-                <label class="field-block"><span>Motivo de la corrección</span><select v-model="amountReason" class="input-field" :disabled="busy" @change="amountConfirming = false">
-                  <option value="monto_incorrecto">Importe capturado incorrectamente</option>
-                  <option value="beca_historica">Corrección por beca histórica</option>
-                  <option value="convenio_no_registrado">Convenio previamente no registrado</option>
-                  <option value="otro">Otro motivo documentado</option>
-                </select></label>
-                <label class="field-block"><span>Justificación para auditoría</span><textarea v-model="amountDetail" class="input-field amount-reason" rows="3" maxlength="450" :disabled="busy" placeholder="Ej. El importe correcto de inscripción era $1,635.00; se capturó $1,636.17." @input="amountConfirming = false" /></label>
-              </div>
-              <div v-if="amountError" class="amount-feedback amount-error" role="alert">{{ amountError }} <button type="button" @click="loadAmountPreview">Actualizar importes</button></div>
-              <div class="amount-audit"><LucideShieldCheck :size="18" /><p>Se guardará un registro de auditoría con el importe anterior, el nuevo, el usuario y el motivo. También se notificará al grupo institucional de Telegram.</p></div>
-              <div v-if="amountConfirming" class="amount-final-review" aria-live="polite">
-                <strong>Confirmar la corrección</strong>
-                <p>Se modificará el importe de <b>{{ money(amountPreview.months[0]?.currentAmount) }}</b> a <b>{{ money(amountNumber) }}</b> en el documento <b>#{{ amountPreview.documento }}</b>. No se reescribirá ningún pago existente.</p>
-                <label><input v-model="amountAcknowledged" type="checkbox" :disabled="busy" /> Verifiqué los importes y el motivo.</label>
-              </div>
+                <div v-if="amountBelowMinimum" class="amount-minimum-guidance" role="alert">
+                  <LucideAlertCircle :size="17" />
+                  <div><strong>Ya hay pagos por {{ money(amountPreview.minimumAllowed) }}.</strong>
+                    <p>El nuevo importe debe cubrirlos.</p>
+                    <button type="button" :disabled="busy" @click="useMinimumAmount">Usar {{ money(amountPreview.minimumAllowed) }}</button>
+                  </div>
+                </div>
+                <div v-else-if="amountFormatInvalid" class="amount-feedback amount-error" role="alert">
+                  Ingresa un importe mayor a $0.00, con máximo dos decimales.
+                </div>
+                <div v-else-if="amountHasValidInput && amountProjectedBalance === 0" class="amount-feedback amount-ok">
+                  <LucideCheckCircle :size="16" /> Saldo base del mes: $0.00.
+                </div>
+                <p v-if="amountPreview.affectedMonths > 1 || amountPreview.excludedMonths" class="amount-scope">
+                  <LucideLayers3 :size="16" />
+                  <span>
+                    {{ amountPreview.affectedMonths }} {{ amountPreview.affectedMonths === 1 ? 'mes' : 'meses' }} de este documento {{ amountPreview.affectedMonths === 1 ? 'usa' : 'usan' }} el importe base.
+                    <template v-if="amountPreview.excludedMonths"> Los meses con cambio de concepto conservan su importe.</template>
+                  </span>
+                </p>
+                <div v-if="amountError" class="amount-feedback amount-error" role="alert">
+                  <span>{{ amountError }}</span>
+                  <button type="button" @click="loadAmountPreview">Actualizar</button>
+                </div>
+                <p class="amount-audit"><LucideHistory :size="16" />
+                  Se registrará el cambio con tu usuario y se notificará en Telegram.
+                </p>
+                <div v-if="amountConfirming" class="amount-final-review" role="status">
+                  <strong>Confirmar cambio</strong>
+                  <p><b>{{ money(amountSelected?.currentAmount) }}</b> <LucideArrowRight :size="14" /> <b>{{ money(amountNumber) }}</b> · Doc. #{{ amountPreview.documento }}</p>
+                </div>
+              </template>
             </template>
           </section>
 
@@ -224,12 +243,17 @@
           </section>
           </template>
         </div>
-        <div v-if="mode === 'amount' && amountPreview && !loadingAmount" class="modal-footer amount-footer">
-          <button class="btn btn-outline" type="button" :disabled="busy" @click="amountConfirming = false; mode = 'concept'">Volver</button>
-          <button class="btn btn-primary amount-save" type="button" :disabled="busy || Boolean(amountValidation) || !amountHasChanges || amountDetail.trim().length < 8 || (amountConfirming && !amountAcknowledged)" @click="amountConfirming ? submitAmount() : reviewAmount()">
+        <div v-if="mode === 'amount' && amountPreview && amountSelectedEditable && !loadingAmount" class="modal-footer amount-footer">
+          <button class="btn btn-outline" type="button" :disabled="busy"
+            @click="amountConfirming ? (amountConfirming = false) : (mode = 'concept')">
+            {{ amountConfirming ? 'Editar' : 'Volver' }}
+          </button>
+          <button class="btn btn-primary amount-save" type="button"
+            :disabled="busy || Boolean(amountValidation) || !amountHasChanges || Boolean(amountError)"
+            @click="amountConfirming ? submitAmount() : reviewAmount()">
             <LucideLoader2 v-if="busyAction === 'correct_amount'" :size="16" class="animate-spin" />
             <LucideCheckCircle v-else :size="16" />
-            {{ busyAction === 'correct_amount' ? 'Guardando…' : amountConfirming ? 'Confirmar y guardar importe' : 'Revisar corrección' }}
+            {{ busyAction === 'correct_amount' ? 'Guardando…' : amountConfirming ? 'Confirmar cambio' : 'Guardar importe' }}
           </button>
         </div>
         <div v-if="mode === 'start' && startPreview?.eligible && !loadingStart && !startError" class="modal-footer start-footer">
@@ -259,7 +283,6 @@ import {
   LucideX,
   LucideAlertCircle,
   LucideCircleDollarSign,
-  LucideShieldCheck,
   LucideLayers3,
 } from "lucide-vue-next";
 import { useScrollLock } from "~/composables/useScrollLock";
@@ -283,57 +306,64 @@ useScrollLock();
 const mode = ref("concept");
 const amountPreview = ref(null);
 const loadingAmount = ref(false);
-const amountError = ref("");
-const amountInput = ref("");
-const amountReason = ref("monto_incorrecto");
-const amountDetail = ref("");
+const amountError = ref('');
+const amountInput = ref('');
 const amountConfirming = ref(false);
-const amountAcknowledged = ref(false);
-const money = (value) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(Number(value || 0));
+const money = (value) => new Intl.NumberFormat('es-MX', {
+  style: 'currency', currency: 'MXN', minimumFractionDigits: 2, maximumFractionDigits: 2,
+}).format(Number(value || 0));
+const amountSelected = computed(() => amountPreview.value?.months?.find(
+  row => String(row.mes) === String(props.debt?.mes === 'ev' ? 1 : props.debt?.mes),
+) || amountPreview.value?.months?.[0] || null);
+const amountSelectedEditable = computed(() => Boolean(amountSelected.value?.editable));
 const amountCents = computed(() => amountToCents(amountInput.value));
 const amountHasValidInput = computed(() => amountCents.value !== null && amountCents.value > 0);
 const amountNumber = computed(() => amountHasValidInput.value ? centsToAmount(amountCents.value) : 0);
-const amountCurrentBalance = computed(() => {
-  const month = amountPreview.value?.months?.find(item => String(item.mes) === String(props.debt?.mes === 'ev' ? 1 : props.debt?.mes)) || amountPreview.value?.months?.[0];
-  return Math.max(0, Number(month?.currentAmount || 0) + Number(month?.difference || 0) - Number(month?.paid || 0));
-});
+const amountFormatInvalid = computed(() => Boolean(amountInput.value.trim()) && !amountHasValidInput.value);
+const amountBelowMinimum = computed(() => amountHasValidInput.value
+  && amountCents.value < amountToCents(amountPreview.value?.minimumAllowed ?? 0));
 const amountProjectedBalance = computed(() => {
-  const month = amountPreview.value?.months?.find(item => String(item.mes) === String(props.debt?.mes === 'ev' ? 1 : props.debt?.mes)) || amountPreview.value?.months?.[0];
-  return Math.max(0, amountNumber.value + Number(month?.difference || 0) - Number(month?.paid || 0));
+  if (!amountSelectedEditable.value || !amountHasValidInput.value) return 0;
+  const paid = amountToCents(amountSelected.value.paid) || 0;
+  const difference = amountToCents(amountSelected.value.difference) || 0;
+  return centsToAmount(Math.max(0, amountCents.value + difference - paid));
 });
-const amountHasChanges = computed(() => amountHasValidInput.value && Boolean(amountPreview.value) && amountPreview.value.months.some(month => amountToCents(month.currentAmount) !== amountCents.value));
-const amountValidation = computed(() => {
-  if (!amountPreview.value) return 'No se pudo verificar el documento.';
-  if (!amountHasValidInput.value) return 'Escribe un importe mayor a cero con máximo dos decimales.';
-  if (amountCents.value < amountToCents(amountPreview.value.minimumAllowed)) return 'El nuevo importe no puede ser menor a lo ya pagado en alguna mensualidad.';
-  if (!amountHasChanges.value) return 'El importe es igual al registrado. No hay cambios que guardar.';
-  return '';
-});
+const amountHasChanges = computed(() => amountHasValidInput.value && amountSelectedEditable.value
+  && (amountToCents(amountSelected.value?.currentAmount) !== amountCents.value));
+const amountValidation = computed(() => !amountSelectedEditable.value || !amountHasValidInput.value
+  || amountBelowMinimum.value || !amountHasChanges.value);
+const useMinimumAmount = () => {
+  amountInput.value = Number(amountPreview.value.minimumAllowed).toFixed(2);
+  amountConfirming.value = false;
+};
 const loadAmountPreview = async () => {
   if (loadingAmount.value) return;
   loadingAmount.value = true;
   amountError.value = '';
   try {
-    const result = await $fetch(`/api/documentos/${props.debt.documento}/monto`, { query: { ciclo: normalizeCicloKey(state.value.ciclo) } });
+    const result = await $fetch(`/api/documentos/${props.debt.documento}/monto`, {
+      query: { ciclo: normalizeCicloKey(state.value.ciclo) },
+    });
     amountPreview.value = result;
-    amountInput.value = Number(result.months?.[0]?.currentAmount ?? result.montoAnterior ?? 0).toFixed(2);
+    amountInput.value = Number(result.montoAnterior ?? 0).toFixed(2);
     amountConfirming.value = false;
-    amountAcknowledged.value = false;
   } catch (error) {
     amountPreview.value = null;
-    amountError.value = error?.data?.message || 'No se pudieron verificar el importe y los pagos. Reintenta.';
+    amountError.value = error?.data?.message || 'No se pudieron revisar el importe y los pagos.';
   } finally {
     loadingAmount.value = false;
   }
 };
-const openAmountAdjustment = () => { mode.value = 'amount'; if (!amountPreview.value) void loadAmountPreview(); };
+const openAmountAdjustment = () => {
+  mode.value = 'amount';
+  if (!amountPreview.value) void loadAmountPreview();
+};
 const reviewAmount = () => {
-  if (amountValidation.value || amountDetail.value.trim().length < 8) return;
+  if (amountValidation.value || busy.value) return;
   amountConfirming.value = true;
-  amountAcknowledged.value = false;
 };
 const submitAmount = async () => {
-  if (busy.value || !amountConfirming.value || !amountAcknowledged.value || amountValidation.value) return;
+  if (busy.value || !amountConfirming.value || amountValidation.value) return;
   busyAction.value = 'correct_amount';
   amountError.value = '';
   try {
@@ -341,23 +371,23 @@ const submitAmount = async () => {
       method: 'PUT',
       body: {
         ciclo: normalizeCicloKey(state.value.ciclo),
+        mes: props.debt.mes,
         montoFinal: amountNumber.value,
         expectedStoredAmount: amountPreview.value.originalStoredAmount,
-        motivo: amountReason.value,
-        detalle: amountDetail.value.trim(),
+        motivo: 'monto_incorrecto',
       },
     });
     show(result?.notification?.delivered === false
-      ? `Importe corregido y auditado (#${result.auditId}). Aviso de Telegram pendiente; no repitas el ajuste.`
-      : `Importe corregido y registrado en auditoría (#${result.auditId}).`,
+      ? `Importe guardado (auditoría #${result.auditId}). Aviso de Telegram pendiente.`
+      : `Importe actualizado · Auditoría #${result.auditId}`,
       result?.notification?.delivered === false ? 'danger' : 'success',
       { duration: 6500 });
     emit('success');
   } catch (error) {
     amountConfirming.value = false;
-    amountAcknowledged.value = false;
     const requestId = error?.data?.data?.diagnostic?.requestId || error?.data?.requestId || '';
-    amountError.value = (error?.data?.message || 'No se pudo confirmar la corrección.') + (requestId ? ` · Ref: ${requestId}` : '');
+    amountError.value = (error?.data?.message || 'No se pudo confirmar el cambio.')
+      + (requestId ? ` · Ref: ${requestId}` : '');
   } finally {
     busyAction.value = '';
   }
@@ -823,4 +853,17 @@ onMounted(loadConcepts);
   .start-save { width: 100%; }
   .start-card input, .start-card select, .start-card textarea { font-size: 16px; }
 }
+.adjust-tabs button{display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap}
+.amount-workspace .amount-intro{align-items:center}
+.amount-workspace .amount-intro p{margin:0}
+.amount-workspace .amount-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+.amount-workspace .amount-scope{align-items:center;margin:0;font-size:.74rem;line-height:1.5}
+.amount-workspace .amount-audit{align-items:center;margin:0;font-size:.74rem;line-height:1.5}
+.amount-workspace .amount-minimum-guidance{display:flex;align-items:flex-start;gap:10px;padding:12px;border-radius:12px;background:#fff4ed;border:1px solid #f2dac5;color:#80502e}
+.amount-minimum-guidance>svg{flex-shrink:0;margin-top:1px}
+.amount-minimum-guidance strong{font-size:.8rem}.amount-minimum-guidance p{font-size:.75rem;margin:3px 0 7px}
+.amount-minimum-guidance button{font-size:.75rem;font-weight:780;background:#fff;border:1px solid #dbb28b;padding:7px 11px;border-radius:9px;color:#80502e;cursor:pointer}
+.amount-input-invalid{border-color:#cf9a7a;background:#fff8f3}
+.amount-final-review p{display:flex;align-items:center;gap:7px}
+@media(max-width:640px){.amount-workspace .amount-stats{grid-template-columns:1fr}.adjust-tabs button{font-size:.73rem;padding:9px 5px}.amount-value-after input{font-size:16px}}
 </style>
