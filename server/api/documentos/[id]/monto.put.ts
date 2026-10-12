@@ -14,21 +14,24 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   if (!Number.isSafeInteger(documento) || documento <= 0 || !newAmount.valid) {
     throw createError({ statusCode: 400, message: 'Ingresa un importe válido mayor a $0.00, con máximo dos decimales.' })
   }
-  const motivo = String(body?.motivo || '').trim().replace(/\s+/g, ' ').slice(0, 80)
+  // An explanation is optional. Audit always captures user, document and values.
+  const motivo = String(body?.motivo || 'monto_incorrecto').trim().slice(0, 80)
   const detalle = String(body?.detalle || '').trim().slice(0, 450)
   if (!['monto_incorrecto', 'beca_historica', 'convenio_no_registrado', 'otro'].includes(motivo)) {
-    throw createError({ statusCode: 400, message: 'Selecciona el motivo de la corrección.' })
-  }
-  if (detalle.length < 8) {
-    throw createError({ statusCode: 400, message: 'Describe el motivo del ajuste (mínimo 8 caracteres).' })
+    throw createError({ statusCode: 400, message: 'Motivo inválido.' })
   }
   const preview = await readDocumentAmountCorrection(documento, body?.ciclo)
-  const evaluation = canCorrectDocumentAmount(body?.montoFinal, preview.months)
+  const editableMonths = preview.months.filter(month => month.editable)
+  const selectedMonth = String(body?.mes || '').toLowerCase() === 'ev' ? 1 : Number(body?.mes)
+  if (!preview.changeable || (Number.isInteger(selectedMonth) && selectedMonth > 0 && preview.months.some(month => month.mes === selectedMonth && !month.editable))) {
+    throw createError({ statusCode: 409, message: 'El mes seleccionado tiene un ajuste de concepto con importe propio. No se modificó.' })
+  }
+  const evaluation = canCorrectDocumentAmount(body?.montoFinal, editableMonths)
   if (!evaluation.allowed) {
     throw createError({
       statusCode: 409,
-      message: `El importe no puede ser menor a $ ${preview.minimumAllowed.toFixed(2)} porque ya hay pagos o depuraciones vigentes.`,
-      data: { minimumAllowed: preview.minimumAllowed, blockingMonths: preview.months.filter(row => row.paidCents > (evaluation.nextCents || 0)).map(row => ({ mes: row.mes, pagado: row.paid })) },
+      message: `Hay pagos vigentes de hasta ${preview.minimumAllowed.toFixed(2)}. Utiliza ese importe o uno mayor.`,
+      data: { minimumAllowed: preview.minimumAllowed, blockingMonths: editableMonths.filter(row => row.paidCents > (evaluation.nextCents || 0)).map(row => ({ mes: row.mes, pagado: row.paid })) },
     })
   }
   // Catch another operator changing the amount while this modal was open.
@@ -38,13 +41,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 409, message: 'El importe cambió desde que abriste el ajuste. Actualiza la vista antes de guardar.' })
   }
   const montoFinal = centsToAmount(evaluation.nextCents!)
-  if (preview.months.every(row => amountToCents(row.currentAmount) === evaluation.nextCents)) {
+  if (editableMonths.every(row => amountToCents(row.currentAmount) === evaluation.nextCents)) {
     return { success: true, unchanged: true, documento, montoFinal, notification: { skipped: true } }
-  }
-  // An unchanged document base with different historic concept-period amounts
-  // must not rewrite a period silently without a corresponding audit write.
-  if (amountToCents(preview.originalStoredAmount) === evaluation.nextCents) {
-    throw createError({ statusCode: 409, message: 'Los importes de los periodos son distintos. Actualiza el estado de cuenta antes de hacer este ajuste.' })
   }
 
   // The audit table is pre-existing in Aurora's schema, but Bridge installations
@@ -69,11 +67,18 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       difference: month.difference,
     })),
     periods: preview.activeChangePeriods,
+    periodsChanged: 0,
   })
-  // Atomic write and audit. ROW_COUNT + session variable are evaluated in the
-  // SAME Bridge transaction/connection. A concurrent lower-payment write is
-  // rejected by the grouped payment guard; no history records are touched.
+  // One document row only. Existing period overrides and referencesdepago
+  // remain untouched. Revalidate payments in the transaction immediately
+  // after locking the documento row (payment inserts lock the same parent).
+  const affectedMonths = editableMonths.map(month => month.mes)
+  const placeholders = affectedMonths.map(() => '?').join(', ')
   const statements: SqlStatement[] = [
+    {
+      sql: `SELECT documento FROM documentos WHERE documento = ? FOR UPDATE`,
+      params: [documento],
+    },
     {
       sql: `UPDATE documentos SET montoFinal = ?
             WHERE documento = ?
@@ -81,34 +86,31 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
               AND montoFinal <=> ?
               AND NOT EXISTS (
                 SELECT 1 FROM (
-                  SELECT mes FROM referenciasdepago
-                   WHERE documento = ? AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'vigente'
-                   GROUP BY mes HAVING ROUND(SUM(monto), 2) > ?
+                  SELECT CASE WHEN LOWER(TRIM(CAST(mes AS CHAR))) = 'ev' THEN 1
+                              ELSE CAST(mes AS UNSIGNED) END AS payment_month
+                    FROM referenciasdepago
+                   WHERE documento = ?
+                     AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'vigente'
+                     AND (CASE WHEN LOWER(TRIM(CAST(mes AS CHAR))) = 'ev' THEN 1
+                               ELSE CAST(mes AS UNSIGNED) END) IN (${placeholders})
+                   GROUP BY payment_month
+                  HAVING ROUND(SUM(monto), 2) > ?
                 ) AS too_much_paid
               )`,
-      params: [montoFinal, documento, oldStored, documento, montoFinal],
+      params: [montoFinal, documento, oldStored, documento, ...affectedMonths, montoFinal],
     },
     { sql: 'SET @aurora_amount_changed = ROW_COUNT()' },
-    {
-      sql: `UPDATE documento_concepto_periodos
-             SET montoFinal = ?
-           WHERE documento = ? AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'activo'
-             AND LOWER(TRIM(CAST(accion AS CHAR))) = 'cambio'
-             AND @aurora_amount_changed = 1`,
-      params: [montoFinal, documento],
-    },
-    { sql: 'SET @aurora_amount_periods = ROW_COUNT()' },
     {
       sql: `INSERT INTO documento_monto_correcciones
         (documento, matricula, ciclo, monto_anterior, monto_nuevo, mensualidades_afectadas,
          pago_maximo_mensual, pagos_totales, periodos_actualizados, motivo, detalle_anterior, usuario)
-        SELECT ?, ?, ?, ?, ?, ?, ?, ?, @aurora_amount_periods, ?, ?, ?
+        SELECT ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?, ?
          WHERE @aurora_amount_changed = 1`,
       params: [documento, preview.matricula, preview.ciclo, actualMoney, montoFinal,
         preview.affectedMonths, preview.minimumAllowed, preview.totalPaid,
         motivo, auditDetail, actor],
     },
-    { sql: 'SELECT @aurora_amount_changed AS changed, @aurora_amount_periods AS periods, LAST_INSERT_ID() AS auditId' },
+    { sql: 'SELECT @aurora_amount_changed AS changed, LAST_INSERT_ID() AS auditId' },
   ]
   const results = await executeStatementTransaction<any>(statements)
   const outcome = Array.isArray(results[results.length - 1]) ? results[results.length - 1][0] : results[results.length - 1]
@@ -119,7 +121,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   const auditId = Number(outcome.auditId)
   console.info('[DocumentAmount] Correction committed', {
     documento, auditId, requestId, actor, before: actualMoney, after: montoFinal,
-    periods: Number(outcome.periods || 0),
+    periods: 0,
   })
   const message = [
     'Aurora · Corrección de importe de documento',
@@ -127,8 +129,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     `Documento: ${documento} · Matrícula: ${preview.matricula}`,
     `Concepto: ${preview.conceptoNombre} · Ciclo: ${preview.ciclo}`,
     `Importe anterior: $${actualMoney.toFixed(2)} → nuevo: $${montoFinal.toFixed(2)}`,
-    `Meses afectados: ${preview.affectedMonths} · Pago máximo mensual: $${preview.minimumAllowed.toFixed(2)}`,
-    `Motivo: ${motivo} · ${detalle}`,
+    `Meses del documento con importe base: ${preview.affectedMonths} · Máximo pagado en un mes: ${preview.minimumAllowed.toFixed(2)}`,
+    `Motivo: ${motivo}${detalle ? ` · ${detalle}` : ''}`,
     `Auditoría: #${auditId}${requestId ? ` · Ref: ${requestId}` : ''}`,
   ].join('\n')
   const notification = await notifyDocumentAmountCorrection(message)
@@ -140,7 +142,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   return {
     success: true, documento, montoAnterior: actualMoney, montoFinal,
     mensualidadesAfectadas: preview.affectedMonths, pagosTotales: preview.totalPaid,
-    pagoMaximoMensual: preview.minimumAllowed, periodosActualizados: Number(outcome.periods || 0),
+    pagoMaximoMensual: preview.minimumAllowed, periodosActualizados: 0,
     auditId, notification: { delivered: notification.delivered },
   }
 }))
