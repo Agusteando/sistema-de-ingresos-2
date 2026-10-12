@@ -35,3 +35,22 @@ test('successful current refresh completes cleanly and targets are deduplicated'
  assert.equal(result.refreshed,2)
  assert.deepEqual(order,['invalidate:PT','invalidate:SM','refresh:PT','refresh:SM'])
 })
+
+test('queued refresh returns after invalidation without waiting on campus source', async () => {
+ let unblock
+ const gate = new Promise(resolve => { unblock = resolve })
+ let complete
+ const done = new Promise(resolve => { complete = resolve })
+ const steps=[]
+ const result=await settleCommittedTalleresFollowup(['DC','PT'], {
+  invalidate: async p => { steps.push('invalidate:'+p) },
+  refresh: async p => { steps.push('refresh:'+p); if(p==='DC') await gate; return p },
+ }, { queued:true, onComplete:complete })
+ assert.equal(result.queued, true)
+ assert.equal(result.pending, true)
+ assert.deepEqual(steps.slice(0,2),['invalidate:DC','invalidate:PT'])
+ unblock()
+ const final=await done
+ assert.deepEqual(final,{failures:[],refreshed:2})
+ assert.deepEqual(steps,['invalidate:DC','invalidate:PT','refresh:DC','refresh:PT'])
+})
