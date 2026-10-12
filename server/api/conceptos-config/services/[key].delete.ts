@@ -40,11 +40,13 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const authoritative = await readAuthoritativeTalleresCatalog()
+  let authoritative: any = { catalog: [] }
   let synced: any = { ok: false, skipped: true, reason: 'bridge_sync_unavailable' }
   try {
+    authoritative = await readAuthoritativeTalleresCatalog()
     synced = await syncCentralTalleresServiciosCatalogToBridge(authoritative.catalog)
   } catch (error: any) {
+    // Removal has committed: a later source/mirror read must not suggest otherwise.
     synced = { ok: false, skipped: true, reason: 'bridge_sync_unavailable', message: clean(error?.message, 500) }
   }
 
