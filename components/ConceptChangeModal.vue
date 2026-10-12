@@ -341,7 +341,7 @@ const loadAmountPreview = async () => {
   loadingAmount.value = true;
   amountError.value = '';
   try {
-    const result = await $fetch(`/api/documentos/${props.debt.documento}/monto`, {
+    const result = await $fetch(`/api/documentos/${props.debt.documento}/importe`, {
       query: { ciclo: normalizeCicloKey(state.value.ciclo) },
     });
     amountPreview.value = result;
@@ -367,7 +367,7 @@ const submitAmount = async () => {
   busyAction.value = 'correct_amount';
   amountError.value = '';
   try {
-    const result = await $fetch(`/api/documentos/${props.debt.documento}/monto`, {
+    const result = await $fetch(`/api/documentos/${props.debt.documento}/importe`, {
       method: 'PUT',
       body: {
         ciclo: normalizeCicloKey(state.value.ciclo),
