@@ -57,7 +57,10 @@ const normalizePaymentDate = (value: unknown) => {
   return raw
 }
 
-export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
+export default defineEventHandler(async (event) => {
+  const paymentAttemptRef = String(getHeader(event, 'x-payment-attempt') || '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || null
+  try {
+    return await runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
   const { matricula, pagos, formaDePago, ciclo = automaticSchoolCycleKey(), fechaPago } = body
   const pagoRealizadoEnOtroPlantel = truthyFlag(body.pagoRealizadoEnOtroPlantel)
@@ -532,4 +535,13 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     pagoRealizadoEnOtroPlantel,
     plantelPago: pagoRealizadoEnOtroPlantel ? plantelPago : null
   }
-}))
+  })
+  } catch (error) {
+    console.error('[Payments] Payment submission rejected or failed', {
+      reference: paymentAttemptRef,
+      statusCode: Number((error as any)?.statusCode || 500),
+      code: String((error as any)?.code || 'unknown').slice(0, 80)
+    })
+    throw error
+  }
+})

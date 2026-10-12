@@ -1,5 +1,6 @@
 import { computed, onMounted, onUnmounted, ref, toValue, watch } from 'vue'
 import { useModalEscape } from '~/composables/useModalEscape'
+import { safeDraftStorage, type DraftStorage } from '~/utils/modalDraftStorage'
 import type { MaybeRefOrGetter } from 'vue'
 
 type ModalDraftPayload<TDraft> = {
@@ -34,16 +35,6 @@ const safeStringify = (value: unknown) => {
   }
 }
 
-const canUseLocalStorage = () => {
-  if (typeof window === 'undefined') return false
-
-  try {
-    return Boolean(window.localStorage)
-  } catch (error) {
-    return false
-  }
-}
-
 export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceOptions<TDraft>) => {
   const hasInitialized = ref(false)
   const draftRestored = ref(false)
@@ -52,6 +43,19 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
   const lastDraftSavedAt = ref<number | null>(null)
   const cleanSnapshot = ref('')
   let persistTimer: ReturnType<typeof setTimeout> | null = null
+  const loggedStorageFailures = new Set<string>()
+  const withStorage = <T>(operation: 'read' | 'write' | 'remove', action: (storage: DraftStorage) => T) => {
+    const result = safeDraftStorage(action)
+    if (!result.ok && typeof window !== 'undefined') {
+      const signature = `${operation}:${result.reason}`
+      if (!loggedStorageFailures.has(signature)) {
+        loggedStorageFailures.add(signature)
+        // Avoid student data and storage keys in diagnostic logs.
+        console.warn('[ModalDraftPersistence] Browser draft backup unavailable', { operation, reason: result.reason })
+      }
+    }
+    return result
+  }
 
   const debounceMs = options.debounceMs ?? DEFAULT_DEBOUNCE_MS
   const maxAgeMs = options.maxAgeMs ?? DEFAULT_MAX_AGE_MS
@@ -77,11 +81,13 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
     lastDraftSavedAt.value = null
   }
 
+  const removeStoredDraft = () => withStorage('remove', storage => storage.removeItem(storageKey.value))
+
   const clearDraft = () => {
     clearPendingPersist()
     setIdleState()
-    if (!canUseLocalStorage()) return
-    window.localStorage.removeItem(storageKey.value)
+    // Browser storage cleanup is best-effort, especially after a committed payment.
+    removeStoredDraft()
   }
 
   const persistDraftNow = () => {
@@ -90,13 +96,8 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
 
     const draft = options.read()
     if (currentSnapshot() === cleanSnapshot.value || !draftHasContent(draft)) {
-      if (canUseLocalStorage()) window.localStorage.removeItem(storageKey.value)
+      removeStoredDraft()
       setIdleState()
-      return
-    }
-
-    if (!canUseLocalStorage()) {
-      draftSaveState.value = 'error'
       return
     }
 
@@ -106,14 +107,9 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
       value: draft
     }
 
-    try {
-      window.localStorage.setItem(storageKey.value, JSON.stringify(payload))
-      draftSaveState.value = 'saved'
-      lastDraftSavedAt.value = payload.updatedAt
-    } catch (error) {
-      draftSaveState.value = 'error'
-      // Storage can be unavailable or full. Closing protection still prevents accidental discard in the live modal.
-    }
+    const result = withStorage('write', storage => storage.setItem(storageKey.value, JSON.stringify(payload)))
+    draftSaveState.value = result.ok ? 'saved' : 'error'
+    lastDraftSavedAt.value = result.ok ? payload.updatedAt : null
   }
 
   const schedulePersist = () => {
@@ -130,26 +126,26 @@ export const useModalDraftPersistence = <TDraft>(options: ModalDraftPersistenceO
   }
 
   const readStoredDraft = () => {
-    if (!canUseLocalStorage()) return null
+    const result = withStorage('read', storage => storage.getItem(storageKey.value))
+    if (!result.ok || !result.value) return null
 
-    const raw = window.localStorage.getItem(storageKey.value)
-    if (!raw) return null
+    const raw = result.value
 
     try {
       const payload = JSON.parse(raw) as Partial<ModalDraftPayload<TDraft>>
       if (!payload || typeof payload.updatedAt !== 'number' || !('value' in payload)) {
-        window.localStorage.removeItem(storageKey.value)
+        removeStoredDraft()
         return null
       }
 
       if (Date.now() - payload.updatedAt > maxAgeMs) {
-        window.localStorage.removeItem(storageKey.value)
+        removeStoredDraft()
         return null
       }
 
       return payload.value as TDraft
     } catch (error) {
-      window.localStorage.removeItem(storageKey.value)
+      removeStoredDraft()
       return null
     }
   }

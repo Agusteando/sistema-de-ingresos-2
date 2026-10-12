@@ -15,7 +15,7 @@
     </span>
     <span v-else-if="status === 'error'" class="modal-draft-pill error">
       <LucideAlertCircle :size="15" :stroke-width="2.2" />
-      No se pudo guardar el borrador local
+      {{ errorMessage }}
     </span>
     <span v-else-if="dirty" class="modal-draft-pill pending">
       <LucideCloud :size="15" :stroke-width="2.2" />
@@ -40,6 +40,10 @@ const props = defineProps({
   dirty: {
     type: Boolean,
     default: false
+  },
+  errorMessage: {
+    type: String,
+    default: 'No se pudo guardar el borrador local'
   }
 })
 
