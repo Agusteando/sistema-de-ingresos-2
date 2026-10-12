@@ -3,6 +3,7 @@ import { parseDocumentMonths, schoolMonthLabel } from '../../shared/utils/docume
 import { legacyProjectedAmount, resolveProjectedAmount } from './monto-final'
 import { amountToCents, centsToAmount, paymentFloorCents } from '../../shared/utils/documentAmountCorrection'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
+import { getDocumentoPeriodoSchema } from './documento-periods'
 
 const active = (value: unknown) => String(value || '').trim().toLowerCase() === 'activo'
 const monthOf = (value: unknown) => String(value ?? '').trim().toLowerCase() === 'ev' ? 1 : Number.parseInt(String(value), 10)
@@ -28,9 +29,10 @@ export const readDocumentAmountCorrection = async (documento: number, requestedC
   if (!applicableMonths.length) {
     throw createError({ statusCode: 409, message: 'El documento no tiene meses válidos para corregir.' })
   }
+  const periodSchema = await getDocumentoPeriodoSchema()
   const [periods, payments] = await Promise.all([
     query<any[]>(`
-      SELECT id, start_mes, end_mes, concepto_id, conceptoNombre, accion, costo, montoFinal, diferencia_monto
+      SELECT id, start_mes, end_mes, concepto_id, conceptoNombre, accion, costo, montoFinal, ${periodSchema.hasDiferenciaMonto ? 'diferencia_monto' : '0 AS diferencia_monto'}
         FROM documento_concepto_periodos
        WHERE documento = ? AND LOWER(TRIM(CAST(estatus AS CHAR))) = 'activo'
        ORDER BY start_mes DESC, id DESC
@@ -56,7 +58,9 @@ export const readDocumentAmountCorrection = async (documento: number, requestedC
     if (String(period?.accion || '').trim().toLowerCase() === 'cancelacion') return []
     const amount = resolveProjectedAmount(doc, period)
     const paidCents = paidByMonth.get(mes) || 0
+    const editable = !period || String(period.accion || '').trim().toLowerCase() !== 'cambio'
     return [{
+      editable,
       mes,
       label: isEventual ? 'Cargo único' : schoolMonthLabel(mes),
       periodId: Number(period?.id || 0) || null,
@@ -69,6 +73,9 @@ export const readDocumentAmountCorrection = async (documento: number, requestedC
     }]
   })
   if (!months.length) throw createError({ statusCode: 409, message: 'Este documento no tiene cargos activos.' })
+  // Existing cambio periods have their own montoFinal: this operation only edits
+  // documentos.montoFinal, never overrides a deliberate later concept change.
+  const editableMonths = months.filter(month => month.editable)
   const activeChangePeriods = periods.filter((row: any) => String(row?.accion || '').toLowerCase() === 'cambio')
   const previousDocumentAmount = doc.montoFinal == null
     ? legacyProjectedAmount(doc.costo, doc.beca)
@@ -82,10 +89,12 @@ export const readDocumentAmountCorrection = async (documento: number, requestedC
     recurring: !isEventual && months.length > 1,
     originalStoredAmount: doc.montoFinal == null ? null : centsToAmount(moneyCents(doc.montoFinal)),
     montoAnterior: centsToAmount(moneyCents(previousDocumentAmount)),
-    minimumAllowed: centsToAmount(paymentFloorCents(months)),
+    minimumAllowed: centsToAmount(paymentFloorCents(editableMonths)),
+    changeable: editableMonths.length > 0,
+    excludedMonths: months.length - editableMonths.length,
     months,
-    totalPaid: centsToAmount(months.reduce((sum: number, month: any) => sum + month.paidCents, 0)),
-    affectedMonths: months.length,
+    totalPaid: centsToAmount(editableMonths.reduce((sum: number, month: any) => sum + month.paidCents, 0)),
+    affectedMonths: editableMonths.length,
     activeChangePeriods: activeChangePeriods.map((row: any) => ({
       id: row.id, start_mes: row.start_mes, end_mes: row.end_mes,
       concepto_id: row.concepto_id, conceptoNombre: row.conceptoNombre,
