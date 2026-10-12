@@ -395,7 +395,10 @@ export default defineEventHandler(async (event) => {
         documento,
         doc.plazo,
         doc.meses,
-        doc.montoFinal,
+        // The same transaction may have filled an initially NULL montoFinal
+        // immediately before this insert. Expect that committed value instead
+        // of the stale value read when composing payment statements.
+        doc.montoFinal == null && !periodIsChangedConcept ? finalAmount : doc.montoFinal,
         mes,
         p.mesLabel,
         nombreCompleto,
