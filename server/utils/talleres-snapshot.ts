@@ -21,6 +21,7 @@ import {
 } from './talleres-servicios'
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 import { readAuthoritativeTalleresCatalog } from './talleres-catalog-authority'
+import { settleCommittedTalleresFollowup } from './committed-talleres-followup'
 
 const SNAPSHOT_TABLE = 'control_external_student_view'
 
@@ -32,10 +33,11 @@ const SNAPSHOT_TABLE = 'control_external_student_view'
  * it is not an API version and must never cause consumers to migrate to /v2, /v3, etc.
  *
  * The snapshot exists only to make reads fast. It is not permission to return
- * stale business data. Aurora-managed writes that affect Talleres must refresh
- * the relevant snapshot before they report a successful, current state. Reads
- * that detect an old snapshot refresh synchronously or fail; they never knowingly
- * return the old payload as if it were current.
+ * stale business data. Aurora-managed writes that affect Talleres must
+ * invalidate their affected snapshots before reporting a committed mutation;
+ * rebuilt rosters can complete asynchronously. Reads that detect an old
+ * snapshot refresh synchronously or fail; they never knowingly return the old
+ * payload as if it were current.
  */
 export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'
 export const TALLERES_SNAPSHOT_PLANTELES = [...DASHBOARD_PLANTELES] as string[]
@@ -543,7 +545,8 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       const previous = await readSnapshotRows(plantel, ciclo)
       if (!input.force && previous.rows.length) {
         const generatedAt = previous.rows[0]?.generated_at ? new Date(previous.rows[0].generated_at).getTime() : 0
-        if (generatedAt && generatedAt >= Date.now() - refreshMinutes() * 60 * 1000) {
+        const staleAfter = previous.rows[0]?.stale_after ? new Date(previous.rows[0].stale_after).getTime() : 0
+        if (generatedAt && generatedAt >= Date.now() - refreshMinutes() * 60 * 1000 && staleAfter > Date.now()) {
           return { success: true, skipped: true, reason: 'fresh', plantel, ciclo, rows: previous.students.length, generatedAt: toIso(previous.rows[0]?.generated_at) }
         }
       }
@@ -736,6 +739,51 @@ export const ensureCurrentTalleresSnapshots = async (input: { ciclo?: unknown, p
     results.push(await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true }))
   }
   return { success: true, current: true, ciclo, results, refreshed: results.length }
+}
+
+/**
+ * Admin catalogue/mapping writes have already committed to central MySQL by
+ * the time this runs. Report partial downstream refresh rather than returning
+ * HTTP failure and tempting the operator to retry a non-idempotent business
+ * action. Never relax the independent read-side snapshot freshness barrier.
+ */
+export const refreshTalleresAfterCommittedConfigWrite = async (input: {
+  ciclo?: unknown
+  planteles?: unknown[]
+  operation: string
+}) => {
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  const requested = Array.isArray(input.planteles) && input.planteles.length
+    ? input.planteles.map(canonicalTalleresPlantel).filter(Boolean)
+    : [...TALLERES_SNAPSHOT_PLANTELES]
+  const targets = Array.from(new Set(requested))
+  const followup = await settleCommittedTalleresFollowup(targets, {
+    invalidate: (plantel) => invalidateTalleresSnapshotPlantel({ plantel, ciclo }),
+    // Invalidated rows do not pass the freshness check. The read side also
+    // synchronously refreshes or fails closed until the queued rebuild succeeds.
+    refresh: (plantel) => ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: false }),
+  }, {
+    queued: true,
+    onComplete: ({ failures, refreshed }) => {
+      if (!failures.length) return
+      // The five-minute Nitro refresh pass retries invalidated campuses.
+      console.warn('[TalleresSnapshot] Background roster refresh incomplete', {
+        operation: input.operation,
+        ciclo,
+        refreshed,
+        failures,
+      })
+    },
+  })
+  if (followup.failures.length) {
+    // Do not log student rosters, matrícula, source errors or DB credentials.
+    console.warn('[TalleresSnapshot] Central write committed; some roster invalidations failed', {
+      operation: input.operation,
+      ciclo,
+      failures: followup.failures,
+    })
+  }
+  return { ...followup, ciclo }
 }
 
 export const refreshTalleresSnapshots = async (input: { ciclo?: unknown, force?: boolean, planteles?: unknown[] } = {}) => {

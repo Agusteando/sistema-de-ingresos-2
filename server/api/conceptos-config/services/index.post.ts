@@ -3,7 +3,7 @@ import { controlEscolarCentralQuery } from '../../../utils/control-escolar-centr
 import { readAuthoritativeTalleresCatalog } from '../../../utils/talleres-catalog-authority'
 import { syncCentralTalleresServiciosCatalogToBridge } from '../../../utils/talleres-servicios'
 import { normalizeServicioClave, normalizeServicioNombre } from '../../../../shared/utils/talleresServicios'
-import { ensureCurrentTalleresSnapshots } from '../../../utils/talleres-snapshot'
+import { refreshTalleresAfterCommittedConfigWrite } from '../../../utils/talleres-snapshot'
 
 export default defineEventHandler(async (event) => {
   const user = await requireConceptosAdmin(event)
@@ -38,8 +38,8 @@ export default defineEventHandler(async (event) => {
     synced = { ok: false, skipped: true, reason: 'bridge_sync_unavailable', message: error?.message || String(error || '') }
   }
 
-  // Catalogue changes are global. A successful response means every ready
-  // Talleres snapshot has already been rebuilt against the new catalogue.
-  const snapshotRefresh = await ensureCurrentTalleresSnapshots()
+  // The central write is committed. Campus roster verification must never
+  // turn that into a misleading HTTP failure; stale rosters remain invalidated.
+  const snapshotRefresh = await refreshTalleresAfterCommittedConfigWrite({ operation: 'catalog_upsert' })
   return { ok: true, servicio: { clave, nombre, imagen: imagen || `/talleres-servicios/${clave}.svg` }, synced, snapshotRefresh }
 })

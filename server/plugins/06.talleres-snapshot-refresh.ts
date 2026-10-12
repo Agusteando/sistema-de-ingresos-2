@@ -5,9 +5,10 @@ import { refreshTalleresSnapshots } from '../utils/talleres-snapshot'
  * Safety-net refresh only.
  *
  * Snapshot correctness must NOT depend on this timer. Aurora-managed mutations
- * refresh affected snapshots synchronously before their current state is exposed,
- * and snapshot readers synchronously refresh known-old payloads. This interval
- * only catches out-of-band database changes or missed external writes.
+ * invalidate affected snapshots before acknowledging the central business write.
+ * Background rebuilds and readers refresh known-old payloads or fail closed.
+ * This interval retries a failed background rebuild and catches out-of-band
+ * database changes or missed external writes.
  */
 const CHECK_INTERVAL_MS = 5 * 60 * 1000
 
@@ -29,6 +30,12 @@ export default defineNitroPlugin(() => {
         failures: Array.isArray(result?.failures) ? result.failures.length : 0,
         durationMs: Date.now() - startedAt,
       })
+      for (const failure of result?.failures || []) {
+        console.warn('[talleres-snapshot] campus refresh pending', {
+          plantel: failure.plantel,
+          code: failure.code,
+        })
+      }
     } catch (error: any) {
       console.error('[talleres-snapshot] refresh pass failed', {
         code: String(error?.code || error?.statusMessage || ''),

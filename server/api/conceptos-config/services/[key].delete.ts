@@ -3,7 +3,7 @@ import { controlEscolarCentralQuery } from '../../../utils/control-escolar-centr
 import { readAuthoritativeTalleresCatalog } from '../../../utils/talleres-catalog-authority'
 import { syncCentralTalleresServiciosCatalogToBridge } from '../../../utils/talleres-servicios'
 import { canonicalTallerKey } from '../../../../shared/utils/talleresServicios'
-import { ensureCurrentTalleresSnapshots } from '../../../utils/talleres-snapshot'
+import { refreshTalleresAfterCommittedConfigWrite } from '../../../utils/talleres-snapshot'
 
 const clean = (value: unknown, max = 255) => String(value ?? '').trim().slice(0, max)
 
@@ -40,17 +40,19 @@ export default defineEventHandler(async (event) => {
     )
   }
 
-  const authoritative = await readAuthoritativeTalleresCatalog()
+  let authoritative: any = { catalog: [] }
   let synced: any = { ok: false, skipped: true, reason: 'bridge_sync_unavailable' }
   try {
+    authoritative = await readAuthoritativeTalleresCatalog()
     synced = await syncCentralTalleresServiciosCatalogToBridge(authoritative.catalog)
   } catch (error: any) {
+    // Removal has committed: a later source/mirror read must not suggest otherwise.
     synced = { ok: false, skipped: true, reason: 'bridge_sync_unavailable', message: clean(error?.message, 500) }
   }
 
-  // Catalogue removal is global. Rebuild before reporting the mutation as
-  // current so no consumer can keep the removed identity in a ready snapshot.
-  const snapshotRefresh = await ensureCurrentTalleresSnapshots()
+  // Removal has committed. Invalidate all rosters before best-effort rebuild.
+  // Consumers still refuse to return a stale roster for a failed campus.
+  const snapshotRefresh = await refreshTalleresAfterCommittedConfigWrite({ operation: 'catalog_delete' })
   return {
     ok: true,
     removed: { clave: requestedKey, nombre: clean(matches[0]?.servicio_nombre, 180) || requestedKey },

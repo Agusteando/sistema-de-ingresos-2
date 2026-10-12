@@ -28,6 +28,14 @@
       </div>
     </header>
 
+    <div v-if="syncPendingNotice" class="sync-pending-notice" role="status">
+      <LucideCircleAlert :size="18" class="shrink-0" />
+      <div class="min-w-0">
+        <strong>Guardado en el catálogo institucional</strong>
+        <p>{{ syncPendingNotice }} No se presentan listas de alumnos desactualizadas como vigentes.</p>
+      </div>
+      <button type="button" aria-label="Ocultar aviso" title="Ocultar aviso" @click="syncPendingNotice = ''"><LucideX :size="16" /></button>
+    </div>
     <section class="card manual-card">
       <div class="manual-title">
         <div>
@@ -197,6 +205,26 @@ const showAllPreview = ref(false)
 const showWorkshopModal = ref(false)
 const newWorkshopName = ref('')
 const creatingWorkshop = ref(false)
+const syncPendingNotice = ref('')
+
+const reportCommittedWrite = (result, message) => {
+  const failures = Array.isArray(result?.snapshotRefresh?.failures) ? result.snapshotRefresh.failures : []
+  const planteles = [...new Set(failures.map(item => item.plantel).filter(Boolean))]
+  const mirrorPending = result?.synced?.ok === false
+  if (result?.snapshotRefresh?.queued && !failures.length && !mirrorPending) {
+    syncPendingNotice.value = 'Las listas de Talleres se están actualizando en segundo plano. Aurora reintentará automáticamente si una sede no está disponible.'
+    show(message + ' Actualizando listas de Talleres.', 'success', { duration: 5500 })
+    return
+  }
+  if (result?.snapshotRefresh?.pending || mirrorPending) {
+    const scope = [planteles.length ? `planteles: ${planteles.join(', ')}` : '', mirrorPending ? 'espejo Bridge' : ''].filter(Boolean).join('; ')
+    syncPendingNotice.value = `La actualización de Talleres está pendiente${scope ? ` (${scope})` : ''}; Aurora reintentará automáticamente.`
+    show(message + ' Sincronización con Talleres pendiente.', 'success', { duration: 8500, details: scope ? [scope] : [] })
+  } else {
+    syncPendingNotice.value = ''
+    show(message, 'success')
+  }
+}
 
 const rows = computed(() => payload.value?.rows || [])
 const catalog = computed(() => [...(payload.value?.catalog || [])].sort((a, b) => Number(a?.orden || 9999) - Number(b?.orden || 9999) || String(a?.nombre || '').localeCompare(String(b?.nombre || ''), 'es')))
@@ -240,8 +268,8 @@ const saveMapping = async (row, key) => {
   if (!row || !key || savingIds.has(row.concepto_id)) return
   savingIds.add(row.concepto_id)
   try {
-    await $fetch('/api/conceptos-config/talleres-servicios/mapping', { method: 'POST', body: { ciclo: selectedCiclo.value, concepto_id: row.concepto_id, servicio_clave: key } })
-    show(`${row.concepto_nombre} asociado globalmente.`, 'success')
+    const result = await $fetch('/api/conceptos-config/talleres-servicios/mapping', { method: 'POST', body: { ciclo: selectedCiclo.value, concepto_id: row.concepto_id, servicio_clave: key } })
+    reportCommittedWrite(result, `${row.concepto_nombre} asociado globalmente.`)
     await load()
   } catch (e) {
     show(e?.data?.message || 'No se pudo guardar la asociación.', 'danger')
@@ -263,8 +291,8 @@ const removeGlobal = async (row) => {
   if (!row?.global?.id || savingIds.has(row.concepto_id)) return
   savingIds.add(row.concepto_id)
   try {
-    await $fetch(`/api/conceptos-config/mappings/${row.global.id}`, { method: 'DELETE' })
-    show(`Se quitó la asociación GLOBAL de ${row.concepto_nombre}.`, 'success')
+    const result = await $fetch(`/api/conceptos-config/mappings/${row.global.id}`, { method: 'DELETE' })
+    reportCommittedWrite(result, `Se quitó la asociación GLOBAL de ${row.concepto_nombre}.`)
     await load()
     if (String(row.concepto_id) === String(manualConceptId.value)) manualServiceKey.value = ''
   } catch (e) {
@@ -279,9 +307,9 @@ const removeWorkshop = async (item) => {
   if (!window.confirm(`Retirar ${item.nombre} del catálogo de talleres? Sus asociaciones activas también se deshabilitarán; el historial se conserva.`)) return
   removingWorkshopKey.value = item.clave
   try {
-    await $fetch(`/api/conceptos-config/services/${encodeURIComponent(item.clave)}`, { method: 'DELETE' })
+    const result = await $fetch(`/api/conceptos-config/services/${encodeURIComponent(item.clave)}`, { method: 'DELETE' })
     if (manualServiceKey.value === item.clave) manualServiceKey.value = ''
-    show(`${item.nombre} retirado del catálogo.`, 'success')
+    reportCommittedWrite(result, `${item.nombre} retirado del catálogo.`)
     await load()
   } catch (e) {
     show(e?.data?.message || 'No se pudo retirar el taller.', 'danger')
@@ -305,10 +333,10 @@ const createWorkshop = async () => {
   }
   creatingWorkshop.value = true
   try {
-    await $fetch('/api/conceptos-config/services', { method: 'POST', body: { servicio_clave: clave, servicio_nombre: nombre, imagen_url: '/talleres-servicios/default.svg', orden: 9999 } })
+    const result = await $fetch('/api/conceptos-config/services', { method: 'POST', body: { servicio_clave: clave, servicio_nombre: nombre, imagen_url: '/talleres-servicios/default.svg', orden: 9999 } })
+    reportCommittedWrite(result, `${nombre} agregado al catálogo.`)
     await load()
     manualServiceKey.value = clave
-    show(`${nombre} agregado al catálogo.`, 'success')
     showWorkshopModal.value = false
     newWorkshopName.value = ''
   } catch (e) {
@@ -331,6 +359,9 @@ onMounted(load)
 </script>
 
 <style scoped>
+.sync-pending-notice{display:flex;align-items:flex-start;gap:11px;padding:13px 15px;border:1px solid #f2dcb9;border-radius:13px;background:#fffbf3;color:#77511b;font-size:.8rem;line-height:1.45}
+.sync-pending-notice strong{font-weight:850}.sync-pending-notice p{margin:3px 0 0;color:#805b28}
+.sync-pending-notice button{display:grid;place-items:center;flex-shrink:0;margin-left:auto;border:0;background:transparent;color:#9d7541;cursor:pointer}
 .ts-admin{display:grid;gap:16px;width:100%}.card{background:#fff;border:1px solid #e3e9ef;border-radius:18px;box-shadow:0 8px 24px rgba(28,55,83,.055)}.hero{padding:22px 24px;display:flex;justify-content:space-between;gap:24px;align-items:center}.hero h1,.manual-title h2,.modal h2{margin:4px 0 6px;color:#17263a}.hero h1{font-size:clamp(1.45rem,2vw,2rem)}.hero p,.manual-title p,.suggestions p,.modal p{margin:0;color:#65758a;line-height:1.45}.eyebrow{color:#0b88b1;font-size:.68rem;font-weight:900;letter-spacing:.12em}.hero-actions{display:flex;align-items:end;gap:10px;flex-wrap:wrap;justify-content:flex-end}.field{display:grid;gap:5px;min-width:0}.field>span{font-size:.68rem;color:#718096;font-weight:800;text-transform:uppercase;letter-spacing:.07em}.field>input{height:42px;border:1px solid #d5dfe9;border-radius:12px;background:#fff;padding:0 12px;color:#27374a;font-weight:700;outline:0;min-width:0}.field>input:focus{border-color:#77b9cb;box-shadow:0 0 0 3px rgba(11,136,177,.1)}.cycle-field{min-width:190px}.btn,.icon-btn{border:0;border-radius:12px;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:42px;padding:0 15px}.btn:disabled,.icon-btn:disabled,input:disabled{opacity:.55;cursor:not-allowed}.primary{background:#55aa3e;color:#fff}.subtle{background:#f2f5f7;color:#697687}.btn.remove{background:#fff0ee;color:#a64038}.manual-card{padding:18px 20px;border-color:#cfe4d0;background:linear-gradient(135deg,#fbfffa,#fff 75%)}.manual-title{display:flex;justify-content:space-between;gap:16px;align-items:start;margin-bottom:15px}.manual-title h2{font-size:1.05rem}.manual-fields{display:grid;grid-template-columns:minmax(270px,1.5fr) minmax(230px,1fr) auto auto auto;gap:10px;align-items:end}.manual-fields .searchable-select{width:100%}.pill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:4px 8px;background:#f2f4f6;color:#74808e;font-size:.68rem;font-weight:850;white-space:nowrap}.mapped-pill{background:#eaf8e8;color:#32853a}.suggestion-pill{background:#e9f7fd;color:#087fa7}.override-pill{background:#fff3df;color:#946507}.suggestions{padding:16px 20px;display:grid;grid-template-columns:auto 1fr;gap:12px;color:#0784ad;background:#fbfeff}.suggestion-heading{display:flex;align-items:center;gap:8px;flex-wrap:wrap;color:#1f3045}.suggestions p{font-size:.86rem;margin-top:3px}.preview{display:flex;gap:6px;flex-wrap:wrap;margin-top:9px}.preview span,.preview button{border:0;border-radius:999px;padding:5px 8px;background:#eef7fb;color:#3d6273;font-size:.68rem;font-weight:750}.preview button{cursor:pointer;color:#087fa6}.association-card{overflow:visible}.toolbar{padding:14px 16px;border-bottom:1px solid #e8edf2;display:flex;justify-content:space-between;gap:14px}.tabs{display:flex;gap:5px;background:#f4f7f9;padding:4px;border-radius:12px}.tabs button{border:0;background:transparent;color:#637287;border-radius:9px;padding:8px 12px;font-weight:800;cursor:pointer}.tabs button.active{background:#fff;color:#0b789d;box-shadow:0 2px 8px rgba(26,68,94,.09)}.tabs span{font-size:.68rem;opacity:.7}.search{min-width:min(390px,46vw);height:40px;border:1px solid #dce4eb;border-radius:12px;display:flex;align-items:center;gap:8px;padding:0 12px;color:#7a8797}.search input{border:0;outline:0;width:100%;background:transparent}.rows{display:grid}.row{display:grid;grid-template-columns:minmax(0,1fr) minmax(300px,440px);gap:24px;align-items:center;padding:15px 18px;border-bottom:1px solid #edf1f4}.row:last-child{border-bottom:0}.row.mapped{box-shadow:inset 3px 0 #62b966}.concept-title{display:flex;gap:8px;align-items:baseline}.concept-title span{color:#8b98a8;font-size:.7rem;font-weight:800}.concept-title strong{color:#26374b;font-size:.93rem}.meta,.overrides{display:flex;gap:6px;flex-wrap:wrap;margin-top:7px}.overrides span{font-size:.67rem;color:#6e5a28;background:#fff9ed;border:1px solid #f2e5c8;border-radius:7px;padding:3px 6px}.mapping{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:end}.mapping .searchable-select{width:100%}.suggest{background:#e7f7fd;color:#087ea5;white-space:nowrap}.state{min-height:170px;display:flex;align-items:center;justify-content:center;gap:8px;color:#738195}.state.error{color:#b24c4c}.backdrop{position:fixed;inset:0;z-index:1000;display:grid;place-items:center;padding:18px;background:rgba(19,35,50,.38);backdrop-filter:blur(4px)}.modal{width:min(520px,100%);box-sizing:border-box;background:#fff;border:1px solid #dfe7ec;border-radius:20px;box-shadow:0 24px 70px rgba(24,42,58,.22);padding:20px;display:grid;gap:17px}.modal-title{display:flex;justify-content:space-between;gap:14px}.modal-title h2{font-size:1.25rem}.icon-btn{width:38px;height:38px;min-height:38px;padding:0;background:#f3f5f7;color:#697687}.modal p{font-size:.82rem}.modal-actions{display:flex;justify-content:flex-end;gap:9px}.spin{animation:spin .8s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:1180px){.manual-fields{grid-template-columns:1fr 1fr auto}.manual-fields .btn{width:100%}}@media(max-width:900px){.hero{align-items:stretch;flex-direction:column}.hero-actions{justify-content:flex-start}.toolbar{flex-direction:column}.search{min-width:0;width:100%;box-sizing:border-box}.row{grid-template-columns:1fr;gap:11px}}@media(max-width:620px){.hero,.manual-card,.suggestions{padding:16px}.hero-actions{display:grid;grid-template-columns:1fr 1fr}.cycle-field{grid-column:1/-1;width:100%}.hero-actions .btn{width:100%}.manual-title{flex-direction:column}.manual-fields{grid-template-columns:1fr}.mapping{grid-template-columns:1fr}.mapping .btn{width:100%}.tabs{width:100%;overflow:auto;box-sizing:border-box}.tabs button{flex:1 0 auto}.modal-actions{display:grid;grid-template-columns:1fr 1fr}}
 </style>
