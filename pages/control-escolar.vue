@@ -1335,10 +1335,12 @@
                         <label><span>Fecha nacimiento padre</span><input v-model="editForm.fechaNacimientoPadre" type="date" autocomplete="off" /></label>
                         <label><span>INE padre</span><input v-model="editForm.inePadre" autocomplete="off" /></label>
                         <label><span>CURP padre</span><input v-model="editForm.curpPadre" maxlength="18" autocomplete="off" /></label>
+                         <label class="ce-family-span-2"><span>Lugar de trabajo del padre</span><input v-model="editForm.lugarTrabajoPadre" maxlength="255" autocomplete="off" /></label>
                         <label><span>Estado civil madre</span><input v-model="editForm.estadoCivilMadre" autocomplete="off" /></label>
                         <label><span>Fecha nacimiento madre</span><input v-model="editForm.fechaNacimientoMadre" type="date" autocomplete="off" /></label>
                         <label><span>INE madre</span><input v-model="editForm.ineMadre" autocomplete="off" /></label>
                         <label><span>CURP madre</span><input v-model="editForm.curpMadre" maxlength="18" autocomplete="off" /></label>
+                         <label class="ce-family-span-2"><span>Lugar de trabajo de la madre</span><input v-model="editForm.lugarTrabajoMadre" maxlength="255" autocomplete="off" /></label>
                       </div>
                     </section>
 
@@ -4230,10 +4232,12 @@ const advancedTextFields = [
   { key: "peso", label: "Peso" },
   { key: "tipoSangre", label: "Tipo de sangre" },
   { key: "alergias", label: "Alergias" },
+  { key: "lugarTrabajoPadre", label: "Lugar de trabajo del padre" },
   { key: "estadoCivilPadre", label: "Estado civil padre" },
   { key: "fechaNacimientoPadre", label: "Fecha nacimiento padre" },
   { key: "inePadre", label: "INE padre" },
   { key: "curpPadre", label: "CURP padre" },
+  { key: "lugarTrabajoMadre", label: "Lugar de trabajo de la madre" },
   { key: "estadoCivilMadre", label: "Estado civil madre" },
   { key: "fechaNacimientoMadre", label: "Fecha nacimiento madre" },
   { key: "ineMadre", label: "INE madre" },
@@ -4301,6 +4305,7 @@ const EDIT_FORM_FIELDS = [
   "nombrePadre",
   "apellidoPaternoPadre",
   "apellidoMaternoPadre",
+  "lugarTrabajoPadre",
   "estadoCivilPadre",
   "fechaNacimientoPadre",
   "inePadre",
@@ -4308,6 +4313,7 @@ const EDIT_FORM_FIELDS = [
   "nombreMadre",
   "apellidoPaternoMadre",
   "apellidoMaternoMadre",
+  "lugarTrabajoMadre",
   "estadoCivilMadre",
   "fechaNacimientoMadre",
   "ineMadre",
@@ -6324,6 +6330,7 @@ const readEditFormFromStudent = (student = {}) => ({
   nombrePadre: toNameDisplayCase(student.nombrePadre || ""),
   apellidoPaternoPadre: toNameDisplayCase(student.apellidoPaternoPadre || ""),
   apellidoMaternoPadre: toNameDisplayCase(student.apellidoMaternoPadre || ""),
+  lugarTrabajoPadre: student.lugarTrabajoPadre || "",
   estadoCivilPadre: student.estadoCivilPadre || "",
   fechaNacimientoPadre: normalizeDateInput(student.fechaNacimientoPadre),
   inePadre: student.inePadre || "",
@@ -6331,6 +6338,7 @@ const readEditFormFromStudent = (student = {}) => ({
   nombreMadre: toNameDisplayCase(student.nombreMadre || ""),
   apellidoPaternoMadre: toNameDisplayCase(student.apellidoPaternoMadre || ""),
   apellidoMaternoMadre: toNameDisplayCase(student.apellidoMaternoMadre || ""),
+  lugarTrabajoMadre: student.lugarTrabajoMadre || "",
   estadoCivilMadre: student.estadoCivilMadre || "",
   fechaNacimientoMadre: normalizeDateInput(student.fechaNacimientoMadre),
   ineMadre: student.ineMadre || "",
