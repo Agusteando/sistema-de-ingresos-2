@@ -3237,6 +3237,21 @@ const buildEditableMatriculaEntries = (
     });
   }
 
+  // Do not acknowledge an edit as saved if this deployment has an older central schema.
+  const unavailableWorkplaceFields = ["lugarTrabajoPadre", "lugarTrabajoMadre"].filter(
+    (field) => requestedFields.includes(field) && !schema.matricula.has(PATCH_FIELD_COLUMN_MAP[field]),
+  );
+  if (unavailableWorkplaceFields.length) {
+    console.error("[Control Escolar] Missing central matricula workplace columns", {
+      fields: unavailableWorkplaceFields,
+      columns: unavailableWorkplaceFields.map((field) => PATCH_FIELD_COLUMN_MAP[field]),
+    });
+    throw createError({
+      statusCode: 503,
+      message: "No se pudo guardar el lugar de trabajo: faltan columnas en la matrícula central. No se aplicaron los cambios.",
+    });
+  }
+
   if (requestedFields.includes("grupo") && !schema.matricula.has("grupo")) {
     throw createError({
       statusCode: 500,
