@@ -29,6 +29,12 @@ export default defineNitroPlugin(() => {
         failures: Array.isArray(result?.failures) ? result.failures.length : 0,
         durationMs: Date.now() - startedAt,
       })
+      for (const failure of result?.failures || []) {
+        console.warn('[talleres-snapshot] campus refresh pending', {
+          plantel: failure.plantel,
+          code: failure.code,
+        })
+      }
     } catch (error: any) {
       console.error('[talleres-snapshot] refresh pass failed', {
         code: String(error?.code || error?.statusMessage || ''),

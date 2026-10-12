@@ -40,3 +40,11 @@ Quitar un nombre de `matricula.servicio(s)` sólo elimina la fuente directa. Si 
 Cuando un cargo financiero cambia de concepto o se cancela, Aurora registra el cambio de pertenencia y fuerza la regeneración de `talleres-roster-v2`. El write-through histórico en `matricula.servicio(s)` no puede conservar por sí solo un taller que fue administrado por un concepto financiero si ya no existe evidencia financiera vigente. Las asignaciones directas/manuales sin esa procedencia se conservan.
 
 Los documentos con `estatus` distinto de `Activo` no cuentan. Cuando existen ajustes por periodo, se toma el ajuste activo más reciente; una cancelación activa más reciente impide que ese documento cuente como asignación actual. Si otro documento activo todavía respalda el mismo taller, la pertenencia permanece.
+
+## Catálogo institucional y consistencia del roster (octubre de 2026)
+
+El catálogo central `talleres_servicios_catalogo` y las asociaciones `config_enrollment_mappings` son escrituras administrativas independientes de la disponibilidad instantánea de las fuentes escolares. Una escritura central ya confirmada **no se reporta como fallida** sólo porque la reconstrucción de `control_external_student_view` del plantel DC u otro plantel falle. La API devuelve `ok: true` junto con `snapshotRefresh.current/pending/failures` y, cuando aplique, `synced`; la interfaz conserva aviso de sincronización pendiente.
+
+La sincronización invalida **todos** los ámbitos afectados antes de reconstruir, intenta cada plantel sin que uno bloquee a los demás y registra los códigos de falla por plantel. El refresco periódico reintenta incluso cuando `generated_at` es reciente pero `stale_after` ya venció. Los lectores externos **continúan rechazando** snapshots no verificables: no se inventan alumnos, no se entrega una lista vieja como vigente ni se degrada a catálogos estáticos. Un fallo de una fuente de DC debe investigarse por separado; este cambio no garantiza que alumnos faltantes reaparezcan sin recuperar su fuente.
+
+En `/conceptos?section=talleres`, la confirmación de guardado y la condición de sincronización pendiente se muestran por separado, con los planteles afectados cuando están disponibles. Reintentar el alta por un fallo de snapshot no es necesario ni deseable. No hay DDL, migraciones ni cambios en el contrato público `/api/external/v1/talleres`.

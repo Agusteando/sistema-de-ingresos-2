@@ -4,7 +4,7 @@ import { getTrustedAuthUser, type AuthSessionUser } from './auth-session'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { normalizeEventualFlag } from '../../shared/utils/conceptEventual'
 import { invalidateInstitutionalSchoolCycleCache } from './school-cycle'
-import { ensureCurrentTalleresSnapshots } from './talleres-snapshot'
+import { refreshTalleresAfterCommittedConfigWrite } from './talleres-snapshot'
 
 export const CONCEPTO_CATEGORIES = [
   { key: 'regular', legacyKey: 'planteles', label: 'Inscripción', order: 10 },
@@ -734,9 +734,10 @@ export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) =
 
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   const snapshotRefresh = type === 'talleres_servicios'
-    ? await ensureCurrentTalleresSnapshots({
+    ? await refreshTalleresAfterCommittedConfigWrite({
         ciclo,
         planteles: plantel === 'GLOBAL' ? undefined : [plantel],
+        operation: 'mapping_upsert',
       })
     : { success: true, skipped: true, reason: 'not_talleres_servicios' }
   return { ok: true, synced, snapshotRefresh }
@@ -756,9 +757,10 @@ export const deleteMapping = async (id: unknown) => {
   await controlEscolarCentralQuery(`DELETE FROM config_enrollment_mappings WHERE id = ?`, [mappingId])
   const synced = await syncCentralConceptosConfigToBridgeBestEffort()
   const snapshotRefresh = String(previous?.enrollment_type || '').toLowerCase() === 'talleres_servicios'
-    ? await ensureCurrentTalleresSnapshots({
+    ? await refreshTalleresAfterCommittedConfigWrite({
         ciclo: previous?.cycle_name,
         planteles: String(previous?.plantel || '').toUpperCase() === 'GLOBAL' ? undefined : [previous?.plantel],
+        operation: 'mapping_delete',
       })
     : { success: true, skipped: true, reason: 'not_talleres_servicios' }
   return { ok: true, synced, snapshotRefresh }

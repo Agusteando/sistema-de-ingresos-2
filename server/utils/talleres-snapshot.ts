@@ -21,6 +21,7 @@ import {
 } from './talleres-servicios'
 import { readTalleresAssignmentSummaries, readTalleresContracts, recordTalleresAssignmentChange } from './talleres-contracts'
 import { readAuthoritativeTalleresCatalog } from './talleres-catalog-authority'
+import { settleCommittedTalleresFollowup } from './committed-talleres-followup'
 
 const SNAPSHOT_TABLE = 'control_external_student_view'
 
@@ -543,7 +544,8 @@ export const refreshTalleresSnapshotPlantel = async (input: { plantel: unknown, 
       const previous = await readSnapshotRows(plantel, ciclo)
       if (!input.force && previous.rows.length) {
         const generatedAt = previous.rows[0]?.generated_at ? new Date(previous.rows[0].generated_at).getTime() : 0
-        if (generatedAt && generatedAt >= Date.now() - refreshMinutes() * 60 * 1000) {
+        const staleAfter = previous.rows[0]?.stale_after ? new Date(previous.rows[0].stale_after).getTime() : 0
+        if (generatedAt && generatedAt >= Date.now() - refreshMinutes() * 60 * 1000 && staleAfter > Date.now()) {
           return { success: true, skipped: true, reason: 'fresh', plantel, ciclo, rows: previous.students.length, generatedAt: toIso(previous.rows[0]?.generated_at) }
         }
       }
@@ -736,6 +738,38 @@ export const ensureCurrentTalleresSnapshots = async (input: { ciclo?: unknown, p
     results.push(await ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true }))
   }
   return { success: true, current: true, ciclo, results, refreshed: results.length }
+}
+
+/**
+ * Admin catalogue/mapping writes have already committed to central MySQL by
+ * the time this runs. Report partial downstream refresh rather than returning
+ * HTTP failure and tempting the operator to retry a non-idempotent business
+ * action. Never relax the independent read-side snapshot freshness barrier.
+ */
+export const refreshTalleresAfterCommittedConfigWrite = async (input: {
+  ciclo?: unknown
+  planteles?: unknown[]
+  operation: string
+}) => {
+  const ciclo = await resolveCurrentCiclo(input.ciclo)
+  const requested = Array.isArray(input.planteles) && input.planteles.length
+    ? input.planteles.map(canonicalTalleresPlantel).filter(Boolean)
+    : [...TALLERES_SNAPSHOT_PLANTELES]
+  const targets = Array.from(new Set(requested))
+  const followup = await settleCommittedTalleresFollowup(targets, {
+    invalidate: (plantel) => invalidateTalleresSnapshotPlantel({ plantel, ciclo }),
+    refresh: (plantel) => ensureCurrentTalleresSnapshotPlantel({ plantel, ciclo, force: true }),
+  })
+  if (!followup.current) {
+    // Do not log student rosters, matrícula, source errors or DB credentials.
+    console.warn('[TalleresSnapshot] Central configuration committed; roster refresh pending', {
+      operation: input.operation,
+      ciclo,
+      refreshed: followup.refreshed,
+      failures: followup.failures,
+    })
+  }
+  return { ...followup, ciclo }
 }
 
 export const refreshTalleresSnapshots = async (input: { ciclo?: unknown, force?: boolean, planteles?: unknown[] } = {}) => {
