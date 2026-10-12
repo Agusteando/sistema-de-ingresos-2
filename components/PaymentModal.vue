@@ -4,7 +4,7 @@
       <div class="modal-container payment-modal relative">
         <div class="modal-header modal-header-with-status relative">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
-          <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" />
+          <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" error-message="Sin respaldo local. Puedes registrar el pago; evita recargar." />
           <div ref="paymentOptionsRef" class="relative ml-auto">
             <button
               type="button"
@@ -472,12 +472,20 @@
           @continue="continueEditing"
           @discard="discardAndClose"
         />
+        <p v-if="!processing && (hasBlockingStock || totalCobrar <= 0)" class="mx-4 mb-2 text-xs text-amber-700" role="status">
+          {{ hasBlockingStock ? 'No se puede registrar: hay conceptos agotados en este plantel.' : 'No hay un importe pendiente para registrar. Verifica los conceptos seleccionados.' }}
+        </p>
+        <div v-if="paymentSubmissionError" class="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
+          <p class="font-semibold">{{ paymentSubmissionError.title }}</p>
+          <p class="mt-1">{{ paymentSubmissionError.message }}</p>
+          <p class="mt-1 text-xs opacity-75">Referencia: {{ paymentSubmissionError.reference }}</p>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
           <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
-          <button class="btn btn-primary" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock">
+          <button class="btn btn-primary" type="button" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock" :title="hasBlockingStock ? 'Hay un concepto agotado' : totalCobrar <= 0 ? 'No hay saldo a registrar' : 'Registrar pago'">
             <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
             <LucideCheckCircle v-else :size="16"/>
             {{ processing ? 'Registrando...' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago') }}
@@ -513,6 +521,7 @@ useScrollLock()
 
 const formaDePago = ref('Efectivo')
 const processing = ref(false)
+const paymentSubmissionError = ref(null)
 const processedDebts = ref([])
 const paymentOptionsRef = ref(null)
 const paymentCampusRef = ref(null)
@@ -1245,6 +1254,7 @@ const previewReceipt = () => {
 
 const submit = async () => {
   if (processing.value) return
+  paymentSubmissionError.value = null
   if (hasBlockingStock.value) {
     window.alert('Uno o más conceptos seleccionados están agotados para este plantel.')
     return
@@ -1268,17 +1278,24 @@ const submit = async () => {
 
   // Open the receipt window while the action is still inside the operator's click.
   // Browsers may block a window opened only after the asynchronous payment request finishes.
-  const receiptWindow = window.open('', '_blank', 'width=850,height=800')
-  if (receiptWindow) {
-    receiptWindow.document.title = 'Generando recibo...'
-    receiptWindow.document.body.innerHTML = '<main style="font-family:system-ui,sans-serif;padding:32px;color:#24364b"><h1 style="font-size:20px;margin:0 0 8px">Generando recibo...</h1><p style="margin:0;color:#667085">El pago se está registrando. Esta ventana continuará automáticamente.</p></main>'
+  let receiptWindow = null
+  try {
+    receiptWindow = window.open('', '_blank', 'width=850,height=800')
+    if (receiptWindow) {
+      receiptWindow.document.title = 'Generando recibo...'
+      receiptWindow.document.body.innerHTML = '<main style="font-family:system-ui,sans-serif;padding:32px;color:#24364b"><h1 style="font-size:20px;margin:0 0 8px">Generando recibo...</h1><p style="margin:0;color:#667085">El pago se está registrando. Esta ventana continuará automáticamente.</p></main>'
+    }
+  } catch {
+    // Some browsers deny receipt popups; registration must still reach the API.
+    receiptWindow = null
   }
 
   processing.value = true
+  const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
   try {
     const res = await executeOptimistic(
-      () => $fetch('/api/payments/pay', { method: 'POST', body: payload }),
+      () => $fetch('/api/payments/pay', { method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload }),
       () => {},
       () => {},
       {
@@ -1289,7 +1306,12 @@ const submit = async () => {
     )
 
     const folios = Array.isArray(res?.folios) ? res.folios.filter(Boolean) : []
-    markSaved()
+    // The server has committed; browser draft storage can never change this outcome.
+    try {
+      markSaved()
+    } catch {
+      console.warn('[Payments] Post-commit local draft cleanup failed', { reference })
+    }
 
     if (pagoRealizadoEnOtroPlantel.value && plantelPago.value) {
       const userName = useCookie('auth_name').value || 'Operador'
@@ -1298,20 +1320,39 @@ const submit = async () => {
       ).catch(() => {})
     }
 
-    if (folios.length) {
-      const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`
-      if (receiptWindow && !receiptWindow.closed) {
-        receiptWindow.location.replace(receiptUrl)
-      } else {
-        window.open(receiptUrl, '_blank', 'width=850,height=800')
+    try {
+      if (folios.length) {
+        const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`
+        if (receiptWindow && !receiptWindow.closed) {
+          receiptWindow.location.replace(receiptUrl)
+        } else {
+          window.open(receiptUrl, '_blank', 'width=850,height=800')
+        }
+      } else if (receiptWindow && !receiptWindow.closed) {
+        receiptWindow.close()
       }
-    } else if (receiptWindow && !receiptWindow.closed) {
-      receiptWindow.close()
+    } catch {
+      // Printing is independent of the confirmed payment. The receipt is still accessible from history.
+      console.warn('[Payments] Receipt popup failed after confirmed payment', { reference })
     }
 
     emit('success', res)
-  } catch {
+  } catch (error) {
     if (receiptWindow && !receiptWindow.closed) receiptWindow.close()
+    const statusCode = Number(error?.statusCode || error?.response?.status || error?.data?.statusCode || 0)
+    const rejected = statusCode >= 400 && statusCode < 500
+    console.error('[Payments] Registrar pago did not complete in the UI', {
+      reference,
+      statusCode: statusCode || null,
+      code: String(error?.data?.code || error?.code || 'unknown').slice(0, 80)
+    })
+    paymentSubmissionError.value = {
+      reference,
+      title: rejected ? 'El pago no fue aceptado' : 'No se pudo confirmar el resultado del pago',
+      message: rejected
+        ? (String(error?.data?.message || error?.data?.statusMessage || '').trim() || 'Revise los datos y vuelva a intentarlo.')
+        : 'Antes de volver a intentarlo, revise el Estado de Cuenta: el servidor pudo haber registrado el pago.'
+    }
   } finally {
     processing.value = false
   }
