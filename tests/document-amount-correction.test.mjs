@@ -24,9 +24,12 @@ test('rejects more than two decimal places, negatives, zero and unbounded number
 import { readFile } from 'node:fs/promises'
 
 test('the correction modifies only the requested document and writes an atomic audit', async () => {
-  const api = await readFile('server/api/documentos/[id]/monto.put.ts', 'utf8')
+  const api = await readFile('server/api/documentos/[id]/importe.put.ts', 'utf8')
   assert.match(api, /SELECT documento FROM documentos WHERE documento = \? FOR UPDATE/)
   assert.match(api, /UPDATE documentos SET montoFinal = \?/)
+  const tuition = await readFile('server/api/documentos/[id]/monto.put.ts', 'utf8')
+  assert.match(tuition, /SET montoFinal = \?, beca = \?, becaMonto = \?, becaPorcentaje = \?/)
+  assert.match(tuition, /Esta corrección está disponible para documentos recurrentes/)
   assert.match(api, /GROUP BY payment_month/)
   assert.match(api, /LOWER\(TRIM\(CAST\(estatus AS CHAR\)\)\) = 'vigente'/)
   assert.match(api, /INSERT INTO documento_monto_correcciones/)
