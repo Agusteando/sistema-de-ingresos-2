@@ -388,13 +388,17 @@ export default defineEventHandler(async (event) => {
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
+        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
       `,
       params: [
         matricula,
         documento,
         doc.plazo,
         doc.meses,
+        // The same transaction may have filled an initially NULL montoFinal
+        // immediately before this insert. Expect that committed value instead
+        // of the stale value read when composing payment statements.
+        doc.montoFinal == null && !periodIsChangedConcept ? finalAmount : doc.montoFinal,
         mes,
         p.mesLabel,
         nombreCompleto,

@@ -1,0 +1,36 @@
+// Uses the same institutional audit group as payment action notifications.
+const TELEGRAM_ENDPOINT = 'https://tgbot.casitaapps.com/sendMessages'
+const AUDIT_CHAT_IDS = ['-4885991203']
+
+export const notifyDocumentAmountCorrection = async (message: string) => {
+  let lastError: unknown = null
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const controller = new AbortController()
+      const timeout = setTimeout(() => controller.abort(), 5500)
+      let response: Response
+      try {
+        response = await fetch(TELEGRAM_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ chatId: AUDIT_CHAT_IDS, message }),
+          signal: controller.signal,
+        })
+      } finally {
+        clearTimeout(timeout)
+      }
+      if (!response.ok) throw new Error(`Telegram HTTP ${response.status}`)
+      // HTTP 200 alone does not confirm success when the relay reports a logical failure.
+      const raw = await response.text().catch(() => '')
+      let payload: any = null
+      try { payload = raw ? JSON.parse(raw) : null } catch {}
+      if (payload?.success === false || payload?.ok === false || payload?.error) {
+        throw new Error('Telegram relay rejected message')
+      }
+      return { delivered: true }
+    } catch (error) {
+      lastError = error
+    }
+  }
+  return { delivered: false, errorCode: String((lastError as any)?.name || 'TELEGRAM_DELIVERY_FAILED').slice(0, 60) }
+}
