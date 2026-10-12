@@ -33,10 +33,11 @@ const SNAPSHOT_TABLE = 'control_external_student_view'
  * it is not an API version and must never cause consumers to migrate to /v2, /v3, etc.
  *
  * The snapshot exists only to make reads fast. It is not permission to return
- * stale business data. Aurora-managed writes that affect Talleres must refresh
- * the relevant snapshot before they report a successful, current state. Reads
- * that detect an old snapshot refresh synchronously or fail; they never knowingly
- * return the old payload as if it were current.
+ * stale business data. Aurora-managed writes that affect Talleres must
+ * invalidate their affected snapshots before reporting a committed mutation;
+ * rebuilt rosters can complete asynchronously. Reads that detect an old
+ * snapshot refresh synchronously or fail; they never knowingly return the old
+ * payload as if it were current.
  */
 export const TALLERES_SNAPSHOT_VIEW_VERSION = 'talleres-roster-v2'
 export const TALLERES_SNAPSHOT_PLANTELES = [...DASHBOARD_PLANTELES] as string[]
