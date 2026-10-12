@@ -472,6 +472,9 @@
           @continue="continueEditing"
           @discard="discardAndClose"
         />
+        <p v-if="!processing && (hasBlockingStock || totalCobrar <= 0)" class="mx-4 mb-2 text-xs text-amber-700" role="status">
+          {{ hasBlockingStock ? 'No se puede registrar: hay conceptos agotados en este plantel.' : 'No hay un importe pendiente para registrar. Verifica los conceptos seleccionados.' }}
+        </p>
         <div v-if="paymentSubmissionError" class="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
           <p class="font-semibold">{{ paymentSubmissionError.title }}</p>
           <p class="mt-1">{{ paymentSubmissionError.message }}</p>
@@ -1275,10 +1278,16 @@ const submit = async () => {
 
   // Open the receipt window while the action is still inside the operator's click.
   // Browsers may block a window opened only after the asynchronous payment request finishes.
-  const receiptWindow = window.open('', '_blank', 'width=850,height=800')
-  if (receiptWindow) {
-    receiptWindow.document.title = 'Generando recibo...'
-    receiptWindow.document.body.innerHTML = '<main style="font-family:system-ui,sans-serif;padding:32px;color:#24364b"><h1 style="font-size:20px;margin:0 0 8px">Generando recibo...</h1><p style="margin:0;color:#667085">El pago se está registrando. Esta ventana continuará automáticamente.</p></main>'
+  let receiptWindow = null
+  try {
+    receiptWindow = window.open('', '_blank', 'width=850,height=800')
+    if (receiptWindow) {
+      receiptWindow.document.title = 'Generando recibo...'
+      receiptWindow.document.body.innerHTML = '<main style="font-family:system-ui,sans-serif;padding:32px;color:#24364b"><h1 style="font-size:20px;margin:0 0 8px">Generando recibo...</h1><p style="margin:0;color:#667085">El pago se está registrando. Esta ventana continuará automáticamente.</p></main>'
+    }
+  } catch {
+    // Some browsers deny receipt popups; registration must still reach the API.
+    receiptWindow = null
   }
 
   processing.value = true
@@ -1311,15 +1320,20 @@ const submit = async () => {
       ).catch(() => {})
     }
 
-    if (folios.length) {
-      const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`
-      if (receiptWindow && !receiptWindow.closed) {
-        receiptWindow.location.replace(receiptUrl)
-      } else {
-        window.open(receiptUrl, '_blank', 'width=850,height=800')
+    try {
+      if (folios.length) {
+        const receiptUrl = `/print/recibo?folios=${encodeURIComponent(folios.join(','))}`
+        if (receiptWindow && !receiptWindow.closed) {
+          receiptWindow.location.replace(receiptUrl)
+        } else {
+          window.open(receiptUrl, '_blank', 'width=850,height=800')
+        }
+      } else if (receiptWindow && !receiptWindow.closed) {
+        receiptWindow.close()
       }
-    } else if (receiptWindow && !receiptWindow.closed) {
-      receiptWindow.close()
+    } catch {
+      // Printing is independent of the confirmed payment. The receipt is still accessible from history.
+      console.warn('[Payments] Receipt popup failed after confirmed payment', { reference })
     }
 
     emit('success', res)
