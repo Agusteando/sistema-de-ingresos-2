@@ -388,13 +388,14 @@ export default defineEventHandler(async (event) => {
           fecha_original,
           fecha_modificada_at,
           fecha_modificada_por
-        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
+        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
       `,
       params: [
         matricula,
         documento,
         doc.plazo,
         doc.meses,
+        doc.montoFinal,
         mes,
         p.mesLabel,
         nombreCompleto,
