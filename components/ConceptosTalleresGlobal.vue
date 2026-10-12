@@ -211,6 +211,11 @@ const reportCommittedWrite = (result, message) => {
   const failures = Array.isArray(result?.snapshotRefresh?.failures) ? result.snapshotRefresh.failures : []
   const planteles = [...new Set(failures.map(item => item.plantel).filter(Boolean))]
   const mirrorPending = result?.synced?.ok === false
+  if (result?.snapshotRefresh?.queued && !failures.length && !mirrorPending) {
+    syncPendingNotice.value = 'Las listas de Talleres se están actualizando en segundo plano. Aurora reintentará automáticamente si una sede no está disponible.'
+    show(message + ' Actualizando listas de Talleres.', 'success', { duration: 5500 })
+    return
+  }
   if (result?.snapshotRefresh?.pending || mirrorPending) {
     const scope = [planteles.length ? `planteles: ${planteles.join(', ')}` : '', mirrorPending ? 'espejo Bridge' : ''].filter(Boolean).join('; ')
     syncPendingNotice.value = `La actualización de Talleres está pendiente${scope ? ` (${scope})` : ''}; Aurora reintentará automáticamente.`
