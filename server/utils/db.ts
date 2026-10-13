@@ -1067,6 +1067,7 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           await checkAndAddColumn('referenciasdepago', 'depurado', "TINYINT(1) NOT NULL DEFAULT 0")
           await checkAndAddColumn('referenciasdepago', 'depurado_por', "VARCHAR(255) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'depurado_fecha', "DATETIME DEFAULT NULL")
+          await checkAndAddColumn('referenciasdepago', 'depurado_motivo', "VARCHAR(500) DEFAULT NULL")
           await checkAndAddColumn('referenciasdepago', 'usuario_email', "VARCHAR(255) DEFAULT NULL")
           await runSafeQuery(`
             UPDATE referenciasdepago r

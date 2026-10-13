@@ -1,3 +1,4 @@
+import { isDepurationAdjustment } from './payment-audit'
 import { MAX_COMBINED_RECEIPT_PAYMENTS } from '../../shared/constants/paymentReceipt'
 import { normalizeCicloKey } from '../../shared/utils/ciclo'
 import { resolveFinancialAcademicPlacement } from './financial-academic-placement'
@@ -51,6 +52,12 @@ export const loadActiveReceiptPayments = async (value: unknown) => {
 
   if (!rows.length) {
     return { folios, items: [] as any[], matricula: '' }
+  }
+
+  // A depuration is an accounting settlement, not a received payment.
+  if (rows.some((row) => isDepurationAdjustment(row)
+    || String(row.formaDePago || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === 'depuracion')) {
+    throw createError({ statusCode: 409, message: 'Una depuración no genera recibo de pago.' })
   }
 
   const returnedFolios = new Set(rows.map((row) => Number(row.folio)))

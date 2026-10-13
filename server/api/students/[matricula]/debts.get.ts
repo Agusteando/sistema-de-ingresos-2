@@ -43,10 +43,12 @@ const cicloInClause = (values: string[]) => values.map(() => "?").join(",");
 const truthyFlag = (value: unknown) =>
   ["1", "true", "si", "sí", "yes", "on"].includes(String(value ?? "").trim().toLowerCase());
 
-export default defineEventHandler(async (event) =>
+export const loadStudentDebts = (event: any, overrides: { matricula?: string; ciclo?: string } = {}) =>
   runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
-    const matricula = event.context.params?.matricula;
-    const { ciclo = automaticSchoolCycleKey(), fechaPago = "" } = getQuery(event);
+    const matricula = overrides.matricula || event.context.params?.matricula;
+    const { ciclo = automaticSchoolCycleKey(), fechaPago = "" } = overrides.ciclo
+      ? { ciclo: overrides.ciclo, fechaPago: "" }
+      : getQuery(event);
     const cicloKey = normalizeCicloKey(ciclo);
     if (!matricula)
       throw createError({ statusCode: 400, message: "Matrícula requerida" });
@@ -78,6 +80,23 @@ export default defineEventHandler(async (event) =>
   `,
       [normalizedMatricula, ...cicloValues],
     );
+
+    // Schema rollout is optional for reads. A missing audit column must never
+    // take down the existing Estado de Cuenta in production.
+    if (pagosRows.some((p) => isDepuradoPayment(p)
+      && String(p.formaDePago || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === 'depuracion')) {
+      try {
+        const motivos = await query<any[]>(`
+          SELECT folio, depurado_motivo FROM referenciasdepago
+          WHERE matricula = ? AND CAST(ciclo AS CHAR) IN (${cicloInClause(cicloValues)})
+            AND COALESCE(depurado, 0) = 1
+        `, [normalizedMatricula, ...cicloValues]);
+        const motiveByFolio = new Map(motivos.map((p: any) => [String(p.folio), String(p.depurado_motivo || '')]));
+        pagosRows.forEach((p) => { p.depurado_motivo = motiveByFolio.get(String(p.folio)) || ''; });
+      } catch (error: any) {
+        console.warn('[Depuracion] Audit reason not yet available', { matricula: normalizedMatricula, code: error?.code || 'SCHEMA_PENDING' });
+      }
+    }
 
     const [studentRef] = await query<any[]>(
       `SELECT matricula, plantel, nivel as nivelBase, grado as gradoBase, ciclo as cicloBase FROM base WHERE matricula = ? LIMIT 1`,
@@ -632,5 +651,6 @@ export default defineEventHandler(async (event) =>
     });
 
     return uniqueDebts;
-  }),
-);
+  });
+
+export default defineEventHandler((event) => loadStudentDebts(event));

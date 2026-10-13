@@ -1,3 +1,5 @@
+import { isDepurationAdjustment } from '../../utils/payment-audit'
+import { notifyDocumentAmountCorrection } from '../../utils/telegram-document-audit'
 import { runWithBridgeAgentId, query } from '../../utils/db'
 import { restoreStockForCanceledPayment } from '../../utils/conceptos-stock'
 
@@ -33,6 +35,14 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 409, message: 'Este pago ya fue cancelado.' })
   }
 
+  const isDepuration = isDepurationAdjustment(pago)
+  if (isDepuration && !user?.isSuperAdmin) {
+    throw createError({ statusCode: 403, message: 'Solo superadministradores pueden revertir una depuración.' })
+  }
+  if (isDepuration && String(body.motivo || '').trim().length < 8) {
+    throw createError({ statusCode: 400, message: 'La reversión de una depuración requiere motivo.' })
+  }
+
   if (user.isSuperAdmin || body.force_direct) {
     const result: any = await query(
       `UPDATE referenciasdepago
@@ -53,6 +63,12 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       stock = { restored: false, error: error?.message || 'No se pudo restaurar stock.' }
     }
 
+    if (isDepuration) {
+      const notification = await notifyDocumentAmountCorrection(
+        `*Depuración revertida* · ${user.name || user.email}\nFolio: ${pago.folio} · Documento: ${pago.documento} · Mes: ${pago.mes}\nMonto: ${Number(pago.monto || 0).toFixed(2)} · Motivo: ${String(body.motivo || '').trim().slice(0, 400)}`
+      )
+      if (!notification.delivered) console.error('[Depuracion] Reversal Telegram failed', { folio: pago.folio, notification })
+    }
     return { success: true, status: 'canceled', folio: pago.folio, stock }
   }
 

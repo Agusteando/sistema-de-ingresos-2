@@ -8,6 +8,7 @@
         {
           'is-selected': isSelected(item),
           'is-cancelled': item.cancelled,
+          'is-depurated': isDepuration(item),
           'has-pay-action': itemIndex === 0 && pendingTotal > 0,
         },
       ]"
@@ -40,6 +41,7 @@
           <span>{{ paymentPeriodLabel(item) }}</span>
           <span>{{ formatDate(item.payment?.fecha || item.payment?.fecha_original) }}</span>
           <span>{{ paymentMethodLabel(item.payment) }}</span>
+          <span v-if="isDepuration(item) && item.payment?.depurado_motivo" class="depuration-ledger-reason" :title="item.payment.depurado_motivo">Motivo: {{ item.payment.depurado_motivo }}</span>
         </div>
       </div>
 
@@ -63,7 +65,7 @@
           class="payment-ledger-action"
           title="Descargar recibo"
           aria-label="Descargar recibo"
-          :disabled="item.cancelled"
+          :disabled="item.cancelled || isDepuration(item)"
           @click="emit('receipt', item)"
         >
           <LucideDownload :size="15" />
@@ -146,10 +148,13 @@ const invoiceForItem = (item: any) => {
 }
 
 const isSelected = (item: any) => selectedKeySet.value.has(paymentItemKey(item))
+const isDepuration = (item: any) =>
+  String(item?.payment?.formaDePago || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase() === 'depuracion'
 const selectionDisabled = (item: any) =>
-  Boolean(item?.cancelled) || (selectionLimitReached.value && !isSelected(item))
+  Boolean(item?.cancelled) || isDepuration(item) || (selectionLimitReached.value && !isSelected(item))
 const selectionLabel = (item: any) => {
   if (item?.cancelled) return 'Pago cancelado'
+  if (isDepuration(item)) return 'La depuración no genera recibo'
   if (selectionDisabled(item)) {
     return `Límite de ${MAX_COMBINED_RECEIPT_PAYMENTS} pagos alcanzado`
   }
@@ -169,11 +174,13 @@ const paymentMethodLabel = (payment: any) => {
 
 const paymentStatusLabel = (item: any) => {
   if (item?.cancelled) return 'Cancelado'
+  if (isDepuration(item)) return 'Depuración'
   if (item?.payment?.depurado) return 'Depurado'
   return 'Vigente'
 }
 const paymentStatusClass = (item: any) => {
   if (item?.cancelled) return 'is-cancelled'
+  if (isDepuration(item)) return 'is-depuration'
   if (item?.payment?.depurado) return 'is-audit'
   return 'is-active'
 }
@@ -197,7 +204,10 @@ const formatDate = (value: unknown) => {
 </script>
 
 
-<style scoped src="./students/accountLedger.css"></style>
+<style scoped src="./students/accountLedger.css">.payment-ledger-row.is-depurated { background: #f4f9ff; border-left: 3px solid #2d78c9; }
+.payment-ledger-row.is-depurated .payment-ledger-row__amount { color: #185cab; }
+.depuration-ledger-reason { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: #2364a3; }
+</style>
 <style scoped>
 .payment-ledger-rows { container: payment-ledger / inline-size; display: grid; }
 .payment-ledger-row { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto auto; }
