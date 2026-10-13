@@ -20,3 +20,7 @@
 .account-ledger-actions button.is-danger:hover:not(:disabled), .account-ledger-actions button.payment-ledger-action--danger:hover:not(:disabled) { color: #a03830; border-color: #e7b5af; background: #fff3f1; }
 .account-ledger-actions button:disabled { cursor: not-allowed; opacity: .38; }
 .account-ledger-actions button:focus-visible { outline: 2px solid var(--action-primary, #4e844e); outline-offset: 2px; }
+
+/* Depuraciones extinguish debt without recording cash received. */
+.account-ledger-status.is-depuration { color: #165eae; background: #e7f2ff; }
+.account-ledger-row.is-depurated:hover { background: #eaf4ff; }

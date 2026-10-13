@@ -770,6 +770,7 @@
                         selected: selectedDebts.includes(debt),
                         cleared:
                           Number(debt.pagosDepurados) > 0 && debt.saldo <= 0,
+                        'is-depurated': Number(debt.pagosDepurados) > 0,
                       }"
                       class="debt-row"
                       @contextmenu.prevent="showDebtContextMenu($event, debt)"
@@ -798,7 +799,7 @@
                             :style="{ width: progressCleanupWidth(debt) }"
                           ></span>
                         </div>
-                        <em :class="{ complete: debt.saldo <= 0 }">{{
+                        <em :class="{ complete: debt.saldo <= 0, 'is-depuration': Number(debt.pagosDepurados) > 0 }">{{
                           progressStatusLabel(debt)
                         }}</em>
                       </td>
@@ -816,6 +817,7 @@
                             class="concept-meta"
                             >Beca {{ Number(debt.beca).toFixed(0) }}%</span
                           >
+                          <span v-if="Number(debt.pagosDepurados) > 0" class="depuration-badge">Depurado</span>
                           <span v-if="debt.hasRecargo" class="recargo-badge"
                             >Recargo</span
                           >
@@ -849,6 +851,7 @@
                           @click.stop="toggleDebtPaymentRows(debt)"
                         >
                           <strong>${{ format(debt.pagos) }}</strong>
+                          <small v-if="Number(debt.pagosDepurados) > 0" class="depuration-payment">+${{ format(debt.pagosDepurados) }} depurado</small>
                           <small>
                             {{ isDebtPaymentRowsOpen(debt) ? 'Ocultar' : 'Mostrar pagos' }}
                           </small>
@@ -861,6 +864,10 @@
                         data-label="Saldo"
                       >
                         ${{ format(debt.saldo) }}
+                        <button v-if="canDepurarDebt(debt)" type="button" class="depuration-row-action"
+                          title="Depurar saldo" @click.stop="requestDepuracion(debt)">
+                          <LucideShieldCheck :size="13" /> Depurar
+                        </button>
                       </td>
                       <td class="menu-cell" data-label="Opciones">
                         <button
@@ -980,6 +987,14 @@
         @close="closePaymentCancellation"
         @success="handlePaymentCancellationSuccess"
       />
+      <DepurationModal
+        v-if="showDepurationModal && selectedDepurationDebt"
+        :student="student"
+        :debt="selectedDepurationDebt"
+        :ciclo="selectedCicloKey"
+        @close="closeDepuration"
+        @success="handleDepurationSuccess"
+      />
       <ConceptChangeModal
         v-if="showConceptModal"
         :debt="selectedConceptDebt"
@@ -1094,6 +1109,7 @@ import PaymentModal from "./PaymentModal.vue";
 import DocumentModal from "./DocumentModal.vue";
 import InvoiceModal from "./InvoiceModal.vue";
 import PaymentCancelModal from "./PaymentCancelModal.vue";
+import DepurationModal from "./DepurationModal.vue";
 import PaymentLedgerRows from "./PaymentLedgerRows.vue";
 import StudentInvoiceLedger from "./StudentInvoiceLedger.vue";
 import ConceptChangeModal from "./ConceptChangeModal.vue";
@@ -1162,7 +1178,8 @@ const talleresContractObservations = ref("");
 const loading = ref(false);
 const reminding = ref(false);
 const selectedDebts = ref([]);
-const depurandoDebt = ref(null);
+const showDepurationModal = ref(false);
+const selectedDepurationDebt = ref(null);
 const accountSearchQuery = ref("");
 const invoiceSearchQuery = ref("");
 const accountFilter = ref("all");
@@ -2687,10 +2704,14 @@ watch(
   { immediate: true },
 );
 
+const isDepurationLedgerItem = (item) =>
+  String(item?.payment?.formaDePago || '').normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '').toLowerCase().trim() === 'depuracion';
+
 const prunePaymentSelection = (debtList = debts.value) => {
   const validKeys = new Set(
     buildPaymentItems(debtList)
-      .filter((item) => !item.cancelled)
+      .filter((item) => !item.cancelled && !isDepurationLedgerItem(item))
       .map(paymentItemKey),
   );
   selectedPaymentKeys.value = new Set(
@@ -2707,7 +2728,7 @@ watch(
 );
 
 const togglePaymentSelection = (item) => {
-  if (!item || item.cancelled) return;
+  if (!item || item.cancelled || isDepurationLedgerItem(item)) return;
   const key = paymentItemKey(item);
   const next = new Set(selectedPaymentKeys.value);
 
@@ -2732,7 +2753,7 @@ const clearPaymentSelection = () => {
 
 const downloadPaymentReceipt = (item) => {
   const folio = Number(item?.payment?.folio);
-  if (!Number.isInteger(folio) || folio <= 0 || item?.cancelled) return;
+  if (!Number.isInteger(folio) || folio <= 0 || item?.cancelled || isDepurationLedgerItem(item)) return;
   downloadReceiptPdf([folio]);
 };
 
@@ -2743,7 +2764,7 @@ const downloadSelectedPayments = () => {
 };
 
 const invoicePaymentItem = (item) => {
-  if (!item?.debt || !item?.payment || item?.cancelled) return;
+  if (!item?.debt || !item?.payment || item?.cancelled || isDepurationLedgerItem(item)) return;
   invoicePaymentReceipt(item.debt, item.payment);
 };
 
@@ -2927,70 +2948,26 @@ const sendReminder = async () => {
 };
 
 const canDepurarDebt = (debt) =>
-  debt && Number(debt.saldo || 0) > 0 && Number(debt.pagos ?? 0) > 0;
+  isSuperAdmin.value && debt && Number(debt.documento) > 0 &&
+  Number(debt.saldo || 0) > 0 && Number(debt.pagos ?? 0) > 0 &&
+  !debt.montoFinalPendiente;
 
-const requestDepuracion = async (debt) => {
-  if (!canDepurarDebt(debt)) {
-    return show(
-      "La depuración solo completa conceptos con avance previo y saldo pendiente.",
-      "danger",
-    );
-  }
-
-  if (depurandoDebt.value) return;
-
-  const saldo = Number(debt.saldo || 0);
-  const message = `La depuración completará el saldo restante de ${debt.conceptoNombre} (${debt.mesLabel}) por $${saldo.toFixed(2)}. No se registrará como pago ordinario y requiere código de autorización por Telegram.`;
-
-  if (!confirm(message)) return;
-
-  const motivo = prompt("Motivo de depuración:");
-  if (!motivo) return;
-
-  depurandoDebt.value = debtKey(debt);
-
-  try {
-    const request = await $fetch("/api/payments/audit", {
-      method: "POST",
-      body: {
-        action: "request",
-        matricula: props.student.matricula,
-        documento: debt.documento,
-        mes: debt.mes,
-        ciclo: normalizeCicloKey(state.value.ciclo),
-        conceptoNombre: debt.conceptoNombre,
-        mesLabel: debt.mesLabel,
-        subtotal: debt.subtotal,
-        saldo: debt.saldo,
-        pagos: debt.resuelto ?? debt.pagos,
-        pagosRegistrados: debt.pagos,
-        hasRecargo: debt.hasRecargo,
-        motivo,
-      },
-    });
-
-    const input = prompt(
-      "Ingresa el código de depuración de 5 dígitos enviado por Telegram:",
-    );
-    if (!input) return show("Depuración cancelada", "danger");
-
-    await $fetch("/api/payments/audit", {
-      method: "POST",
-      body: {
-        action: "confirm",
-        requestId: request.requestId,
-        code: String(input).trim(),
-      },
-    });
-
-    show("Saldo depurado y progreso completado", "success");
-    await loadDebts({ useCache: false });
-    emit("refresh");
-  } catch (e) {
-    show(e?.data?.message || "No se pudo aplicar la depuración", "danger");
-  } finally {
-    depurandoDebt.value = null;
-  }
+const requestDepuracion = (debt) => {
+  if (!canDepurarDebt(debt)) return;
+  selectedDepurationDebt.value = debt;
+  showDepurationModal.value = true;
+};
+const closeDepuration = () => {
+  showDepurationModal.value = false;
+  selectedDepurationDebt.value = null;
+};
+const handleDepurationSuccess = async (result) => {
+  closeDepuration();
+  show(result?.notification?.delivered === false
+    ? "Depuración aplicada. No se confirmó el aviso de Telegram."
+    : "Saldo depurado", result?.notification?.delivered === false ? "danger" : "success");
+  await loadDebts({ useCache: false });
+  emit('refresh');
 };
 
 const openConceptChange = (debt) => {
@@ -3161,12 +3138,9 @@ const showDebtContextMenu = (event, debt) => {
 
   if (canDepurarDebt(debt)) {
     menuItems.push({
-      label:
-        depurandoDebt.value === debtKey(debt)
-          ? "Depurando saldo..."
-          : "Depurar saldo restante",
+      label: "Depurar saldo",
       icon: LucideShieldCheck,
-      disabled: Boolean(depurandoDebt.value),
+      class: "text-blue-700 hover:bg-blue-50",
       action: () => requestDepuracion(debt),
     });
     menuItems.push({ label: "-" });
