@@ -241,7 +241,7 @@
               <span v-if="selectedDebts.length" class="profile-action-count">{{ selectedDebts.length }}</span>
             </button>
             <button
-              v-if="isSuperAdmin && selectedDebts.length === 1"
+              v-if="canDepurarAsAdmin && selectedDebts.length === 1"
               type="button"
               class="profile-action-button profile-action-button--depuration"
               :disabled="!canDepurarDebt(selectedDebts[0])"
@@ -1172,6 +1172,9 @@ const roleTokens = computed(() =>
     .filter(Boolean),
 );
 const isSuperAdmin = computed(() => roleTokens.value.includes("superadmin"));
+const canDepurarAsAdmin = computed(() =>
+  isSuperAdmin.value || roleTokens.value.includes("role_admon"),
+);
 
 const debts = ref([]);
 const siblings = ref([]);
@@ -2895,7 +2898,7 @@ const showStudentActionsMenu = (event) => {
     { label: detailsExpanded.value ? "Contraer estado de cuenta" : "Ampliar estado de cuenta", icon: LucideMaximize2, action: toggleDetailsExpanded },
     { label: "Pagar conceptos seleccionados", icon: LucideCreditCard, disabled: !selectedDebts.value.length, action: () => { showPaymentModal.value = true; } },
     { label: "Facturar conceptos seleccionados", icon: LucideFileText, disabled: !selectedDebts.value.length, action: () => { showInvoiceModal.value = true; } },
-    ...(isSuperAdmin.value && selectedDebt ? [{
+    ...(canDepurarAsAdmin.value && selectedDebt ? [{
       label: "Depurar saldo seleccionado",
       icon: LucideShieldCheck,
       class: "text-blue-700 hover:bg-blue-50",
@@ -2969,7 +2972,7 @@ const sendReminder = async () => {
 };
 
 const canDepurarDebt = (debt) =>
-  isSuperAdmin.value && debt && Number(debt.documento) > 0 &&
+  canDepurarAsAdmin.value && debt && Number(debt.documento) > 0 &&
   Number(debt.saldo || 0) > 0 && Number(debt.pagos ?? 0) > 0 &&
   !debt.montoFinalPendiente;
 

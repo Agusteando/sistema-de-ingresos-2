@@ -36,8 +36,8 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   }
 
   const isDepuration = isDepurationAdjustment(pago)
-  if (isDepuration && !user?.isSuperAdmin) {
-    throw createError({ statusCode: 403, message: 'Solo superadministradores pueden revertir una depuración.' })
+  if (isDepuration && !user?.hasFinancialAccess) {
+    throw createError({ statusCode: 403, message: 'Solo administradores con acceso financiero pueden revertir una depuración.' })
   }
   if (isDepuration && String(body.motivo || '').trim().length < 8) {
     throw createError({ statusCode: 400, message: 'La reversión de una depuración requiere motivo.' })

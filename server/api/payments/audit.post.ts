@@ -38,7 +38,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   for (const [id, item] of pending) if (item.expiresAt <= Date.now()) pending.delete(id)
   const user = event.context.user
   const actor = String(user?.email || '').trim().toLowerCase()
-  if (!user?.isSuperAdmin || !actor) throw createError({ statusCode: 403, message: 'Solo superadministradores pueden depurar saldos.' })
+  if (!user?.hasFinancialAccess || !actor) throw createError({ statusCode: 403, message: 'Solo administradores con acceso financiero pueden depurar saldos.' })
   const body = await readBody(event)
   const action = String(body?.action || '').trim().toLowerCase()
   const agent = String(event.context.dbBridgeAgentId || '').trim().toUpperCase()
