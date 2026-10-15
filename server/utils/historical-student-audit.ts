@@ -40,6 +40,8 @@ const parseMessage = (line: string, ns: string, labels: Record<string, string>):
     try { obj = JSON.parse(line.slice(jsonAt)) } catch { /* preserve original line */ }
   }
   const message = compact(obj.message || line)
+  // Failed attempts must never be counted as successful writes in a forensic view.
+  if (['error','warn','fatal'].includes(compact(obj.level).toLowerCase())) return null
   const husky = message.includes('credentialization.submission.database-committed')
     || message.includes('personas-autorizadas.student.save')
   const aurora = message.includes('centralized matricula overlay updated')
