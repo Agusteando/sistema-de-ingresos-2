@@ -11,7 +11,7 @@ const sources = Promise.all([
 
 test('depuración is offered only to superadmins', async () => {
   const [ui, , , auth] = await sources
-  assert.match(ui, /const canDepurarAsAdmin = computed\(\(\) =>\s*isSuperAdmin\.value \|\| roleTokens\.value\.includes\("role_admon"\)/)
+  assert.match(ui, /const canDepurarAsAdmin = computed\(\(\) =>\s*isSuperAdmin\.value/)
   assert.match(ui, /v-if="canDepurarAsAdmin && selectedDebts\.length === 1"/)
   assert.match(ui, /\.\.\.\(canDepurarAsAdmin\.value && selectedDebt \? \[\{/)
   assert.match(ui, /const canDepurarDebt = \(debt\) =>\s*canDepurarAsAdmin\.value && debt/)
@@ -23,8 +23,8 @@ test('depuración is offered only to superadmins', async () => {
 test('backend requires superadmin, keeps one-time Telegram approval and accounting constraints', async () => {
   const [, api] = await sources
   assert.match(api, /const user = event\.context\.user/)
-  assert.match(api, /if \(!user\?\.hasFinancialAccess \|\| !actor\) throw createError\(\{ statusCode: 403/)
-  assert.doesNotMatch(api, /if \(!user\?\.isSuperAdmin/)
+  assert.match(api, /if \(!user\?\.isSuperAdmin \|\| !actor\) throw createError\(\{ statusCode: 403/)
+  assert.doesNotMatch(api, /if \(!user\?\.hasFinancialAccess/)
   assert.match(api, /const TTL = 10 \* 60 \* 1000/)
   assert.match(api, /if \(info\.actor !== actor \|\| info\.agent !== agent\)/)
   assert.match(api, /info\.attempts >= 3/)
@@ -37,7 +37,7 @@ test('backend requires superadmin, keeps one-time Telegram approval and accounti
 
 test('only superadmins can request reversal', async () => {
   const [, , cancel] = await sources
-  assert.match(cancel, /if \(isDepuration && !user\?\.hasFinancialAccess\)/)
+  assert.match(cancel, /if \(isDepuration && !user\?\.isSuperAdmin\)/)
   assert.match(cancel, /La reversión de una depuración requiere motivo/)
   assert.match(cancel, /\*Depuración revertida\*/)
   assert.match(cancel, /notifyDocumentAmountCorrection\(/)
