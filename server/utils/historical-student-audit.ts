@@ -172,9 +172,13 @@ const labelFor = (field: string) => ({
   apellidoMaterno: 'Apellido materno', lugarTrabajoPadre: 'Trabajo del padre',
   lugarTrabajoMadre: 'Trabajo de la madre'
 } as Record<string,string>)[field] || field.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')
+const historyCache = new Map<string, { at: number; value: {events: HistoricalStudentAction[]; available: boolean; truncated: boolean; checked: number} }>()
 export const loadHistoricalActions = async (input: {
   from: Date; to: Date; planteles: string[]
 }) => {
+  const key = [input.from.toISOString(), input.to.toISOString(), [...input.planteles].sort().join(',')].join('|')
+  const stored = historyCache.get(key)
+  if (stored && Date.now() - stored.at < 90000) return stored.value
   const accounts = await resolveHistoricalAccounts()
   const combined: LokiRecord[] = []
   let truncated = false
@@ -186,7 +190,7 @@ export const loadHistoricalActions = async (input: {
     combined.push(...result.records)
     truncated ||= result.truncated
     available ||= result.available
-    start = end + 1
+    start = end
   }
   const result: HistoricalStudentAction[] = []
   const dedupe = new Set<string>()
@@ -219,5 +223,8 @@ export const loadHistoricalActions = async (input: {
       })
     }
   }
-  return { events: result, available, truncated, checked: combined.length }
+  const value = { events: result, available, truncated, checked: combined.length }
+  if (historyCache.size > 24) historyCache.clear()
+  historyCache.set(key, { at: Date.now(), value })
+  return value
 }
