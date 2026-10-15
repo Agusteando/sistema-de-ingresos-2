@@ -64,7 +64,7 @@ export default defineEventHandler(async (event) => {
     return {events,available:history.available,truncated:history.truncated,partial:history.partial,checked:history.checked,unmatched:history.unmatched}
   } catch(error:any) {
     const requestId=String(event.context.auroraRequestId||'')
-    console.warn('[historical-student-audit] query unavailable', {requestId,code:String(error?.code||''),message:String(error?.message||error)})
-    return {events:[],available:false,truncated:false,requestId,code:'AUDIT_HISTORY_UNAVAILABLE'}
+    console.warn('[historical-student-audit] query unavailable', {requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
+    throw createError({statusCode:503,message:'No se pudo completar la consulta.',data:{requestId,code:'AUDIT_HISTORY_UNAVAILABLE',retryable:true}})
   }
 })

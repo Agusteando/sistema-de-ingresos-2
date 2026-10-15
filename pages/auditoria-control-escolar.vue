@@ -318,10 +318,12 @@ const handleLegacyToggle = (event) => { if (event?.target?.open) void loadAudit(
 
 <style scoped>
 .control-audit-page {
-  display: grid;
-  gap: 1.15rem;
-  min-height: 100%;
-  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  height: 100%;
+  min-height: 0;
+  padding: 0;
   color: #16243a;
 }
 
@@ -725,4 +727,10 @@ const handleLegacyToggle = (event) => { if (event?.target?.open) void loadAudit(
 .legacy-audit>summary:after{content:"+";float:right;font-size:24px;line-height:1}
 .legacy-audit[open]>summary:after{content:"−"}
 .legacy-audit-content{padding:5px 8px 18px}
+</style>
+
+<style scoped>
+.control-audit-page>.change-workspace{flex:1;min-height:0}
+.legacy-audit{flex:0 0 auto;max-height:60%;overflow:auto}
+.legacy-audit>summary{padding:10px 16px;min-height:42px;font-size:16px}
 </style>

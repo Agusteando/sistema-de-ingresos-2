@@ -72,11 +72,11 @@ const parseSelections = (value: string) => {
   // The selector must come from server configuration, never a browser-supplied expression.
   return s.startsWith('{') && s.includes('}') ? [s] : []
 }
-const allowedLokiUrl = () => {
+export const allowedLokiUrl = () => {
   const raw = compact(process.env.AUDIT_LOKI_URL || process.env.LOKI_URL || process.env.GRAFANA_LOKI_URL || 'http://observability_loki:3100')
   const url = new URL(raw)
   if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid audit history endpoint')
-  url.pathname = url.pathname.replace(/\/$/, '') + '/loki/api/v1/query_range'
+  url.pathname = url.pathname.replace(/\/+$/, '').replace(/\/loki\/api\/v1\/(?:push|query|query_range)$/, '') + '/loki/api/v1/query_range'
   url.search = ''
   return url
 }
@@ -88,6 +88,8 @@ export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> =>
   const username = compact(process.env.AUDIT_LOKI_USERNAME || process.env.LOKI_USERNAME)
   const password = compact(process.env.AUDIT_LOKI_PASSWORD || process.env.LOKI_PASSWORD)
   const headers: Record<string,string> = { Accept: 'application/json' }
+  const tenant=compact(process.env.AUDIT_LOKI_TENANT_ID)
+  if(tenant)headers['X-Scope-OrgID']=tenant
   if (token) headers.Authorization = 'Bearer ' + token
   else if (username) headers.Authorization = 'Basic ' + Buffer.from(username + ':' + password).toString('base64')
   const filter = ' |~ "credentialization.submission.database-committed|centralized matricula overlay updated|matricula audited write|personas-autorizadas.student.save"'
@@ -137,7 +139,7 @@ export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> =>
     } catch (error) {
       lastError = error
       failed++
-      console.warn('[historical-student-audit] source query failed', { selector, message: String((error as Error)?.message || error) })
+      console.warn('[historical-student-audit] source query failed', { selector, endpoint:url.host, code:String((error as any)?.cause?.code||(error as any)?.code||''), message: String((error as Error)?.message || error) })
       // Other label families may still contain reachable streams; preserve partial results.
     }
   }

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import {createRequire} from 'node:module'
-import {mkdir,writeFile} from 'node:fs/promises'
+import {mkdir,writeFile,readFile} from 'node:fs/promises'
 const require=createRequire(import.meta.url)
 const {chromium}=require(process.env.VISUAL_PLAYWRIGHT_MODULE||'playwright')
 const base=process.env.VISUAL_BASE_URL||'http://127.0.0.1:3012'
@@ -13,67 +13,109 @@ try {
  for(const [width,height] of [[1920,1080],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]){
   browser=await chromium.launch({headless:true,...(process.env.VISUAL_BROWSER_EXECUTABLE?{executablePath:process.env.VISUAL_BROWSER_EXECUTABLE,args:['--no-sandbox','--disable-dev-shm-usage','--single-process','--use-gl=angle','--use-angle=swiftshader']}: {})})
   const context=await browser.newContext({viewport:{width,height}})
+  await context.addCookies([
+   {name:'auth_email',value:'visual@example.invalid',url:base},
+   {name:'auth_role',value:'superadmin',url:base},
+   {name:'auth_planteles',value:'PT%2CSM',url:base},
+   {name:'auth_has_control_escolar',value:'true',url:base},
+   {name:'auth_has_financial_access',value:'true',url:base},
+   {name:'auth_is_super_admin',value:'true',url:base}
+  ])
   const page=await context.newPage(),errors=[]
   page.on('pageerror',e=>errors.push(e.message))
+  page.on('response',r=>{if(r.status()>=500)console.error('HTTP '+r.status()+' '+r.url())})
+  page.on('requestfailed',r=>console.error('Request failed: '+r.url()+' '+r.failure()?.errorText))
+  const warnings=[]
+  page.on('console',m=>{if(['warning','error'].includes(m.type()))warnings.push(m.text())})
+  if(process.env.VISUAL_FONT_MODULES){
+   const fontRoot=process.env.VISUAL_FONT_MODULES
+   const fonts=new Map()
+   let css=''
+   for(const family of ['Montserrat','Fredoka'])for(const weight of [500,600,700]){
+    const file=family+'-'+weight+'.woff2'
+    fonts.set('/__audit_font__/'+file,await readFile(fontRoot+'/'+family.toLowerCase()+'/files/'+family.toLowerCase()+'-latin-'+weight+'-normal.woff2'))
+    css+='@font-face{font-family:'+family+';font-style:normal;font-weight:'+weight+';src:url('+base+'/__audit_font__/'+file+')}\n'
+   }
+   await page.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:css}))
+   await page.route('**/__audit_font__/**',route=>route.fulfill({contentType:'font/woff2',body:fonts.get(new URL(route.request().url()).pathname)}))
+  }
   let unavailable=false
   const categories=[['grupo','Grupo'],['nombre','Nombre'],['grado','Grado'],['estatus','Estatus'],['contacto','Contacto'],['trabajo','Lugares de trabajo'],['otros','Otros campos']].map(([key,label])=>({key,label}))
   const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
-  const make=(id,actor,source='Aurora',category='nombre')=>({id,eventId:1,date:day,recordedAt:day+' 09:42:18',matricula:'PT0123',student:'Alumno de prueba visual',field:category,fieldLabel:categories.find(c=>c.key===category).label,category,before:'Valor anterior',after:'Valor nuevo',source,actor,actorEmail:source==='Aurora'?'visual'+id+'@casitaiedis.edu.mx':'',avatar:source==='Aurora'?'https://lh3.googleusercontent.com/a/audit-fixture':'',flow:'test',quality:source==='Aurora'?'verified':'historical',plantel:'PT',ciclo:'2026'})
+  const make=(id,actor,source='Aurora',category='nombre')=>({id,eventId:1,date:day,recordedAt:day+' 09:42:18',matricula:'PT0123',student:'Alumno de prueba visual',field:category,fieldLabel:categories.find(c=>c.key===category).label,category,before:'Valor anterior',after:'Valor nuevo',source,actor,actorEmail:source==='Aurora'?'visual'+id+'@casitaiedis.edu.mx':'',avatar:source==='Aurora'?'https://lh3.googleusercontent.com/a/'+(id==='2'?'expired-fixture':'audit-fixture'):'',flow:'test',quality:source==='Aurora'?'verified':'historical',plantel:'PT',ciclo:'2026'})
   const stored=[make('1','Erika Ramos'),make('2','Mónica Pérez'),make('3','Ismael García'),make('5','Erika Ramos','Aurora','trabajo')]
   const external=[make('4','Husky Pass · Familia','Husky Pass')]
   await page.route('**/api/**',async route=>{
    const url=new URL(route.request().url())
+   if(!url.pathname.startsWith('/api/'))return route.continue()
+   if(url.pathname==='/api/directory/photo')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#9fc7b3"/></svg>'})
    if(url.pathname==='/api/control-escolar/audit/changes')return route.fulfill({json:{events:stored,categories,allowedPlanteles:['PT','SM'],truncated:false}})
-   if(url.pathname==='/api/control-escolar/audit/history')return route.fulfill({json:{events:unavailable?[]:external,available:!unavailable,truncated:false}})
+   if(url.pathname==='/api/control-escolar/audit/history')return unavailable?route.fulfill({status:503,json:{statusCode:503,message:'No se pudo completar la consulta.',data:{requestId:'fixture-history-failure',code:'AUDIT_HISTORY_UNAVAILABLE',retryable:true}}}):route.fulfill({json:{events:external,available:true,truncated:false}})
    return route.fulfill({status:401,json:{message:'Synthetic unauthenticated API; visual fixture only'}})
   })
+  await page.route('https://lh3.googleusercontent.com/a/expired-fixture',route=>route.fulfill({status:404,body:''}))
   await page.route('https://lh3.googleusercontent.com/a/audit-fixture',route=>route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><rect width="80" height="80" fill="#cfe7da"/><circle cx="40" cy="29" r="15" fill="#719b83"/><ellipse cx="40" cy="78" rx="29" ry="30" fill="#476f5a"/></svg>'}))
-  await page.goto(base+'/__visual-lab/audit',{waitUntil:'networkidle',timeout:120000})
-  await page.locator('.matrix-cell').filter({hasText:'Husky Pass'}).waitFor()
+  await page.goto(base+'/__visual-lab/audit',{waitUntil:'domcontentloaded',timeout:120000})
+  try{await page.locator('.matrix-cell').filter({hasText:'Husky Pass'}).waitFor({timeout:60000})}catch(error){
+   await page.screenshot({path:output+`/failure-${width}x${height}.png`})
+   console.error(JSON.stringify({width,height,pageErrors:errors,warnings:warnings.slice(-10),html:(await page.locator('.income-content').innerHTML()).slice(0,2000),url:page.url(),body:(await page.locator('body').innerText()).slice(0,2200)}));throw error
+  }
   const cell=page.locator('.matrix-cell').filter({hasText:'Husky Pass'})
+  try{await cell.filter({hasText:'Erika Ramos'}).waitFor({timeout:30000})}catch(error){console.error((await page.locator('.change-workspace').innerText()).slice(0,2000));await page.screenshot({path:output+`/failure-${width}x${height}.png`});throw error}
+  await cell.locator('img[src*="directory/photo"]').waitFor({timeout:30000})
+  await page.waitForFunction(()=>[...document.querySelectorAll('.matrix-cell img')].every(img=>img.complete&&img.naturalWidth>0))
   assert.match(await cell.innerText(),/Erika Ramos/)
   assert.match(await cell.innerText(),/Mónica Pérez/)
   assert.match(await cell.innerText(),/Ismael García/)
   assert.equal(await cell.locator('.cell-source.husky').count(),1)
   assert.equal(await cell.locator('.audit-avatar img').count(),3)
   assert.ok(await cell.locator('img').first().evaluate(img=>img.complete&&img.naturalWidth>0))
+  assert.equal(await cell.locator('img[src*="directory/photo"]').count(),1)
+  assert.ok(await cell.locator('img[src*="directory/photo"]').evaluate(img=>img.complete&&img.naturalWidth>0))
   assert.equal(await page.locator('.change-workspace select').count(),0)
-  // Click a cell already visible in the chart; the document must not jump to the old list.
+  // Non-modal inspector stays alongside the grid on desktop, below it on mobile.
   await cell.scrollIntoViewIfNeeded()
-  const before=await page.evaluate(()=>({window:window.scrollY,content:document.querySelector('.income-content')?.scrollTop||0,matrix:document.querySelector('.matrix-scroll').scrollTop}))
-  await cell.click()
-  const dialog=page.getByRole('dialog')
-  await dialog.waitFor({state:'visible'})
-  const box=await dialog.boundingBox()
+  const before=await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop}))
+  console.log('Checking audit viewport '+width+'x'+height)
+  const point=await cell.evaluate(el=>{const r=el.getBoundingClientRect(),s=el.closest('.matrix-scroll').getBoundingClientRect();return {x:(Math.max(r.left,s.left+159)+Math.min(r.right,s.right)-2)/2,y:(Math.max(r.top,s.top+55)+Math.min(r.bottom,s.bottom)-2)/2}})
+  await page.mouse.click(point.x,point.y)
+  const inspector=page.getByRole('complementary',{name:'Detalle de cambios'})
+  await inspector.getByRole('heading',{name:/Nombre/}).waitFor()
+  assert.equal(await page.locator('dialog').count(),0)
+  const box=await inspector.boundingBox(),gridBox=await page.locator('.audit-overview').boundingBox()
   assert.ok(box.y>=0&&box.y+box.height<=height+1)
-  assert.ok(await dialog.getByRole('button',{name:'Cerrar detalles'}).isVisible())
-  assert.ok(await dialog.getByText('Husky Pass · Familia',{exact:true}).isVisible())
-  const after=await page.evaluate(()=>({window:window.scrollY,content:document.querySelector('.income-content')?.scrollTop||0,matrix:document.querySelector('.matrix-scroll').scrollTop}))
+  if(width>760)assert.ok(box.x>=gridBox.x+gridBox.width-1,'inspector must not overlap matrix')
+  assert.ok(await inspector.getByText('Husky Pass · Familia',{exact:true}).isVisible())
+  const after=await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop}))
   assert.deepEqual(after,before)
+  assert.equal(await page.locator('.field-heading').count(),7)
+  await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
+  if(width===1920){const last=await page.locator('.field-heading').last().boundingBox(),matrix=await page.locator('.matrix-scroll').boundingBox();assert.ok(last.y+last.height<=matrix.y+matrix.height+1,'all seven field rows visible at desktop size')}
+  assert.ok(await page.locator('.change-workspace').evaluate(el=>getComputedStyle(el).fontFamily.includes('Montserrat')))
   await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
   await page.keyboard.press('Escape')
-  await dialog.waitFor({state:'hidden'})
-  assert.equal(await cell.evaluate(el=>el===document.activeElement),true)
+  await inspector.getByRole('heading',{name:'Cambios recientes'}).waitFor()
   await page.getByRole('button',{name:'Filtrar plantel',exact:true}).click()
   await page.getByPlaceholder('Buscar plantel…').fill('secundaria')
   await page.getByRole('option',{name:'Secundaria Metepec'}).click()
   await page.getByRole('button',{name:'Filtrar plantel',exact:true}).click()
   await page.getByPlaceholder('Buscar plantel…').fill('toluca')
   await page.getByRole('option',{name:'Primaria Toluca'}).click()
-  await page.getByRole('button',{name:'Filtrar',exact:true}).click()
+  await page.getByRole('button',{name:'Más filtros',exact:true}).click()
   await page.getByRole('button',{name:'Sistema',exact:true}).click()
   await page.getByPlaceholder('Buscar sistema…').fill('husky')
   await page.getByRole('option',{name:'Husky Pass',exact:true}).click()
   assert.equal(await page.locator('.matrix-cell .mini-name').filter({hasText:'Erika'}).count(),0)
-  await page.getByRole('button',{name:'Limpiar',exact:true}).click()
+  await page.getByRole('button',{name:'Limpiar filtros',exact:true}).click()
   unavailable=true
   await page.getByRole('button',{name:'Actualizar',exact:true}).click()
-  await page.getByText('Historial anterior no disponible',{exact:true}).waitFor()
-  assert.match(await page.locator('.source-summary>.husky').innerText(),/—/)
+  await page.getByText('No se pudo completar la consulta.',{exact:true}).waitFor()
+  await page.getByText('Ref. fixture-history-failure',{exact:true}).waitFor()
+  assert.match(await page.locator('.source-legend>.husky').innerText(),/—/)
   assert.equal(await page.locator('.matrix-cell').filter({hasText:'Erika Ramos'}).count()>0,true)
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
   assert.deepEqual(errors,[])
-  results.push({width,height,dialogInViewport:true,scrollPositionPreserved:true,workspaceImagesRendered:true,allActorsAndHuskyVisible:true,searchableFilters:true,unavailableHistoryExplicit:true,pageErrors:errors})
+  results.push({width,height,inspectorInViewport:true,scrollPositionPreserved:true,workspaceImagesRendered:true,allActorsAndHuskyVisible:true,nonModalInspector:true,existingFonts:true,searchableFilters:true,unavailableHistoryExplicit:true,pageErrors:errors})
   await browser.close();browser=null
  }
  await writeFile(output+'/results.json',JSON.stringify({synthetic:true,results},null,2))
