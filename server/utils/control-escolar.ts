@@ -21,7 +21,7 @@ import {
   getHistoricalEnrollmentConceptEvidence,
   parseEnrollmentConceptIds,
 } from "./enrollment-evidence";
-import { controlEscolarCentralQuery } from "./control-escolar-central";
+import { controlEscolarCentralQuery, getControlEscolarCentralDb } from "./control-escolar-central";
 import {
   fetchVerifiedControlEscolarScopeRows,
   maybeRefreshVerifiedControlEscolarScopeCache,
@@ -3345,6 +3345,7 @@ const buildEditableMatriculaEntries = (
   return editableEntries;
 };
 
+// Atomic field-level evidence. The write and its attribution must succeed or fail together.
 const upsertMatriculaOverlay = async (
   agentId: string,
   normalizedMatricula: string,
@@ -3352,70 +3353,127 @@ const upsertMatriculaOverlay = async (
   user: AuthSessionUser,
   basePlantel: unknown,
   schema: ControlEscolarSchema,
+  auditFlow = "aurora_control_escolar_write",
 ) => {
-  const [existing] = await controlEscolarCentralQuery<any[]>(
-    `SELECT matricula FROM \`matricula\` WHERE UPPER(TRIM(\`matricula\`)) = ? LIMIT 1`,
-    [canonicalMatriculaKey(normalizedMatricula)],
-  );
-  const auditContext = {
-    user: user.email,
-    agentId,
-    matricula: normalizedMatricula,
-    fields: editableEntries.map((entry) => entry.field),
+  const connection = await getControlEscolarCentralDb().getConnection();
+  const key = canonicalMatriculaKey(normalizedMatricula);
+  const fieldColumns = Array.from(new Set(editableEntries.map((entry) => entry.column)));
+  if (!fieldColumns.length) return connection.release();
+  const selection = fieldColumns.map(escapeColumn).join(", ");
+  const identityWhere = "UPPER(TRIM(`matricula`)) = ?";
+  const valueForAudit = (value: unknown, field: string) => {
+    if (value === null || value === undefined) return null;
+    if (typeof value === "object" && value instanceof Date) return value.toISOString();
+    const normalized = String(value);
+    if (/foto|adjunt|ine|curp|password|token/i.test(field)) {
+      return normalized ? "[Registrado]" : null;
+    }
+    return normalized.slice(0, 500);
   };
-
-  if (existing) {
-    const assignments = editableEntries.map(
-      (entry) => `${escapeColumn(entry.column)} = ?`,
+  try {
+    await connection.beginTransaction();
+    const [beforeRows] = await connection.query<any[]>(
+      `SELECT ${selection} FROM \`matricula\` WHERE ${identityWhere} LIMIT 1 FOR UPDATE`,
+      [key],
     );
-    const params = [...editableEntries.map((entry) => entry.value)];
-    if (schema.matricula.has("updated_at"))
-      assignments.push("`updated_at` = CURRENT_TIMESTAMP");
-    if (schema.matricula.has("updated_by")) {
-      assignments.push("`updated_by` = ?");
-      params.push(user.email);
-    }
-    params.push(canonicalMatriculaKey(normalizedMatricula));
-    await controlEscolarCentralQuery(
-      `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE UPPER(TRIM(\`matricula\`)) = ?`,
-      params,
-    );
-  } else {
-    const columns = ["matricula"];
-    const values: any[] = [normalizedMatricula];
-
-    if (schema.matricula.has("plantel")) {
-      columns.push("plantel");
-      values.push(normalizePlantel(basePlantel || agentId));
-    }
-
-    if (schema.matricula.has("created_by")) {
-      columns.push("created_by");
-      values.push(user.email);
-    }
-
-    if (schema.matricula.has("updated_by")) {
-      columns.push("updated_by");
-      values.push(user.email);
-    }
-
-    editableEntries.forEach((entry) => {
-      if (!columns.includes(entry.column)) {
-        columns.push(entry.column);
-        values.push(entry.value);
+    const before = beforeRows[0] || null;
+    if (before) {
+      const assignments = editableEntries.map((entry) => `${escapeColumn(entry.column)} = ?`);
+      const params: any[] = editableEntries.map((entry) => entry.value);
+      if (schema.matricula.has("updated_at")) assignments.push("`updated_at` = CURRENT_TIMESTAMP");
+      if (schema.matricula.has("updated_by")) {
+        assignments.push("`updated_by` = ?");
+        params.push(user.email);
       }
-    });
-
-    await controlEscolarCentralQuery(
-      `INSERT INTO \`matricula\` (${columns.map(escapeColumn).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
-      values,
+      await connection.query(
+        `UPDATE \`matricula\` SET ${assignments.join(", ")} WHERE ${identityWhere}`,
+        [...params, key],
+      );
+    } else {
+      const columns = ["matricula"];
+      const values: any[] = [normalizedMatricula];
+      if (schema.matricula.has("plantel")) {
+        columns.push("plantel");
+        values.push(normalizePlantel(basePlantel || agentId));
+      }
+      if (schema.matricula.has("created_by")) {
+        columns.push("created_by");
+        values.push(user.email);
+      }
+      if (schema.matricula.has("updated_by")) {
+        columns.push("updated_by");
+        values.push(user.email);
+      }
+      for (const entry of editableEntries) {
+        if (!columns.includes(entry.column)) {
+          columns.push(entry.column);
+          values.push(entry.value);
+        }
+      }
+      await connection.query(
+        `INSERT INTO \`matricula\` (${columns.map(escapeColumn).join(", ")}) VALUES (${columns.map(() => "?").join(", ")})`,
+        values,
+      );
+    }
+    const [afterRows] = await connection.query<any[]>(
+      `SELECT ${selection} FROM \`matricula\` WHERE ${identityWhere} LIMIT 1`,
+      [key],
     );
+    const after = afterRows[0] || {};
+    const changes = editableEntries
+      .filter((entry) => String(before?.[entry.column] ?? "") !== String(after?.[entry.column] ?? ""))
+      .map((entry) => ({
+        field: entry.field,
+        before: valueForAudit(before?.[entry.column], entry.field),
+        after: valueForAudit(after?.[entry.column], entry.field),
+      }));
+    if (changes.length) {
+      const payload = JSON.stringify({
+        version: 2,
+        evidence: "transactional",
+        changes,
+        fields: changes.map((change) => change.field),
+        operation: auditFlow,
+      });
+      await connection.query(
+        `INSERT INTO control_escolar_audit_events (
+          event_type, plantel, ciclo, matricula,
+          actor_email, actor_name, actor_role, summary,
+          source_base, source_flow, payload
+        ) VALUES ('student_update', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        [
+          normalizePlantel(agentId),
+          "",
+          normalizedMatricula,
+          user.email || null,
+          user.name || user.email || "Usuario institucional",
+          user.role || "",
+          `Modificó ${changes.length} campo(s) de ${normalizedMatricula}`,
+          "CONTROL_ESCOLAR_MYSQL.matricula",
+          auditFlow,
+          payload,
+        ],
+      );
+    }
+    await connection.commit();
+    console.info("[Control Escolar] matricula audited write", {
+      matricula: normalizedMatricula,
+      agentId,
+      actor: user.email,
+      changedFields: changes.map((item) => item.field),
+      source: auditFlow,
+    });
+  } catch (error) {
+    await connection.rollback().catch(() => undefined);
+    console.error("[Control Escolar] atomic change audit failed; write rolled back", {
+      matricula: normalizedMatricula,
+      agentId,
+      error: String((error as Error)?.message || error),
+    });
+    throw error;
+  } finally {
+    connection.release();
   }
-
-  console.info(
-    "[Control Escolar] centralized matricula overlay updated",
-    auditContext,
-  );
 };
 
 export const CONTROL_ESCOLAR_MATRICULA_IMPORT_FIELDS = [
@@ -3630,6 +3688,7 @@ export const importControlEscolarMatriculaUpdates = async (
         user,
         visibleStudent.plantel || visibleStudent.basePlantel || agentId,
         schema,
+        "aurora_control_escolar_csv",
       );
       summary.updated++;
     } catch (error: any) {

@@ -88,17 +88,17 @@ const resolveRequestedPlantel = (event: any, user: AuthSessionUser, requested?: 
 
 const pruneAuditEvents = async (plantel: string, ciclo: string) => {
   await controlEscolarCentralQuery(
-    `DELETE FROM control_escolar_audit_events WHERE created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
+    `DELETE FROM control_escolar_audit_events WHERE event_type IN ('page_snapshot', 'control_login') AND created_at < DATE_SUB(NOW(), INTERVAL ? DAY)`,
     [AUDIT_RETENTION_DAYS]
   ).catch(() => null)
 
   if (ciclo) {
     await controlEscolarCentralQuery(
       `DELETE FROM control_escolar_audit_events
-       WHERE plantel = ? AND ciclo = ? AND id NOT IN (
+       WHERE plantel = ? AND ciclo = ? AND event_type IN ('page_snapshot', 'control_login') AND id NOT IN (
          SELECT id FROM (
            SELECT id FROM control_escolar_audit_events
-           WHERE plantel = ? AND ciclo = ?
+           WHERE plantel = ? AND ciclo = ? AND event_type IN ('page_snapshot', 'control_login')
            ORDER BY created_at DESC
            LIMIT 1500
          ) keepers

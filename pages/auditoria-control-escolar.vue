@@ -1,5 +1,9 @@
 <template>
   <div class="control-audit-page">
+    <FieldChangeMatrix />
+    <details class="legacy-audit" @toggle="handleLegacyToggle">
+      <summary>Auditoría anterior y avance</summary>
+      <div class="legacy-audit-content">
     <section class="audit-hero">
       <div class="audit-hero-copy">
         <span>Auditoría Control Escolar</span>
@@ -180,12 +184,15 @@
         </article>
       </aside>
     </section>
+      </div>
+    </details>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import { useCookie } from '#app'
+import FieldChangeMatrix from '~/components/control-escolar/FieldChangeMatrix.vue'
 import {
   LucideCheckCircle,
   LucideClock3,
@@ -305,7 +312,7 @@ const loadAudit = async () => {
   }
 }
 
-onMounted(loadAudit)
+const handleLegacyToggle = (event) => { if (event?.target?.open) void loadAudit() }
 </script>
 
 <style scoped>
@@ -708,4 +715,13 @@ onMounted(loadAudit)
   }
   .audit-timeline-head time { flex: initial; }
 }
+</style>
+
+<style scoped>
+.legacy-audit{border:1px solid #dfe7ea;border-radius:16px;background:#fff;overflow:hidden}
+.legacy-audit>summary{cursor:pointer;list-style:none;padding:18px 22px;font:750 17px Montserrat,system-ui,sans-serif;color:#365366;min-height:58px}
+.legacy-audit>summary::-webkit-details-marker{display:none}
+.legacy-audit>summary:after{content:"+";float:right;font-size:24px;line-height:1}
+.legacy-audit[open]>summary:after{content:"−"}
+.legacy-audit-content{padding:5px 8px 18px}
 </style>
