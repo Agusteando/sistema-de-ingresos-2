@@ -50,7 +50,7 @@ try {
    if(!url.pathname.startsWith('/api/'))return route.continue()
    if(url.pathname==='/api/directory/photo')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#9fc7b3"/></svg>'})
    if(url.pathname==='/api/control-escolar/audit/changes')return route.fulfill({json:{events:stored,categories,allowedPlanteles:['PT','SM'],truncated:false}})
-   if(url.pathname==='/api/control-escolar/audit/history')return route.fulfill({json:{events:unavailable?[]:external,available:!unavailable,truncated:false}})
+   if(url.pathname==='/api/control-escolar/audit/history')return unavailable?route.fulfill({status:503,json:{statusCode:503,message:'No se pudo completar la consulta.',data:{requestId:'fixture-history-failure',code:'AUDIT_HISTORY_UNAVAILABLE',retryable:true}}}):route.fulfill({json:{events:external,available:true,truncated:false}})
    return route.fulfill({status:401,json:{message:'Synthetic unauthenticated API; visual fixture only'}})
   })
   await page.route('https://lh3.googleusercontent.com/a/expired-fixture',route=>route.fulfill({status:404,body:''}))
@@ -61,8 +61,9 @@ try {
    console.error(JSON.stringify({width,height,pageErrors:errors,warnings:warnings.slice(-10),html:(await page.locator('.income-content').innerHTML()).slice(0,2000),url:page.url(),body:(await page.locator('body').innerText()).slice(0,2200)}));throw error
   }
   const cell=page.locator('.matrix-cell').filter({hasText:'Husky Pass'})
-  await cell.filter({hasText:'Erika Ramos'}).waitFor({timeout:30000})
+  try{await cell.filter({hasText:'Erika Ramos'}).waitFor({timeout:30000})}catch(error){console.error((await page.locator('.change-workspace').innerText()).slice(0,2000));await page.screenshot({path:output+`/failure-${width}x${height}.png`});throw error}
   await cell.locator('img[src*="directory/photo"]').waitFor({timeout:30000})
+  await page.waitForFunction(()=>[...document.querySelectorAll('.matrix-cell img')].every(img=>img.complete&&img.naturalWidth>0))
   assert.match(await cell.innerText(),/Erika Ramos/)
   assert.match(await cell.innerText(),/Mónica Pérez/)
   assert.match(await cell.innerText(),/Ismael García/)
@@ -88,6 +89,7 @@ try {
   const after=await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop}))
   assert.deepEqual(after,before)
   assert.equal(await page.locator('.field-heading').count(),7)
+  await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
   if(width===1920){const last=await page.locator('.field-heading').last().boundingBox(),matrix=await page.locator('.matrix-scroll').boundingBox();assert.ok(last.y+last.height<=matrix.y+matrix.height+1,'all seven field rows visible at desktop size')}
   assert.ok(await page.locator('.change-workspace').evaluate(el=>getComputedStyle(el).fontFamily.includes('Montserrat')))
   await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
@@ -108,6 +110,7 @@ try {
   unavailable=true
   await page.getByRole('button',{name:'Actualizar',exact:true}).click()
   await page.getByText('No se pudo completar la consulta.',{exact:true}).waitFor()
+  await page.getByText('Ref. fixture-history-failure',{exact:true}).waitFor()
   assert.match(await page.locator('.source-legend>.husky').innerText(),/—/)
   assert.equal(await page.locator('.matrix-cell').filter({hasText:'Erika Ramos'}).count()>0,true)
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)

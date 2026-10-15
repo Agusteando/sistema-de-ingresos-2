@@ -201,6 +201,8 @@ Run `scripts/verify-account-ledgers-ui.mjs` using the same Playwright, Chromium 
 
 Run `node scripts/verify-audit-workspace-ui.mjs` against a dev server (`VISUAL_BASE_URL`, default `http://127.0.0.1:3012`). Existing `VISUAL_PLAYWRIGHT_MODULE`, `VISUAL_BROWSER_EXECUTABLE` and `VISUAL_EVIDENCE_DIR` overrides are supported. The gate checks 1920×1080, 1366×768, 1024×768, 900×640, 390×844 and 1150×410: non-modal inspector bounds, non-overlap with the matrix, preserved mouse-selection scroll, Escape to clear selection, all actors/system labels, stored-photo rendering and Directory fallback after an expired image, searchable filters, failure visibility and no document overflow/page errors. At the largest size all seven field rows must be visible. Typography inherits the existing `--font-body` and `--font-display` variables.
 
+Validation on 2026-10-15 passed all six viewports in the complete Nuxt app with the real default sidebar and existing font families, synthetic API/image responses, a simulated historical HTTP 503 and its visible request reference. The production build and 16 backend/profile/permission/API tests also passed. Real-data acceptance remains pending.
+
 The same component gate can run in a Vite host with a reactive fixture `useFetch` adapter for focused checks. Record which host was tested. Run `npm run build` separately.
 
 Backend checks: `node --test tests/historical-student-audit.test.mjs tests/audit-actor-profile.test.mjs tests/audit-changes-handler.test.mjs tests/audit-history-handler.test.mjs`. These are parser/profile/API contract regressions, not real-data acceptance.
