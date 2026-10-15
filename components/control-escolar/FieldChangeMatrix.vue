@@ -13,10 +13,8 @@
     <div class="top-controls">
       <label class="campus-control">
         <span>Plantel</span>
-        <select v-model="plantel" aria-label="Filtrar plantel">
-          <option value="ALL">Todos mis planteles</option>
-          <option v-for="code in campuses" :key="code" :value="code">{{ campusLabel(code) }}</option>
-        </select>
+        <SearchableSelect v-model="plantel" :options="campusOptions" :clearable="false"
+          accessible-label="Filtrar plantel" search-placeholder="Buscar plantel…" />
       </label>
       <div class="period-area">
         <span class="filter-label">Periodo</span>
@@ -39,19 +37,20 @@
     <div v-if="!validDates" class="minor-notice">Selecciona un periodo de hasta 90 días.</div>
     <div v-if="showFilters" class="secondary-filters">
       <input v-model="search" type="search" aria-label="Buscar" placeholder="Alumno, matrícula o usuario…" />
-      <select v-model="source" aria-label="Sistema">
-        <option value="ALL">Todos los sistemas</option>
-        <option value="Aurora">Aurora</option>
-        <option value="Husky Pass">Husky Pass</option>
-        <option value="Otro">Otros</option>
-      </select>
+      <SearchableSelect v-model="source" :options="sourceOptions" :clearable="false"
+        accessible-label="Sistema" search-placeholder="Buscar sistema…" />
       <button type="button" @click="resetFilters">Limpiar</button>
     </div>
 
-    <div class="legend">
-      <span><i class="legend-color aurora"></i>Aurora</span>
-      <span><i class="legend-color husky"></i>Husky Pass</span>
-      <span><i class="legend-color other"></i>Otros</span>
+    <div class="source-summary" aria-label="Registros por sistema" aria-live="polite">
+      <div v-for="system in ['Aurora','Husky Pass','Otro']" :key="system" :class="sourceClass(system)">
+        <span>{{ system==='Otro'?'Otros':system }}</span>
+        <strong>{{ busy ? '…' : systemCount(system) }}</strong>
+      </div>
+      <div v-if="historyUnavailable" class="history-retry" role="status">
+        <span>Historial anterior no disponible</span>
+        <button type="button" :disabled="busy" @click="refreshHistory">Reintentar</button>
+      </div>
     </div>
 
     <div v-if="queryError" class="error-message" role="alert">
@@ -90,16 +89,14 @@
               @click="selectCell(category.key,day.key)">
               <template v-if="cell(category.key,day.key).length">
                 <span class="cell-number">{{ cell(category.key,day.key).length }}</span>
-                <span v-for="actor in cellActors(category.key,day.key).slice(0,2)" :key="actor.key" class="mini-actor">
-                  <span class="avatar" :class="sourceClass(actor.source)">
-                    <span>{{ initials(actor.name,actor.source) }}</span>
-                    <img v-if="actor.avatar" :src="actor.avatar" alt="" loading="lazy" @error="hideBrokenImage"/>
-                  </span>
+                <span v-for="system in cellSources(category.key,day.key)" :key="system.name" class="cell-source" :class="sourceClass(system.name)">
+                  {{ system.name==='Otro'?'Otros':system.name }} <b>{{ system.count }}</b>
+                </span>
+                <span v-for="actor in cellActors(category.key,day.key)" :key="actor.key" class="mini-actor">
+                  <AuditActorAvatar :src="actor.avatar" :name="actor.name" :source="actor.source" />
                   <span class="mini-name">{{ actor.name }}</span>
                 </span>
-                <span v-if="cellActors(category.key,day.key).length>2" class="more-actors">
-                  +{{ cellActors(category.key,day.key).length-2 }}
-                </span>
+
               </template>
               <span v-else class="no-change">—</span>
             </button>
@@ -108,69 +105,46 @@
       </div>
 
       <div class="events-heading">
-        <div>
-          <h2>{{ selectionTitle }}</h2>
-          <span>{{ selectedEvents.length }} registros</span>
-        </div>
-        <button v-if="selected" type="button" class="clear-selection" @click="selected=null">Ver todos</button>
+        <div><h2>Cambios recientes</h2><span>{{ filteredEvents.length }} registros</span></div>
       </div>
-
       <div class="event-list">
-        <article v-for="record in selectedEvents.slice(0,visibleCount)" :key="record.id" class="event-card">
-          <div class="event-head">
-            <div class="event-actor">
-              <span class="avatar large" :class="sourceClass(record.source)">
-                <span>{{ initials(record.actor,record.source) }}</span>
-                <img v-if="record.avatar" :src="record.avatar" alt="" loading="lazy" @error="hideBrokenImage"/>
-              </span>
-              <div class="actor-lines">
-                <strong>{{ record.source === 'Husky Pass' ? 'Husky Pass · Familia' : record.actor }}</strong>
-                <span>{{ record.source }} · {{ formatTime(record.recordedAt) }}</span>
-              </div>
-            </div>
-            <span class="field-chip" :class="sourceClass(record.source)">{{ record.fieldLabel }}</span>
-          </div>
-          <div class="student-line">
-            <strong>{{ record.student }}</strong>
-            <span>{{ record.matricula }} · {{ record.plantel }}</span>
-          </div>
-          <div v-if="record.quality==='verified'" class="diff">
-            <div><span>Antes</span><strong>{{ displayValue(record.before) }}</strong></div>
-            <LucideArrowRight :size="22"/>
-            <div><span>Después</span><strong>{{ displayValue(record.after) }}</strong></div>
-          </div>
-          <div v-else class="activity-mark">
-            <LucideHistory :size="19"/> {{ record.source==='Husky Pass' ? 'Envío registrado' : 'Actualización registrada' }}
-          </div>
-          <div class="event-footer">
-            <span>{{ record.quality==='verified' ? 'Cambio guardado' : 'Registro histórico' }}</span>
-            <span v-if="record.eventId">#{{ record.eventId }}</span>
-          </div>
-        </article>
-
-        <div v-if="busy && !selectedEvents.length" class="empty-area">
-          <LucideRefreshCw class="spinning" :size="27"/>
-          <strong>Cargando historial…</strong>
+        <AuditChangeCard v-for="record in filteredEvents.slice(0,visibleCount)" :key="record.id" :record="record" />
+        <div v-if="busy && !filteredEvents.length" class="empty-area">
+          <LucideRefreshCw class="spinning" :size="27"/><strong>Cargando historial…</strong>
         </div>
-        <div v-else-if="!selectedEvents.length" class="empty-area">
-          <LucideInbox :size="29" />
-          <strong>Sin registros en estas fechas</strong>
+        <div v-else-if="!filteredEvents.length" class="empty-area">
+          <LucideInbox :size="29" /><strong>{{ historyUnavailable ? 'Historial incompleto' : 'Sin registros en estas fechas' }}</strong>
         </div>
-        <button v-if="selectedEvents.length>visibleCount" class="load-more" type="button" @click="visibleCount+=30">
-          Ver más ({{ selectedEvents.length-visibleCount }})
+        <button v-if="filteredEvents.length>visibleCount" class="load-more" type="button" @click="visibleCount+=30">
+          Ver más ({{ filteredEvents.length-visibleCount }})
         </button>
       </div>
+      <dialog ref="detailDialog" class="change-dialog" aria-labelledby="audit-detail-title" @close="selected=null" @click="dismissBackdrop">
+        <header class="detail-header">
+          <div><h2 id="audit-detail-title">{{ selectionTitle }}</h2><span>{{ selectedEvents.length }} registros</span></div>
+          <button type="button" class="icon-button" aria-label="Cerrar detalles" autofocus @click="closeDetails"><LucideX :size="24"/></button>
+        </header>
+        <div class="detail-records">
+          <AuditChangeCard v-for="record in selectedEvents.slice(0,detailCount)" :key="record.id" :record="record" />
+          <div v-if="!selectedEvents.length" class="empty-area"><LucideInbox :size="29"/><strong>Sin registros en esta selección</strong></div>
+          <button v-if="selectedEvents.length>detailCount" class="load-more" type="button" @click="detailCount+=30">Ver más ({{ selectedEvents.length-detailCount }})</button>
+        </div>
+      </dialog>
+      <div v-if="history?.partial" class="minor-notice" role="status">Historial incompleto. <button type="button" @click="refreshHistory">Reintentar</button></div>
       <div v-if="(data?.truncated || history?.truncated)" class="minor-notice">Hay más registros. Acota el periodo para verlos.</div>
-      <div v-if="history && history.available===false" class="minor-notice">No se pudo recuperar todo el historial anterior.</div>
+
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
 import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import SearchableSelect from '~/components/SearchableSelect.vue'
+import AuditActorAvatar from './AuditActorAvatar.vue'
+import AuditChangeCard from './AuditChangeCard.vue'
 import {
-  LucideArrowRight, LucideRefreshCw, LucideSlidersHorizontal,
-  LucideCalendarDays, LucideChevronLeft, LucideChevronRight, LucideInbox, LucideHistory
+  LucideRefreshCw, LucideSlidersHorizontal,
+  LucideCalendarDays, LucideChevronLeft, LucideChevronRight, LucideInbox, LucideX
 } from 'lucide-vue-next'
 
 type Change = {
@@ -180,7 +154,7 @@ type Change = {
   quality:'verified'|'historical'; plantel:string; ciclo:string
 }
 type MainResponse={categories:{key:string;label:string}[];allowedPlanteles:string[];events:Change[];truncated:boolean}
-type HistoryResponse={events:Change[];available:boolean;truncated:boolean}
+type HistoryResponse={events:Change[];available:boolean;truncated:boolean;partial?:boolean;requestId?:string}
 type AvatarActor={key:string;name:string;source:string;avatar:string}
 const todayParts = new Intl.DateTimeFormat('en-US',{
   timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'
@@ -202,6 +176,8 @@ const search=ref('')
 const selected=ref<{category:string;day?:string}|null>(null)
 const showFilters=ref(false)
 const visibleCount=ref(30)
+const detailCount=ref(30)
+const detailDialog=ref<HTMLDialogElement|null>(null)
 const matrixScroller=ref<HTMLElement|null>(null)
 const from=computed(()=>range.value==='custom'?customFrom.value:shift(today,1-Number(range.value)))
 const to=computed(()=>range.value==='custom'?customTo.value:today)
@@ -217,11 +193,18 @@ const fetchQuery=computed(()=>({
 const {data,status,error,refresh}=await useFetch<MainResponse>('/api/control-escolar/audit/changes',{
   query:fetchQuery,cache:'no-store',default:()=>({categories:[],allowedPlanteles:[],events:[],truncated:false})
 })
-const {data:history,status:historyStatus,refresh:refreshHistory}=await useFetch<HistoryResponse>('/api/control-escolar/audit/history',{
+const {data:history,status:historyStatus,error:historyError,refresh:refreshHistory}=await useFetch<HistoryResponse>('/api/control-escolar/audit/history',{
   query:fetchQuery,server:false,cache:'no-store',default:()=>({events:[],available:true,truncated:false})
 })
 const busy=computed(()=>status.value==='pending'||historyStatus.value==='pending')
 const queryError=computed(()=>Boolean(error.value))
+const historyUnavailable=computed(()=>Boolean(historyError.value)||history.value?.available===false)
+const systemCount=(system:string)=>{
+  const count=filteredEvents.value.filter(e=>e.source===system).length
+  return !count&&historyUnavailable.value&&system!=='Otro'?'—':count
+}
+const sourceOptions=[{value:'ALL',label:'Todos los sistemas'},{value:'Aurora',label:'Aurora'},{value:'Husky Pass',label:'Husky Pass'},{value:'Otro',label:'Otros'}]
+const campusOptions=computed(()=>[{value:'ALL',label:'Todos mis planteles'},...campuses.value.map(code=>({value:code,label:campusLabel(code),search:code}))])
 const campuses=computed(()=>data.value?.allowedPlanteles||[])
 const campusLabel=(code:string)=>({
   PM:'Primaria Metepec',PT:'Primaria Toluca',SM:'Secundaria Metepec',ST:'Secundaria Toluca',
@@ -271,12 +254,17 @@ const indexed=computed(()=>{
   return groups
 })
 const cell=(category:string,day:string)=>indexed.value.get(category+'|'+day)||[]
+const cellSources=(category:string,day:string)=>{
+  const counts=new Map<string,number>()
+  for(const entry of cell(category,day))counts.set(entry.source,(counts.get(entry.source)||0)+1)
+  return [...counts].map(([name,count])=>({name,count}))
+}
 const cellActors=(category:string,day:string):AvatarActor[]=>{
   const unique=new Map<string,AvatarActor>()
   for(const entry of cell(category,day)){
     const name=entry.source==='Husky Pass'?'Husky Pass · Familia':entry.actor
     const key=entry.source+'|'+(entry.actorEmail||name)
-    if(!unique.has(key))unique.set(key,{key,name,source:entry.source,avatar:entry.avatar})
+    if(!unique.has(key)||(!unique.get(key)?.avatar&&entry.avatar))unique.set(key,{key,name,source:entry.source,avatar:entry.avatar})
   }
   return [...unique.values()]
 }
@@ -292,10 +280,6 @@ const selectedEvents=computed(()=>filteredEvents.value.filter(e=>
 const selectCell=(category:string,day:string)=>{selected.value=selected.value?.category===category&&selected.value?.day===day?null:{category,day}}
 const selectField=(category:string)=>{selected.value=selected.value?.category===category&&!selected.value.day?null:{category}}
 const sourceClass=(value:string)=>value==='Aurora'?'aurora':value==='Husky Pass'?'husky':'other'
-const initials=(name:string,system:string)=>system==='Husky Pass'?'HP':name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'
-const hideBrokenImage=(event:Event)=>{const target=event.target as HTMLImageElement;if(target)target.style.display='none'}
-const displayValue=(value:string|null)=>value===null?'Sin dato':value===''?'Vacío':value
-const formatTime=(value:string)=>value.slice(0,16).replace(' ',' · ')
 const setRange=(value:string)=>{range.value=value;if(value==='custom'){customFrom.value=shift(today,-29);customTo.value=today}}
 const resetFilters=()=>{search.value='';source.value='ALL';plantel.value='ALL'}
 const refreshAll=()=>{refresh();refreshHistory()}
@@ -304,7 +288,21 @@ const scrollToLatest=async()=>{await nextTick();if(matrixScroller.value)matrixSc
 onMounted(scrollToLatest)
 watch([from,to,plantel],()=>{selected.value=null;visibleCount.value=30;scrollToLatest()})
 watch(busy,loading=>{if(!loading)scrollToLatest()})
-watch([search,source,selected],()=>{visibleCount.value=30})
+watch([search,source],()=>{visibleCount.value=30})
+const closeDetails=()=>detailDialog.value?.close()
+const dismissBackdrop=(event:MouseEvent)=>{
+  if(event.target!==detailDialog.value)return
+  const rect=detailDialog.value.getBoundingClientRect()
+  if(event.clientX<rect.left||event.clientX>rect.right||event.clientY<rect.top||event.clientY>rect.bottom)closeDetails()
+}
+watch(selected,async value=>{
+  detailCount.value=30
+  await nextTick()
+  if(value){
+    if(!detailDialog.value?.open)detailDialog.value?.showModal()
+    detailDialog.value?.querySelector('.detail-records')?.scrollTo({top:0})
+  }else if(detailDialog.value?.open)closeDetails()
+})
 </script>
 
 <style scoped>
@@ -366,4 +364,28 @@ button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid 
 .load-more{width:100%;font-weight:850}.error-message,.minor-notice{border-radius:10px;background:#fff6eb;color:#815c35;padding:12px;font-size:16px}.error-message button{margin-left:10px;text-decoration:underline;background:none;border:none;cursor:pointer;font-size:16px}
 .spinning{animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:850px){.change-workspace{padding:15px}.top-controls{align-items:stretch}.campus-control,.period-area{min-width:100%}.filter-button{width:100%}.period-buttons{overflow:auto}.matrix-grid{grid-template-columns:155px repeat(var(--day-count),minmax(145px,1fr))}.field-heading{padding:9px}.field-heading span{font-size:16px}.event-head{align-items:flex-start}.field-chip{max-width:45%}}
+</style>
+
+<style scoped>
+.campus-control :deep(.searchable-select__trigger){height:48px;font-size:16px}
+.secondary-filters>.searchable-select{flex:1;min-width:200px}
+.source-summary{display:flex;gap:10px;flex-wrap:wrap;align-items:stretch}
+.source-summary>div{display:flex;align-items:center;gap:18px;justify-content:space-between;flex:1;min-width:150px;border:1px solid #d9e8e0;border-left:5px solid var(--green);border-radius:12px;padding:10px 14px;background:#f1f8f4;font-weight:700}
+.source-summary>div.husky{border-color:#d5e3f2;border-left-color:var(--blue);background:#eff6ff;color:#245a8a}
+.source-summary>div.other{border-left-color:var(--gray);background:#f5f7f8;color:#536573}
+.source-summary strong{font-size:24px}
+.source-summary>div.history-retry{flex-basis:100%;background:#fff6eb;border-color:#eed1a8;color:#815c35}
+.history-retry button{font:inherit;border:0;background:transparent;text-decoration:underline;cursor:pointer}
+.matrix-scroll{max-height:clamp(260px,48dvh,570px);scrollbar-width:auto;scroll-padding-top:70px;scroll-padding-left:185px}
+.matrix-grid{grid-template-columns:185px repeat(var(--day-count),minmax(180px,1fr))}
+.matrix-cell{gap:8px;justify-content:flex-start}
+.cell-source{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:4px 7px;background:#edf7f0;color:#216744;border-radius:7px;font-size:16px;font-weight:700}
+.cell-source.husky{background:#eaf3ff;color:#245a8a}.cell-source.other{background:#f0f3f5;color:#536573}
+.change-dialog{position:fixed;inset:0 0 0 auto;margin:0;width:min(640px,100vw);max-width:100vw;height:100dvh;max-height:100dvh;border:0;border-left:1px solid #dce8e3;padding:0;background:#f7faf8;color:#253a40;box-shadow:-15px 0 60px #102d3326;font:500 16px/1.4 Montserrat,system-ui,sans-serif;overflow:hidden}
+.change-dialog[open]{display:flex;flex-direction:column}
+.change-dialog::backdrop{background:#14292b66}
+.detail-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;padding:20px;background:white;border-bottom:1px solid #dce8e3}
+.detail-header h2{font-size:23px;margin:0 0 4px;font-weight:650}.detail-header span{color:#61746f}
+.detail-records{padding:18px;display:grid;gap:14px;overflow-y:auto;overscroll-behavior:contain;align-content:start;min-height:0;flex:1}
+@media(max-width:600px){.matrix-grid{grid-template-columns:145px repeat(var(--day-count),180px)}.matrix-scroll{scroll-padding-left:145px}.detail-header{padding:16px}.detail-records{padding:12px}.source-summary>div{min-width:100px;padding:8px;gap:6px;font-size:16px}.source-summary strong{font-size:21px}}
 </style>

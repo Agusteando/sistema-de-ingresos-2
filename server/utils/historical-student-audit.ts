@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 
-type LokiRecord = { at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
+export type LokiRecord = { at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
 export type HistoricalStudentAction = {
   id: string; eventId: number; date: string; recordedAt: string; matricula: string
   student: string; field: string; fieldLabel: string; category: string
@@ -33,7 +33,7 @@ const getHash = (item: any) => {
   if (item && typeof item === 'object') return String(item.hash || item.redacted?.hash || '')
   return String(item || '')
 }
-const parseMessage = (line: string, ns: string, labels: Record<string, string>): LokiRecord | null => {
+export const parseMessage = (line: string, ns: string, labels: Record<string, string>): LokiRecord | null => {
   let obj: any = {}
   const jsonAt = line.indexOf('{')
   if (jsonAt >= 0) {
@@ -48,14 +48,16 @@ const parseMessage = (line: string, ns: string, labels: Record<string, string>):
     || message.includes('matricula audited write')
   if (!husky && !aurora) return null
   const source = husky ? 'Husky Pass' : 'Aurora'
-  const actorEmail = compact(obj.actor || obj.actorEmail || obj.user || line.match(/\buser:\s*['"]([^'"]+@[^'"]+)['"]/)?.[1])
+  const actorEmail = [obj.actorEmail, obj.actor?.email, obj.user?.email, obj.actor, obj.user,
+    line.match(/\b(?:actorEmail|actor|user|email):\s*['"]([^'"]+@[^'"]+)['"]/)?.[1]]
+    .find(value => typeof value === 'string' && /^[^\s@]+@[^\s@]+$/.test(value.trim()))?.trim() || ''
   const matricula = obj.matricula || line.match(/\bmatricula:\s*['"]([A-Z]+\d+)['"]/)?.[1]
   const fields = Array.isArray(obj.fields) ? obj.fields.map(String) : Array.isArray(obj.changedFields) ? obj.changedFields.map(String)
     : Array.from(line.matchAll(/['"]((?:grupo|grado|nivel|ciclo|nombres|apellidoPaterno|apellidoMaterno|lugarTrabajoPadre|lugarTrabajoMadre|emailPadre|emailMadre|telefonoPadre|telefonoMadre))['"]/g)).map(match => match[1])
   return {
     at: safeDate(ns), message,
     userId: obj.userId, matricula, fields,
-    source, actor: compact(obj.actorName || obj.userName || obj.actor), actorEmail,
+    source, actor: compact(obj.actorName || obj.userName || obj.actor?.name || actorEmail), actorEmail,
     requestId: compact(obj.requestId),
     rawHash: digest(JSON.stringify({ns, labels, line}))
   }
@@ -63,9 +65,9 @@ const parseMessage = (line: string, ns: string, labels: Record<string, string>):
 const parseSelections = (value: string) => {
   const s = compact(value)
   if (!s) return [
-    '{container_name=~"app-(husky-pass-crm|aurora|sistema-de-ingresos-2)"}',
-    '{container=~"app-(husky-pass-crm|aurora|sistema-de-ingresos-2)"}',
-    '{service_name=~"app-(husky-pass-crm|aurora|sistema-de-ingresos-2)"}'
+    '{container_name=~".*(husky-pass|aurora|sistema-de-ingresos).*"}',
+    '{container=~".*(husky-pass|aurora|sistema-de-ingresos).*"}',
+    '{service_name=~".*(husky-pass|aurora|sistema-de-ingresos).*"}'
   ]
   // The selector must come from server configuration, never a browser-supplied expression.
   return s.startsWith('{') && s.includes('}') ? [s] : []
@@ -78,8 +80,8 @@ const allowedLokiUrl = () => {
   url.search = ''
   return url
 }
-type CaptureResult = { records: LokiRecord[]; available: boolean; truncated: boolean }
-const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> => {
+type CaptureResult = { records: LokiRecord[]; available: boolean; truncated: boolean; partial: boolean }
+export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> => {
   const url = allowedLokiUrl()
   const selectors = parseSelections(process.env.AUDIT_LOKI_SELECTOR || '')
   const token = compact(process.env.AUDIT_LOKI_TOKEN || process.env.LOKI_BEARER_TOKEN)
@@ -93,9 +95,11 @@ const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> => {
   const endNs = BigInt(to.getTime()) * 1000000n
   let lastError: unknown = null
   let anySuccess = false
+  const records: LokiRecord[] = []
+  const seen = new Set<string>()
+  let anyTruncated = false
+  let failed = 0
   for (const selector of selectors) {
-    const records: LokiRecord[] = []
-    const seen = new Set<string>()
     let ceiling = endNs
     let truncated = false
     try {
@@ -127,17 +131,18 @@ const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> => {
         if (page === 7) truncated = true
         ceiling = oldest - 1n
       }
-      if (records.length) return { records, available: true, truncated }
+      anyTruncated ||= truncated
       // A valid empty result may be because this selector doesn't exist in this cluster.
       lastError = null
     } catch (error) {
       lastError = error
+      failed++
       console.warn('[historical-student-audit] source query failed', { selector, message: String((error as Error)?.message || error) })
-      if (error instanceof TypeError || (error as Error)?.name === 'TimeoutError' || (error as Error)?.name === 'AbortError') break
+      // Other label families may still contain reachable streams; preserve partial results.
     }
   }
-  if (lastError && !anySuccess) throw lastError
-  return { records: [], available: true, truncated: false }
+  if (!anySuccess) throw lastError || new Error('No history selectors configured')
+  return { records, available: true, truncated: anyTruncated, partial: failed > 0 }
 }
 type Account = { matricula: string; userId: number; name?: string }
 let accountsCache: { at: number; byMatricula: Map<string,Account>; byHash: Map<string,Account> } | null = null
@@ -146,9 +151,18 @@ const resolveHistoricalAccounts = async () => {
   const byMatricula = new Map<string,Account>()
   const byHash = new Map<string,Account>()
   // Username is the student matrícula for family accounts. Older logger hashes are reproducible, not reversible.
+  const students = await controlEscolarCentralQuery<any[]>('SELECT matricula FROM matricula WHERE matricula IS NOT NULL')
+  for (const student of students) {
+    const raw = compact(student.matricula)
+    const matricula = raw.toUpperCase()
+    if (!/^[A-Z]{1,6}\d{2,8}$/.test(matricula)) continue
+    const account = { matricula, userId: 0 }
+    byMatricula.set(matricula, account)
+    for (const value of [raw, matricula, matricula.toLowerCase()]) byHash.set(hash12(value), account)
+  }
   const users = await controlEscolarCentralQuery<any[]>(
     "SELECT id, username FROM users WHERE username REGEXP '^[A-Za-z]{1,6}[0-9]{2,8}$' LIMIT 40000"
-  )
+  ).catch(() => [])
   for (const user of users) {
     const matricula = compact(user.username).toUpperCase()
     const account = { matricula, userId: Number(user.id || 0) }
@@ -174,7 +188,7 @@ const labelFor = (field: string) => ({
   apellidoMaterno: 'Apellido materno', lugarTrabajoPadre: 'Trabajo del padre',
   lugarTrabajoMadre: 'Trabajo de la madre'
 } as Record<string,string>)[field] || field.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')
-const historyCache = new Map<string, { at: number; value: {events: HistoricalStudentAction[]; available: boolean; truncated: boolean; checked: number} }>()
+const historyCache = new Map<string, { at: number; value: {events: HistoricalStudentAction[]; available: boolean; truncated: boolean; partial: boolean; checked: number; unmatched: number} }>()
 export const loadHistoricalActions = async (input: {
   from: Date; to: Date; planteles: string[]
 }) => {
@@ -185,6 +199,7 @@ export const loadHistoricalActions = async (input: {
   const combined: LokiRecord[] = []
   let truncated = false
   let available = false
+  let partial = false
   // Small windows bound memory and server load even for a broad retrospective date selection.
   for (let start = input.from.getTime(); start < input.to.getTime();) {
     const end = Math.min(start + 7 * 86400000, input.to.getTime())
@@ -192,10 +207,12 @@ export const loadHistoricalActions = async (input: {
     combined.push(...result.records)
     truncated ||= result.truncated
     available ||= result.available
+    partial ||= result.partial
     start = end
   }
   const result: HistoricalStudentAction[] = []
   const dedupe = new Set<string>()
+  let unmatched = 0
   for (const item of combined) {
     if (!item.at) continue
     const matriculaHash = getHash(item.matricula)
@@ -203,7 +220,7 @@ export const loadHistoricalActions = async (input: {
       || accounts.byHash.get(matriculaHash)
       || accounts.byHash.get(getHash(item.userId))
     const matricula = account?.matricula || (/^[A-Z]{1,6}\d{2,8}$/.test(matriculaHash) ? matriculaHash : '')
-    if (!matricula) continue
+    if (!matricula) { unmatched++; continue }
     const plantel = allCampuses(matricula)
     if (!input.planteles.includes(plantel)) continue
     const fields = item.source === 'Husky Pass'
@@ -225,7 +242,8 @@ export const loadHistoricalActions = async (input: {
       })
     }
   }
-  const value = { events: result, available, truncated, checked: combined.length }
+  const value = { events: result, available, truncated, partial, checked: combined.length, unmatched }
+  console.info('[historical-student-audit] capture completed', {checked:combined.length,resolved:result.length,unmatched,partial,truncated,systems:[...new Set(result.map(e=>e.source))]})
   if (historyCache.size > 24) historyCache.clear()
   historyCache.set(key, { at: Date.now(), value })
   return value
