@@ -140,7 +140,7 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT,ST',
     currentDateValue: '2026-09-15',
-  }), false)
+  }), true)
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT,ST',
@@ -167,7 +167,7 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT',
     currentDateValue: '2026-09-15',
-  }), false)
+  }), true)
   assert.equal(recargo.canRemoveLateFee({
     roles: 'ROLE_ADMON',
     financialPlanteles: 'PT',
@@ -197,7 +197,8 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
   }), true)
   assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-01'), true)
   assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-14'), true)
-  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-15'), false)
+  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-15'), true)
+  assert.equal(recargo.isLateFeeRemovalWindowOpen('2026-10-16'), false)
 
   const manualRecargoRemovedByAuthorizedAdmin = recargo.resolveLateFeeBalance({
     baseAmount: 1000,
@@ -229,7 +230,7 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
   assert.doesNotMatch(modal, /canRemoveLateFee/)
   assert.match(modal, /capabilities\?\.canRemoveRecargo/)
   assert.match(modal, /Configuración de recargos/)
-  assert.match(modal, /Permitir retirar recargos después del día 14/)
+  assert.match(modal, /Permitir retirar recargos después del día 15/)
   assert.doesNotMatch(modal, /Quitar recargos en cualquier fecha/)
   assert.match(modal, /return canOmitRecargo\(debt\) \? 'Quitar recargo' : 'Recargo aplicado'/)
   assert.match(modal, /return 'Restaurar recargo'/)
@@ -245,6 +246,7 @@ test('ROLE_ADMON can remove recargos regardless of plantel scope, subject to day
   assert.match(recargoPoliciesApi, /globalRemovalOverride: globalSettings\.allowRemovalAnyTime/)
   assert.match(recargoPoliciesApi, /canManageGlobalRemovalOverride: hasLateFeeRemovalAccess/)
   assert.match(recargoPoliciesApi, /removalLockDay: LATE_FEE_REMOVAL_LOCK_DAY/)
+  assert.equal(recargo.LATE_FEE_REMOVAL_LOCK_DAY, 16)
   assert.match(globalRecargoApi, /setGlobalRecargoRemovalOverride/)
   assert.match(globalRecargoApi, /hasLateFeeRemovalAccess/)
   assert.doesNotMatch(globalRecargoApi, /múltiples planteles/)
