@@ -3,6 +3,7 @@ import { PLANTELES_LIST } from '../../../../utils/constants'
 import { getTrustedAuthUser, normalizePlantel } from '../../../utils/auth-session'
 import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
 import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
+import { cleanAuditAvatar, loadAuditStaffProfiles } from '../../../utils/audit-actor-profile'
 
 const CATEGORIES = [
   { key: 'grupo', label: 'Grupo' },
@@ -52,15 +53,6 @@ const safeValue = (value: any): string | null => {
   if (value === undefined || value === null) return null
   const text = String(value).trim()
   return text.slice(0, 500)
-}
-const cleanAvatar = (value: any) => {
-  const raw = String(value || '').trim()
-  try {
-    const url = new URL(raw)
-    if (url.protocol !== 'https:') return ''
-    if (!/(^|\.)(casitaapps\.com|casitaiedis\.edu\.mx|casitaiedis\.edu)$/.test(url.hostname.toLowerCase())) return ''
-    return raw
-  } catch { return '' }
 }
 
 export default defineEventHandler(async (event) => {
@@ -118,34 +110,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const actorAccounts = Array.from(new Set(selected.map((row) => String(row.actor_email || '').toLowerCase()).filter(Boolean))).slice(0, 180)
-  const avatars = new Map<string, string>()
-  const displayNames = new Map<string, string>()
-  if (actorAccounts.length) {
-    try {
-      const columns = await controlEscolarCentralQuery<any[]>('SHOW COLUMNS FROM users')
-      const actual = columns.map(row => String(row.Field || ''))
-      const field = (names: string[]) => actual.find(value => names.includes(value.toLowerCase()))
-      const nameCol = field(['displayname','fullname','full_name','nombre'])
-      const photoCol = field(['picture','avatar','avatar_url','photo_url','foto'])
-      if (field(['email']) && (nameCol || photoCol)) {
-        const select = ['email']
-        if (nameCol) select.push('`' + nameCol + '` AS person_name')
-        if (photoCol) select.push('`' + photoCol + '` AS profile_photo')
-        const people = await controlEscolarCentralQuery<any[]>(
-          'SELECT ' + select.join(', ') + ' FROM users WHERE LOWER(email) IN (' + actorAccounts.map(() => '?').join(',') + ')',
-          actorAccounts
-        )
-        for (const person of people) {
-          const email = String(person.email || '').toLowerCase()
-          if (person.person_name) displayNames.set(email, String(person.person_name))
-          const url = cleanAvatar(person.profile_photo)
-          if (url) avatars.set(email, url)
-        }
-      }
-    } catch (error: any) {
-      console.info('[student-change-audit] Actor profile unavailable', { code: String(error?.code || '') })
-    }
-  }
+  const staffProfiles = await loadAuditStaffProfiles(actorAccounts)
 
   const changes: any[] = []
   for (const row of selected) {
@@ -161,10 +126,10 @@ export default defineEventHandler(async (event) => {
     const source = /husky|family|familia/i.test(sourceFlow) ? 'Husky Pass'
       : /aurora|matricula_overlay|student_patch|control_escolar_csv/i.test(sourceFlow) ? 'Aurora' : 'Otro'
     const matricula = String(row.matricula || '').toUpperCase()
-    const actorEmail = String(row.actor_email || '').trim()
+    const actorEmail = String(row.actor_email || '').trim().toLowerCase()
     const recordedActor = String(row.actor_name || '').trim()
     const actor = source === 'Aurora' && (!recordedActor || recordedActor.toLowerCase() === actorEmail.toLowerCase())
-      ? displayNames.get(actorEmail.toLowerCase()) || recordedActor || actorEmail || 'Aurora'
+      ? staffProfiles.get(actorEmail.toLowerCase())?.name || recordedActor || actorEmail || 'Aurora'
       : recordedActor || (source === 'Husky Pass' ? 'Husky Pass · Familia' : actorEmail || 'Sin identificar')
     for (let i = 0; i < fields.length; i++) {
       const change = fields[i] || {}
@@ -186,8 +151,8 @@ export default defineEventHandler(async (event) => {
         actor,
         actorEmail,
         avatar: source === 'Aurora' && isCasitaWorkspaceEmail(actorEmail)
-          ? buildWorkspacePhotoUrl(actorEmail, actor)
-          : cleanAvatar(payload.avatar) || avatars.get(actorEmail.toLowerCase()) || '',
+          ? staffProfiles.get(actorEmail)?.avatar || buildWorkspacePhotoUrl(actorEmail, actor)
+          : cleanAuditAvatar(payload.avatar),
         flow: sourceFlow,
         quality: hasDiff ? 'verified' : 'historical',
         plantel: String(row.plantel || ''),
@@ -197,7 +162,7 @@ export default defineEventHandler(async (event) => {
   }
   return {
     categories: CATEGORIES,
-    allowedPlanteles: planteles,
+    allowedPlanteles: allowed.filter(item => PLANTELES_LIST.includes(item)),
     events: changes,
     truncated,
     systems: ['Aurora', 'Husky Pass', 'Otro'],

@@ -1,0 +1,64 @@
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {readFileSync} from 'node:fs'
+import {createContext,runInContext} from 'node:vm'
+import {createHash} from 'node:crypto'
+import ts from 'typescript'
+const source=readFileSync(new URL('../server/utils/historical-student-audit.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
+const js=ts.transpile(source,{target:ts.ScriptTarget.ES2022})+'\nglobalThis.api={queryLoki,parseMessage,loadHistoricalActions};'
+const at='2026-09-30T01:03:35.120Z'
+const ns=String(BigInt(new Date(at).getTime())*1000000n)
+const hash=v=>createHash('sha256').update(String(v)).digest('hex').slice(0,12)
+// Actual event shape and hashes supplied in the PM0637 investigation.
+const family={level:'info',at,message:'credentialization.submission.database-committed',requestId:'c5ef59c2-2c4d-422e-8052-9e87d921e3bb',userId:{hash:'e428a291b4cc'},matricula:{hash:'ef7d3cabb351'},created:false}
+const school={level:'info',message:'matricula audited write',matricula:'PT123',actor:'erika@casitaiedis.edu.mx',changedFields:['grupo']}
+const payload=(records,labels={container_name:'app-husky-pass'})=>({status:'success',data:{result:records.length?[{stream:labels,values:records.map(item=>[ns,JSON.stringify(item)])}]:[]}})
+function setup(responder,query=async(sql)=>sql.includes('FROM matricula')?[{matricula:'PM0637'},{matricula:'PT123'}]:[]){
+ const calls=[]
+ const ctx=createContext({createHash,URL,URLSearchParams,AbortSignal,Buffer,Date,Intl,process:{env:{}},console:{info(){},warn(){}},controlEscolarCentralQuery:query,
+ fetch:async(url)=>{const selector=url.searchParams.get('query');calls.push(selector);const data=await responder(selector,calls.length);return {ok:true,json:async()=>data}}})
+ runInContext(js,ctx)
+ return {...ctx.api,calls}
+}
+const from=new Date('2026-09-29T06:00:00Z'),to=new Date('2026-09-30T05:59:59Z')
+test('combines Aurora and Husky Pass across label families instead of returning the first source',async()=>{
+ const s=setup(q=>q.startsWith('{container_name=')?payload([school],{container_name:'app-aurora'}):q.startsWith('{container=')?payload([family],{container:'app-husky-pass'}):payload([]))
+ const r=await s.loadHistoricalActions({from,to,planteles:['PT','PM']})
+ assert.equal(r.events.length,2)
+ assert.deepEqual(Array.from(new Set(r.events.map(e=>e.source))).sort(),['Aurora','Husky Pass'])
+ assert.equal(r.events.find(e=>e.source==='Husky Pass').matricula,'PM0637')
+ assert.equal(s.calls.length,3)
+ assert.ok(s.calls.every(q=>q.includes('.*(husky-pass|aurora|sistema-de-ingresos).*')))
+})
+test('recovers actual matrícula hashes even when the student has no matching users account',async()=>{
+ assert.equal(hash('PM0637'),'ef7d3cabb351')
+ const s=setup(()=>payload([family]))
+ const r=await s.loadHistoricalActions({from,to,planteles:['PM']})
+ assert.equal(r.events.length,1)
+ assert.equal(r.events[0].date,'2026-09-29')
+ assert.equal(r.events[0].before,null)
+ assert.equal(r.events[0].quality,'historical')
+ assert.equal(r.events[0].actor,'Husky Pass · Familia')
+})
+test('does not lose later label families or returned events when a selector fails',async()=>{
+ const s=setup((q,i)=>{if(i===1)throw new TypeError('network unavailable');return payload([family])})
+ const r=await s.queryLoki(from,to)
+ assert.equal(r.records.length,1)
+ assert.equal(r.partial,true)
+ assert.equal(s.calls.length,3)
+})
+test('total upstream failure stays unavailable rather than becoming an empty successful result',async()=>{
+ const s=setup(()=>{throw new Error('source unavailable')})
+ await assert.rejects(s.queryLoki(from,to),/source unavailable/)
+})
+test('campus permissions exclude resolved records from other campuses',async()=>{
+ const s=setup(()=>payload([family]))
+ assert.equal((await s.loadHistoricalActions({from,to,planteles:['PT']})).events.length,0)
+})
+test('extracts the real actor email from console-style and structured actor logs for Workspace portraits',()=>{
+ const s=setup(()=>payload([]))
+ const plain="[Control Escolar] matricula audited write { matricula: 'PT123', actor: 'erika@casitaiedis.edu.mx', changedFields: ['grupo'] }"
+ assert.equal(s.parseMessage(plain,ns,{}).actorEmail,'erika@casitaiedis.edu.mx')
+ assert.equal(s.parseMessage(JSON.stringify({...school,actor:{name:'Erika',email:'erika@casitaiedis.edu.mx'}}),ns,{}).actor,'Erika')
+ assert.equal(s.parseMessage(JSON.stringify({...family,level:'error'}),ns,{}),null)
+})

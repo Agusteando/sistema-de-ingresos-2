@@ -3,7 +3,8 @@ import { PLANTELES_LIST } from '../../../../utils/constants'
 import { getTrustedAuthUser, normalizePlantel } from '../../../utils/auth-session'
 import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
 import { loadHistoricalActions } from '../../../utils/historical-student-audit'
-import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
+import { isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
+import { loadAuditStaffProfiles } from '../../../utils/audit-actor-profile'
 
 const dateFormat = /^\d{4}-\d{2}-\d{2}$/
 const todayMexico = () => {
@@ -52,31 +53,18 @@ export default defineEventHandler(async (event) => {
     }
     const staffEmails = Array.from(new Set(events.filter(e=>e.source==='Aurora' && isCasitaWorkspaceEmail(e.actorEmail))
       .map(e=>e.actorEmail.toLowerCase()))).slice(0,200)
-    const staffNames=new Map<string,string>()
-    if (staffEmails.length) {
-      try {
-        const profileRows=await controlEscolarCentralQuery<any[]>(
-          'SELECT email, displayName FROM users WHERE LOWER(email) IN (' + staffEmails.map(()=>'?').join(',') + ')',
-          staffEmails
-        )
-        for (const profile of profileRows) {
-          const name=String(profile.displayName||'').trim()
-          if(name) staffNames.set(String(profile.email||'').toLowerCase(),name)
-        }
-      } catch (error:any) {
-        console.info('[historical-student-audit] School staff profiles unavailable', {code:String(error?.code||'')})
-      }
-    }
+    const staffProfiles=await loadAuditStaffProfiles(staffEmails)
     for(const record of events){
       record.student=names.get(record.matricula)||record.matricula
       if(record.source==='Aurora' && isCasitaWorkspaceEmail(record.actorEmail)){
-        record.actor=staffNames.get(record.actorEmail.toLowerCase())||record.actor
-        record.avatar=buildWorkspacePhotoUrl(record.actorEmail,record.actor)
+        record.actor=staffProfiles.get(record.actorEmail.toLowerCase())?.name||record.actor
+        record.avatar=staffProfiles.get(record.actorEmail.toLowerCase())?.avatar || ''
       }
     }
-    return {events,available:history.available,truncated:history.truncated}
+    return {events,available:history.available,truncated:history.truncated,partial:history.partial,checked:history.checked,unmatched:history.unmatched}
   } catch(error:any) {
-    console.warn('[historical-student-audit] query unavailable', {code:String(error?.code||''),message:String(error?.message||error)})
-    return {events:[],available:false,truncated:false}
+    const requestId=String(event.context.auroraRequestId||'')
+    console.warn('[historical-student-audit] query unavailable', {requestId,code:String(error?.code||''),message:String(error?.message||error)})
+    return {events:[],available:false,truncated:false,requestId,code:'AUDIT_HISTORY_UNAVAILABLE'}
   }
 })

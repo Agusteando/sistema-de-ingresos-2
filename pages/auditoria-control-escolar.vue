@@ -16,17 +16,13 @@
       <div class="audit-hero-actions">
         <label>
           <small>Plantel</small>
-          <select v-model="selectedPlantel" @change="loadAudit">
-            <option v-if="isSuperAdmin" value="ALL">Todos</option>
-            <option v-for="plantel in visiblePlanteles" :key="plantel" :value="plantel">Plantel {{ plantel }}</option>
-          </select>
+          <SearchableSelect v-model="selectedPlantel" :clearable="false" accessible-label="Plantel de auditoría anterior"
+            :options="legacyPlantelOptions" @change="loadAudit" />
         </label>
         <label>
           <small>Ciclo</small>
-          <select v-model="selectedCiclo" @change="handleCicloChange">
-            <option value="">Todos</option>
-            <option v-for="ciclo in CICLOS_LIST" :key="ciclo.value" :value="ciclo.value">{{ ciclo.label }}</option>
-          </select>
+          <SearchableSelect v-model="selectedCiclo" :clearable="false" accessible-label="Ciclo de auditoría anterior"
+            :options="[{value:'',label:'Todos'},...CICLOS_LIST]" @change="handleCicloChange" />
         </label>
         <button type="button" :disabled="loading" @click="loadAudit({ force: true })">
           <LucideRefreshCw :class="{ spinning: loading }" :size="17" />
@@ -192,6 +188,7 @@
 <script setup>
 import { computed, ref, watch } from 'vue'
 import { useCookie } from '#app'
+import SearchableSelect from '~/components/SearchableSelect.vue'
 import FieldChangeMatrix from '~/components/control-escolar/FieldChangeMatrix.vue'
 import {
   LucideCheckCircle,
@@ -222,6 +219,10 @@ const visiblePlanteles = computed(() => {
     .filter((plantel) => PLANTELES_LIST.includes(plantel))
   return parsed
 })
+const legacyPlantelOptions = computed(() => [
+  ...(isSuperAdmin.value ? [{value:'ALL',label:'Todos'}] : []),
+  ...visiblePlanteles.value.map(value => ({value,label:`Plantel ${value}`}))
+])
 const defaultPlantel = computed(() => {
   const active = String(activePlantelCookie.value || '').trim().toUpperCase()
   if (isSuperAdmin.value && (!active || active === 'GLOBAL')) return 'ALL'
