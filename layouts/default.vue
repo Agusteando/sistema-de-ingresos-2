@@ -81,6 +81,9 @@
         <NuxtLink v-if="showControlEscolarNav" to="/avance-control-escolar" class="nav-item group" title="Reporte Control Escolar" aria-label="Reporte Control Escolar">
           <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Reporte Control Escolar</span>
         </NuxtLink>
+        <NuxtLink v-if="showControlEscolarNav" to="/auditoria-control-escolar" class="nav-item group" title="Historial de cambios" aria-label="Historial de cambios">
+          <LucideHistory :size="22" stroke-width="2" /> <span class="nav-label">Historial de cambios</span>
+        </NuxtLink>
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin" title="Usuarios" aria-label="Usuarios">
           <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
         </NuxtLink>
