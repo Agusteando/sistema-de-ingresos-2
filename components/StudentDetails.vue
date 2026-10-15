@@ -1173,7 +1173,7 @@ const roleTokens = computed(() =>
 );
 const isSuperAdmin = computed(() => roleTokens.value.includes("superadmin"));
 const canDepurarAsAdmin = computed(() =>
-  isSuperAdmin.value || roleTokens.value.includes("role_admon"),
+  isSuperAdmin.value,
 );
 
 const debts = ref([]);
