@@ -9,7 +9,7 @@ const sources = Promise.all([
   readFile('server/utils/auth-session.ts', 'utf8'),
 ])
 
-test('depuración is offered to financial administrators and superadmins, not Control Escolar-only users', async () => {
+test('depuración is offered only to superadmins', async () => {
   const [ui, , , auth] = await sources
   assert.match(ui, /const canDepurarAsAdmin = computed\(\(\) =>\s*isSuperAdmin\.value \|\| roleTokens\.value\.includes\("role_admon"\)/)
   assert.match(ui, /v-if="canDepurarAsAdmin && selectedDebts\.length === 1"/)
@@ -20,7 +20,7 @@ test('depuración is offered to financial administrators and superadmins, not Co
   assert.match(auth, /const financialAccess = hasFinancialAccessForPlantel\(role, allowedPlanteles, activePlantel\)/)
 })
 
-test('backend uses signed financial access, keeps one-time Telegram approval and accounting constraints', async () => {
+test('backend requires superadmin, keeps one-time Telegram approval and accounting constraints', async () => {
   const [, api] = await sources
   assert.match(api, /const user = event\.context\.user/)
   assert.match(api, /if \(!user\?\.hasFinancialAccess \|\| !actor\) throw createError\(\{ statusCode: 403/)
@@ -35,11 +35,11 @@ test('backend uses signed financial access, keeps one-time Telegram approval and
   assert.match(api, /pending\.delete\(id\)/)
 })
 
-test('regular financial administrators can request reversal; non-financial roles remain denied', async () => {
+test('only superadmins can request reversal', async () => {
   const [, , cancel] = await sources
   assert.match(cancel, /if \(isDepuration && !user\?\.hasFinancialAccess\)/)
   assert.match(cancel, /La reversión de una depuración requiere motivo/)
   assert.match(cancel, /\*Depuración revertida\*/)
   assert.match(cancel, /notifyDocumentAmountCorrection\(/)
-  assert.doesNotMatch(cancel, /Solo superadministradores pueden revertir/)
+  assert.match(cancel, /Solo superadministradores pueden revertir/)
 })
