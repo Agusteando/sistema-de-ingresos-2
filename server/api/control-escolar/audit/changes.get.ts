@@ -2,6 +2,7 @@ import { getQuery, setResponseHeader } from 'h3'
 import { PLANTELES_LIST } from '../../../../utils/constants'
 import { getTrustedAuthUser, normalizePlantel } from '../../../utils/auth-session'
 import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
+import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail } from '../../../utils/google-workspace-directory'
 
 const CATEGORIES = [
   { key: 'grupo', label: 'Grupo' },
@@ -76,16 +77,27 @@ export default defineEventHandler(async (event) => {
     : allowed.filter((item) => PLANTELES_LIST.includes(item))
   if (!planteles.length) throw createError({ statusCode: 403, message: 'Plantel no autorizado.' })
 
-  // Do not silently claim lifetime coverage: the existing ledger has older, incomplete records.
+  const dateFormat = /^\d{4}-\d{2}-\d{2}$/
+  const todayParts = new Intl.DateTimeFormat('en-US', {timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(new Date())
+  const todayPart = (type: string) => todayParts.find(x=>x.type===type)?.value || ''
+  const today = todayPart('year') + '-' + todayPart('month') + '-' + todayPart('day')
+  const to = String(query.to || today)
+  const startDay = new Date(to + 'T12:00:00Z')
+  if (Number.isNaN(startDay.getTime())) throw createError({statusCode:400,message:'Fecha inválida.'})
+  startDay.setUTCDate(startDay.getUTCDate()-6)
+  const from = String(query.from || startDay.toISOString().slice(0,10))
+  if (!dateFormat.test(from) || !dateFormat.test(to) || from > to) throw createError({statusCode:400,message:'Fechas inválidas.'})
+  const range = new Date(to + 'T00:00:00Z').getTime() - new Date(from + 'T00:00:00Z').getTime()
+  if (!Number.isFinite(range) || range > 92*86400000) throw createError({statusCode:400,message:'Selecciona un periodo de hasta 90 días.'})
   const limit = 5000
   const placeholders = planteles.map(() => '?').join(',')
   const rows = await controlEscolarCentralQuery<any[]>(
     "SELECT id, event_type, plantel, ciclo, matricula, actor_email, actor_name, actor_role, source_flow, payload, " +
       "DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS recorded_at " +
       "FROM control_escolar_audit_events WHERE event_type = 'student_update' " +
-      "AND plantel IN (" + placeholders + ") AND created_at >= DATE_SUB(NOW(), INTERVAL 90 DAY) " +
+      "AND plantel IN (" + placeholders + ") AND created_at >= ? AND created_at < ? " +
       "ORDER BY created_at DESC, id DESC LIMIT ?",
-    [...planteles, limit + 1]
+    [...planteles, from + ' 00:00:00', to + ' 23:59:59.999999', limit + 1]
   )
   const truncated = rows.length > limit
   const selected = rows.slice(0, limit)
@@ -107,23 +119,31 @@ export default defineEventHandler(async (event) => {
 
   const actorAccounts = Array.from(new Set(selected.map((row) => String(row.actor_email || '').toLowerCase()).filter(Boolean))).slice(0, 180)
   const avatars = new Map<string, string>()
+  const displayNames = new Map<string, string>()
   if (actorAccounts.length) {
     try {
       const columns = await controlEscolarCentralQuery<any[]>('SHOW COLUMNS FROM users')
-      const fields = new Set(columns.map((row) => String(row.Field || '').toLowerCase()))
-      const photo = ['avatar_url', 'photo_url', 'picture', 'avatar', 'foto'].find((key) => fields.has(key))
-      if (photo && fields.has('email')) {
+      const actual = columns.map(row => String(row.Field || ''))
+      const field = (names: string[]) => actual.find(value => names.includes(value.toLowerCase()))
+      const nameCol = field(['displayname','fullname','full_name','nombre'])
+      const photoCol = field(['picture','avatar','avatar_url','photo_url','foto'])
+      if (field(['email']) && (nameCol || photoCol)) {
+        const select = ['email']
+        if (nameCol) select.push('`' + nameCol + '` AS person_name')
+        if (photoCol) select.push('`' + photoCol + '` AS profile_photo')
         const people = await controlEscolarCentralQuery<any[]>(
-          'SELECT email, ' + '`' + photo + '`' + ' AS profile_photo FROM users WHERE LOWER(email) IN (' + actorAccounts.map(() => '?').join(',') + ')',
+          'SELECT ' + select.join(', ') + ' FROM users WHERE LOWER(email) IN (' + actorAccounts.map(() => '?').join(',') + ')',
           actorAccounts
         )
         for (const person of people) {
+          const email = String(person.email || '').toLowerCase()
+          if (person.person_name) displayNames.set(email, String(person.person_name))
           const url = cleanAvatar(person.profile_photo)
-          if (url) avatars.set(String(person.email || '').toLowerCase(), url)
+          if (url) avatars.set(email, url)
         }
       }
     } catch (error: any) {
-      console.info('[student-change-audit] Actor photos unavailable', { code: String(error?.code || '') })
+      console.info('[student-change-audit] Actor profile unavailable', { code: String(error?.code || '') })
     }
   }
 
@@ -142,8 +162,10 @@ export default defineEventHandler(async (event) => {
       : /aurora|matricula_overlay|student_patch|control_escolar_csv/i.test(sourceFlow) ? 'Aurora' : 'Otro'
     const matricula = String(row.matricula || '').toUpperCase()
     const actorEmail = String(row.actor_email || '').trim()
-    const actor = String(row.actor_name || '').trim()
-      || (source === 'Husky Pass' ? 'Familia ' + matricula : actorEmail || 'Sin identificar')
+    const recordedActor = String(row.actor_name || '').trim()
+    const actor = source === 'Aurora' && (!recordedActor || recordedActor.toLowerCase() === actorEmail.toLowerCase())
+      ? displayNames.get(actorEmail.toLowerCase()) || recordedActor || actorEmail || 'Aurora'
+      : recordedActor || (source === 'Husky Pass' ? 'Husky Pass · Familia' : actorEmail || 'Sin identificar')
     for (let i = 0; i < fields.length; i++) {
       const change = fields[i] || {}
       const field = String(change.field || '').slice(0, 90)
@@ -163,7 +185,9 @@ export default defineEventHandler(async (event) => {
         source,
         actor,
         actorEmail,
-        avatar: cleanAvatar(payload.avatar) || avatars.get(actorEmail.toLowerCase()) || '',
+        avatar: source === 'Aurora' && isCasitaWorkspaceEmail(actorEmail)
+          ? buildWorkspacePhotoUrl(actorEmail, actor)
+          : cleanAvatar(payload.avatar) || avatars.get(actorEmail.toLowerCase()) || '',
         flow: sourceFlow,
         quality: hasDiff ? 'verified' : 'historical',
         plantel: String(row.plantel || ''),
@@ -173,6 +197,7 @@ export default defineEventHandler(async (event) => {
   }
   return {
     categories: CATEGORIES,
+    allowedPlanteles: planteles,
     events: changes,
     truncated,
     systems: ['Aurora', 'Husky Pass', 'Otro'],

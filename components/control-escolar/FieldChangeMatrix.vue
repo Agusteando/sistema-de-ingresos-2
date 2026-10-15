@@ -1,306 +1,369 @@
 <template>
-  <section class="change-workspace" aria-label="Historial de cambios de alumnos">
+  <section class="change-workspace" aria-label="Historial de cambios">
     <header class="change-header">
-      <div>
-        <p class="eyebrow">CONTROL ESCOLAR</p>
+      <div class="heading-copy">
         <h1>Historial de cambios</h1>
-        <p class="subheading">Todos los campos · Todos los sistemas</p>
+        <p>Control Escolar</p>
       </div>
-      <div class="header-tools">
-        <button class="filter-button" type="button" :aria-expanded="showFilters" @click="showFilters = !showFilters">
-          <LucideSlidersHorizontal :size="20" /> Filtros
-        </button>
-        <button class="refresh-button" type="button" :disabled="status === 'pending'" aria-label="Actualizar cambios" @click="refresh">
-          <LucideRefreshCw :size="21" :class="{ spinning: status === 'pending' }" />
-        </button>
-      </div>
+      <button class="icon-button" type="button" :disabled="busy" aria-label="Actualizar" @click="refreshAll">
+        <LucideRefreshCw :size="23" :class="{ spinning: busy }"/>
+      </button>
     </header>
 
-    <div class="legend" aria-label="Origen de los cambios">
-      <span><i class="source-indicator aurora"></i>Aurora</span>
-      <span><i class="source-indicator husky"></i>Husky Pass</span>
-      <span><i class="source-indicator other"></i>Otros</span>
-    </div>
-
-    <div v-if="showFilters" class="filter-drawer">
-      <label><span>Buscar alumno o usuario</span><input v-model="search" type="search" placeholder="Nombre, matrícula o usuario" /></label>
-      <label><span>Sistema</span>
-        <select v-model="system"><option value="all">Todos</option><option value="Aurora">Aurora</option><option value="Husky Pass">Husky Pass</option><option value="Otro">Otros</option></select>
+    <div class="top-controls">
+      <label class="campus-control">
+        <span>Plantel</span>
+        <select v-model="plantel" aria-label="Filtrar plantel">
+          <option value="ALL">Todos mis planteles</option>
+          <option v-for="code in campuses" :key="code" :value="code">{{ campusLabel(code) }}</option>
+        </select>
       </label>
-      <label><span>Periodo</span>
-        <select v-model.number="range"><option :value="7">7 días</option><option :value="30">30 días</option><option :value="90">90 días</option></select>
-      </label>
-      <button type="button" class="clear-button" @click="resetFilters">Ver todos</button>
-    </div>
-
-    <div v-if="error" class="audit-warning" role="alert">
-      No se pudo consultar la auditoría. <button type="button" @click="refresh">Reintentar</button>
-    </div>
-    <div v-else-if="status === 'pending'" class="audit-loading" role="status">Cargando cambios registrados…</div>
-    <template v-else>
-      <div class="stat-line">
-        <div><strong>{{ filteredEvents.length }}</strong><span>Registros</span></div>
-        <div><strong>{{ distinctStudents }}</strong><span>Alumnos</span></div>
-        <div><strong>{{ activeFields }}</strong><span>Tipos de campo</span></div>
-      </div>
-
-      <div class="section-heading">
-        <div>
-          <h2>Cambios por campo</h2>
-          <p>Selecciona una fecha para ver el detalle.</p>
+      <div class="period-area">
+        <span class="filter-label">Periodo</span>
+        <div class="period-buttons" role="group" aria-label="Periodo">
+          <button v-for="daysCount in [7,30,90]" :key="daysCount" type="button"
+            :class="{ selected: range === String(daysCount) }" @click="setRange(String(daysCount))">{{ daysCount }} días</button>
+          <button type="button" :class="{ selected: range === 'custom' }" @click="setRange('custom')">
+            <LucideCalendarDays :size="19" /> Fechas
+          </button>
         </div>
-        <span class="period-label">{{ range }} días</span>
+      </div>
+      <button type="button" class="filter-button" :aria-expanded="showFilters" @click="showFilters=!showFilters">
+        <LucideSlidersHorizontal :size="19"/> Filtrar
+      </button>
+    </div>
+    <div v-if="range === 'custom'" class="custom-dates">
+      <label>Desde <input v-model="customFrom" type="date" :max="customTo" /></label>
+      <label>Hasta <input v-model="customTo" type="date" :min="customFrom" :max="today" /></label>
+    </div>
+    <div v-if="!validDates" class="minor-notice">Selecciona un periodo de hasta 90 días.</div>
+    <div v-if="showFilters" class="secondary-filters">
+      <input v-model="search" type="search" aria-label="Buscar" placeholder="Alumno, matrícula o usuario…" />
+      <select v-model="source" aria-label="Sistema">
+        <option value="ALL">Todos los sistemas</option>
+        <option value="Aurora">Aurora</option>
+        <option value="Husky Pass">Husky Pass</option>
+        <option value="Otro">Otros</option>
+      </select>
+      <button type="button" @click="resetFilters">Limpiar</button>
+    </div>
+
+    <div class="legend">
+      <span><i class="legend-color aurora"></i>Aurora</span>
+      <span><i class="legend-color husky"></i>Husky Pass</span>
+      <span><i class="legend-color other"></i>Otros</span>
+    </div>
+
+    <div v-if="queryError" class="error-message" role="alert">
+      No se pudo consultar el historial. <button type="button" @click="refreshAll">Reintentar</button>
+    </div>
+    <template v-else>
+      <div class="totals">
+        <div><strong>{{ filteredEvents.length }}</strong><span>Registros</span></div>
+        <div><strong>{{ new Set(filteredEvents.map(x=>x.matricula)).size }}</strong><span>Alumnos</span></div>
+        <div><strong>{{ new Set(filteredEvents.map(x=>x.field)).size }}</strong><span>Campos</span></div>
       </div>
 
-      <div class="matrix-scroll" role="region" aria-label="Cambios por campo y fecha" tabindex="0">
-        <div class="matrix-grid" :style="{ '--day-count': String(days.length) }" role="table" aria-label="Matriz de cambios">
-          <div class="matrix-column-title" role="columnheader">CAMPO</div>
-          <div v-for="day in days" :key="'header-' + day.key" class="matrix-day-title" role="columnheader">
-            <span>{{ day.weekday }}</span><strong>{{ day.day }}</strong>
+      <div class="chart-header">
+        <h2>Cambios por campo</h2>
+        <div class="chart-nav">
+          <button type="button" aria-label="Fechas anteriores" @click="moveChart(-1)"><LucideChevronLeft :size="21"/></button>
+          <button type="button" aria-label="Fechas siguientes" @click="moveChart(1)"><LucideChevronRight :size="21"/></button>
+        </div>
+      </div>
+
+      <div ref="matrixScroller" class="matrix-scroll" tabindex="0" aria-label="Cambios por campo y fecha">
+        <div class="matrix-grid" :style="{ '--day-count': String(days.length) }">
+          <div class="matrix-corner">CAMPO</div>
+          <div v-for="day in days" :key="'day-'+day.key" class="day-heading">
+            <span>{{ day.weekday }}</span><strong>{{ day.label }}</strong>
           </div>
           <template v-for="category in categories" :key="category.key">
-            <button type="button" class="field-title" :class="{ chosen: focus?.category === category.key && !focus?.day }" @click="selectField(category.key)">
-              <span class="field-name">{{ category.label }}</span>
-              <strong class="field-total">{{ categoryTotals[category.key] || 0 }}</strong>
+            <button type="button" class="field-heading"
+              :class="{ chosen: selected?.category===category.key && !selected?.day }"
+              @click="selectField(category.key)">
+              <span>{{ category.label }}</span><strong>{{ countCategory(category.key) }}</strong>
             </button>
-            <button v-for="day in days" :key="category.key + '-' + day.key" type="button" class="matrix-cell"
-              :class="{ active: focus?.category === category.key && focus?.day === day.key, filled: cell(category.key,day.key).length > 0 }"
-              :aria-label="category.label + ', ' + day.key + ', ' + cell(category.key,day.key).length + ' registros'"
-              @click="selectCell(category.key, day.key)">
-              <template v-if="cell(category.key, day.key).length">
-                <span class="cell-count">{{ cell(category.key,day.key).length }}</span>
-                <span v-for="actor in cellActors(category.key,day.key).slice(0,2)" :key="actor.identity" class="cell-person">
-                  <span class="actor-avatar" :class="sourceClass(actor.source)">
-                    <img v-if="actor.avatar" :src="actor.avatar" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                    <span v-else>{{ initials(actor.name) }}</span>
+            <button v-for="day in days" :key="category.key+'-'+day.key" type="button"
+              class="matrix-cell" :class="{ active: selected?.category === category.key && selected?.day === day.key }"
+              :aria-label="category.label+' '+day.label+', '+cell(category.key,day.key).length+' registros'"
+              @click="selectCell(category.key,day.key)">
+              <template v-if="cell(category.key,day.key).length">
+                <span class="cell-number">{{ cell(category.key,day.key).length }}</span>
+                <span v-for="actor in cellActors(category.key,day.key).slice(0,2)" :key="actor.key" class="mini-actor">
+                  <span class="avatar" :class="sourceClass(actor.source)">
+                    <span>{{ initials(actor.name,actor.source) }}</span>
+                    <img v-if="actor.avatar" :src="actor.avatar" alt="" loading="lazy" @error="hideBrokenImage"/>
                   </span>
-                  <span class="actor-name">{{ actor.name }}</span>
+                  <span class="mini-name">{{ actor.name }}</span>
                 </span>
-                <span v-if="cellActors(category.key,day.key).length > 2" class="remaining">
-                  +{{ cellActors(category.key,day.key).length - 2 }} usuarios
+                <span v-if="cellActors(category.key,day.key).length>2" class="more-actors">
+                  +{{ cellActors(category.key,day.key).length-2 }}
                 </span>
               </template>
-              <span v-else class="cell-empty">—</span>
+              <span v-else class="no-change">—</span>
             </button>
           </template>
         </div>
       </div>
-      <p class="matrix-note">El nombre y la foto identifican a la cuenta registrada. En Husky Pass, una cuenta familiar no identifica necesariamente a la persona que utilizó el dispositivo.</p>
 
-      <div class="section-heading entries-heading">
+      <div class="events-heading">
         <div>
           <h2>{{ selectionTitle }}</h2>
-          <p>{{ selectedEvents.length }} registros · {{ focus ? 'Selección del mapa' : 'Todos los campos y sistemas' }}</p>
+          <span>{{ selectedEvents.length }} registros</span>
         </div>
-        <button v-if="focus" type="button" class="clear-button" @click="focus = null">Ver todos</button>
+        <button v-if="selected" type="button" class="clear-selection" @click="selected=null">Ver todos</button>
       </div>
-      <div class="event-list" aria-live="polite">
-        <article v-for="record in selectedEvents.slice(0, visibleCount)" :key="record.id" class="event-card">
-          <div class="event-heading">
-            <div class="event-person">
-              <span class="actor-avatar large" :class="sourceClass(record.source)">
-                <img v-if="record.avatar" :src="record.avatar" alt="" loading="lazy" referrerpolicy="no-referrer" />
-                <span v-else>{{ initials(record.actor) }}</span>
+
+      <div class="event-list">
+        <article v-for="record in selectedEvents.slice(0,visibleCount)" :key="record.id" class="event-card">
+          <div class="event-head">
+            <div class="event-actor">
+              <span class="avatar large" :class="sourceClass(record.source)">
+                <span>{{ initials(record.actor,record.source) }}</span>
+                <img v-if="record.avatar" :src="record.avatar" alt="" loading="lazy" @error="hideBrokenImage"/>
               </span>
-              <div class="actor-copy">
-                <strong>{{ record.actor }}</strong>
-                <span>{{ record.source }} · {{ record.recordedAt.slice(0,16).replace('T',' · ') }}</span>
+              <div class="actor-lines">
+                <strong>{{ record.source === 'Husky Pass' ? 'Husky Pass · Familia' : record.actor }}</strong>
+                <span>{{ record.source }} · {{ formatTime(record.recordedAt) }}</span>
               </div>
             </div>
-            <span class="source-chip" :class="sourceClass(record.source)">{{ record.fieldLabel }}</span>
+            <span class="field-chip" :class="sourceClass(record.source)">{{ record.fieldLabel }}</span>
           </div>
-          <div class="event-student"><strong>{{ record.student }}</strong><span>{{ record.matricula }} · {{ record.plantel }}</span></div>
-          <div class="value-diff" v-if="record.quality === 'verified'">
+          <div class="student-line">
+            <strong>{{ record.student }}</strong>
+            <span>{{ record.matricula }} · {{ record.plantel }}</span>
+          </div>
+          <div v-if="record.quality==='verified'" class="diff">
             <div><span>Antes</span><strong>{{ displayValue(record.before) }}</strong></div>
-            <LucideArrowRight :size="23" aria-hidden="true" />
+            <LucideArrowRight :size="22"/>
             <div><span>Después</span><strong>{{ displayValue(record.after) }}</strong></div>
           </div>
-          <div v-else class="historical-note">Registro anterior · Sin valores guardados</div>
-          <div class="event-reference">Evento #{{ record.eventId }} · {{ record.flow || 'Registro de actividad' }}</div>
+          <div v-else class="activity-mark">
+            <LucideHistory :size="19"/> {{ record.source==='Husky Pass' ? 'Envío registrado' : 'Actualización registrada' }}
+          </div>
+          <div class="event-footer">
+            <span>{{ record.quality==='verified' ? 'Cambio guardado' : 'Registro histórico' }}</span>
+            <span v-if="record.eventId">#{{ record.eventId }}</span>
+          </div>
         </article>
-        <div v-if="!selectedEvents.length" class="empty-state">
-          <LucideSearchX :size="35" />
-          <strong>Sin registros en este periodo</strong>
-          <p>No significa que se pueda descartar un cambio fuera de la auditoría disponible.</p>
+
+        <div v-if="busy && !selectedEvents.length" class="empty-area">
+          <LucideRefreshCw class="spinning" :size="27"/>
+          <strong>Cargando historial…</strong>
         </div>
-        <button v-if="selectedEvents.length > visibleCount" class="show-more" type="button" @click="visibleCount += 30">
-          Ver más cambios ({{ selectedEvents.length - visibleCount }})
+        <div v-else-if="!selectedEvents.length" class="empty-area">
+          <LucideInbox :size="29" />
+          <strong>Sin registros en estas fechas</strong>
+        </div>
+        <button v-if="selectedEvents.length>visibleCount" class="load-more" type="button" @click="visibleCount+=30">
+          Ver más ({{ selectedEvents.length-visibleCount }})
         </button>
       </div>
-      <p v-if="data?.truncated" class="audit-warning">Hay más registros que el límite de esta consulta. Reduce el periodo para revisar fechas específicas.</p>
-      <p class="coverage">Fuente: auditoría MySQL · Los registros anteriores pueden carecer de valores antes/después. Las modificaciones directas fuera de las aplicaciones pueden no identificar al responsable.</p>
+      <div v-if="(data?.truncated || history?.truncated)" class="minor-notice">Hay más registros. Acota el periodo para verlos.</div>
+      <div v-if="history && history.available===false" class="minor-notice">No se pudo recuperar todo el historial anterior.</div>
     </template>
   </section>
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
-import { LucideArrowRight, LucideRefreshCw, LucideSearchX, LucideSlidersHorizontal } from 'lucide-vue-next'
+import { computed, ref, watch, nextTick, onMounted } from 'vue'
+import {
+  LucideArrowRight, LucideRefreshCw, LucideSlidersHorizontal,
+  LucideCalendarDays, LucideChevronLeft, LucideChevronRight, LucideInbox, LucideHistory
+} from 'lucide-vue-next'
 
-type AuditEvent = {
-  id: string; eventId: number; date: string; recordedAt: string
-  matricula: string; student: string; field: string; fieldLabel: string; category: string
-  before: string | null; after: string | null; source: string; actor: string
-  actorEmail: string; avatar: string; flow: string; quality: string; plantel: string; ciclo: string
+type Change = {
+  id:string; eventId:number; date:string; recordedAt:string; matricula:string; student:string
+  field:string; fieldLabel:string; category:string; before:string|null; after:string|null
+  source:string; actor:string; actorEmail:string; avatar:string; flow:string
+  quality:'verified'|'historical'; plantel:string; ciclo:string
 }
-type Result = { events: AuditEvent[]; categories: Array<{key: string;label: string}>; truncated: boolean }
-type ActorChip = { identity: string; name: string; source: string; avatar: string }
-
-const showFilters = ref(false)
-const search = ref('')
-const system = ref('all')
-const range = ref(7)
-const focus = ref<{category: string; day?: string} | null>(null)
-const visibleCount = ref(30)
-const { data, status, error, refresh } = await useFetch<Result>('/api/control-escolar/audit/changes', {
-  cache: 'no-store',
-  default: () => ({ events: [], categories: [], truncated: false })
+type MainResponse={categories:{key:string;label:string}[];allowedPlanteles:string[];events:Change[];truncated:boolean}
+type HistoryResponse={events:Change[];available:boolean;truncated:boolean}
+type AvatarActor={key:string;name:string;source:string;avatar:string}
+const todayParts = new Intl.DateTimeFormat('en-US',{
+  timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'
+}).formatToParts(new Date())
+const todayPart = (type:string) => todayParts.find(p=>p.type===type)?.value||''
+const today = todayPart('year')+'-'+todayPart('month')+'-'+todayPart('day')
+const shift = (date:string,amount:number) => {
+  const value=new Date(date+'T12:00:00Z')
+  if (!Number.isFinite(value.getTime())) return date
+  value.setUTCDate(value.getUTCDate()+amount)
+  return value.toISOString().slice(0,10)
+}
+const range=ref('7')
+const customFrom=ref(shift(today,-6))
+const customTo=ref(today)
+const plantel=ref('ALL')
+const source=ref('ALL')
+const search=ref('')
+const selected=ref<{category:string;day?:string}|null>(null)
+const showFilters=ref(false)
+const visibleCount=ref(30)
+const matrixScroller=ref<HTMLElement|null>(null)
+const from=computed(()=>range.value==='custom'?customFrom.value:shift(today,1-Number(range.value)))
+const to=computed(()=>range.value==='custom'?customTo.value:today)
+const validDates=computed(()=>{
+  const delta=new Date(to.value+'T00:00:00Z').getTime()-new Date(from.value+'T00:00:00Z').getTime()
+  return /^\d{4}-\d{2}-\d{2}$/.test(from.value)&&/^\d{4}-\d{2}-\d{2}$/.test(to.value)&&delta>=0&&delta<=92*86400000
 })
-const defaultCategories = [
-  {key:'grupo',label:'Grupo'}, {key:'nombre',label:'Nombre'},
-  {key:'grado',label:'Grado'}, {key:'estatus',label:'Estatus'},
-  {key:'contacto',label:'Contacto'}, {key:'trabajo',label:'Lugares de trabajo'},
-  {key:'otros',label:'Otros campos'}
-]
-const categories = computed(() => data.value?.categories?.length ? data.value.categories : defaultCategories)
-const sourceClass = (source: string) => source === 'Aurora' ? 'aurora' : source === 'Husky Pass' ? 'husky' : 'other'
-const initials = (name: string) => {
-  const parts = String(name || '?').split(/\s+/).filter(Boolean)
-  return (parts.length > 1 ? parts[0][0] + parts[1][0] : String(name || '?').slice(0, 2)).toUpperCase()
-}
-const displayValue = (value: string | null) => value === null ? 'Sin dato' : value === '' ? 'Vacío' : value
-const mexicoDate = (date: Date) => {
-  const parts = new Intl.DateTimeFormat('en-US', {timeZone: 'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).formatToParts(date)
-  const get = (type: string) => parts.find(p=>p.type===type)?.value || ''
-  return get('year')+'-'+get('month')+'-'+get('day')
-}
-const days = computed(() => {
-  const current = mexicoDate(new Date())
-  const [year,month,day] = current.split('-').map(Number)
-  const max = range.value
-  return Array.from({length:max}, (_,i) => {
-    const date = new Date(Date.UTC(year,month-1,day-(max-1-i)))
-    const key = date.toISOString().slice(0,10)
-    return {
-      key,
-      day: new Intl.DateTimeFormat('es-MX',{timeZone:'UTC',day:'numeric',month:'short'}).format(date),
-      weekday: new Intl.DateTimeFormat('es-MX',{timeZone:'UTC',weekday:'short'}).format(date)
-    }
+const fetchQuery=computed(()=>({
+  from:validDates.value?from.value:shift(today,-6),
+  to:validDates.value?to.value:today,
+  plantel:plantel.value
+}))
+const {data,status,error,refresh}=await useFetch<MainResponse>('/api/control-escolar/audit/changes',{
+  query:fetchQuery,cache:'no-store',default:()=>({categories:[],allowedPlanteles:[],events:[],truncated:false})
+})
+const {data:history,status:historyStatus,refresh:refreshHistory}=await useFetch<HistoryResponse>('/api/control-escolar/audit/history',{
+  query:fetchQuery,server:false,cache:'no-store',default:()=>({events:[],available:true,truncated:false})
+})
+const busy=computed(()=>status.value==='pending'||historyStatus.value==='pending')
+const queryError=computed(()=>Boolean(error.value))
+const campuses=computed(()=>data.value?.allowedPlanteles||[])
+const campusLabel=(code:string)=>({
+  PM:'Primaria Metepec',PT:'Primaria Toluca',SM:'Secundaria Metepec',ST:'Secundaria Toluca',
+  CM:'Casita Metepec',CT:'Casita Toluca',DM:'Desarrollo Metepec',GM:'Guardería Metepec',
+  PREEM:'Preescolar Metepec',PREET:'Preescolar Toluca'
+} as Record<string,string>)[code]||code
+const categories=computed(()=>data.value?.categories?.length?data.value.categories:[
+  {key:'grupo',label:'Grupo'},{key:'nombre',label:'Nombre'},{key:'grado',label:'Grado'},
+  {key:'estatus',label:'Estatus'},{key:'contacto',label:'Contacto'},
+  {key:'trabajo',label:'Lugares de trabajo'},{key:'otros',label:'Otros campos'}
+])
+const allEvents=computed(()=>{
+  const stored=data.value?.events||[]
+  const external=history.value?.events||[]
+  const result=[...stored]
+  for (const entry of external){
+    const overlap=stored.some(s=>s.matricula===entry.matricula&&s.source===entry.source
+      &&s.category===entry.category&&Math.abs(new Date(s.recordedAt.replace(' ','T')+'-06:00').getTime()-new Date(entry.recordedAt.replace(' ','T')+'-06:00').getTime())<120000)
+    if(!overlap) result.push(entry)
+  }
+  return result.sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt))
+})
+const filteredEvents=computed(()=>allEvents.value.filter(e=>{
+  if(e.date<from.value||e.date>to.value)return false
+  if(plantel.value!=='ALL'&&e.plantel!==plantel.value)return false
+  if(source.value!=='ALL'&&e.source!==source.value)return false
+  const q=search.value.trim().toLowerCase()
+  return !q||[e.student,e.matricula,e.actor,e.actorEmail,e.fieldLabel].join(' ').toLowerCase().includes(q)
+}))
+const days=computed(()=>{
+  if(!validDates.value)return []
+  const duration=Math.round((new Date(to.value+'T12:00:00Z').getTime()-new Date(from.value+'T12:00:00Z').getTime())/86400000)+1
+  return Array.from({length:duration},(_,i)=>{
+    const key=shift(from.value,i)
+    const date=new Date(key+'T12:00:00Z')
+    return {key,label:new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',timeZone:'UTC'}).format(date),
+      weekday:new Intl.DateTimeFormat('es-MX',{weekday:'short',timeZone:'UTC'}).format(date)}
   })
 })
-const startDate = computed(() => days.value[0]?.key || '')
-const filteredEvents = computed(() => (data.value?.events || []).filter(event => {
-  if (event.date < startDate.value) return false
-  if (system.value !== 'all' && event.source !== system.value) return false
-  const q = search.value.toLocaleLowerCase('es-MX').trim()
-  return !q || [event.actor,event.actorEmail,event.matricula,event.student,event.fieldLabel].join(' ').toLocaleLowerCase('es-MX').includes(q)
-}))
-const indexedCells = computed(() => {
-  const map = new Map<string, AuditEvent[]>()
-  for (const event of filteredEvents.value) {
-    const key = event.category + '|' + event.date
-    const list = map.get(key) || []
-    list.push(event)
-    map.set(key,list)
+const indexed=computed(()=>{
+  const groups=new Map<string,Change[]>()
+  for(const item of filteredEvents.value){
+    const key=item.category+'|'+item.date
+    if(!groups.has(key))groups.set(key,[])
+    groups.get(key)!.push(item)
   }
-  return map
+  return groups
 })
-const cell = (category: string, day: string) => indexedCells.value.get(category + '|' + day) || []
-const cellActors = (category: string, day: string): ActorChip[] => {
-  const people = new Map<string,ActorChip>()
-  for (const e of cell(category,day)) {
-    const identity = e.actorEmail || e.source+':'+e.actor
-    if (!people.has(identity)) people.set(identity,{identity,name:e.actor,source:e.source,avatar:e.avatar})
+const cell=(category:string,day:string)=>indexed.value.get(category+'|'+day)||[]
+const cellActors=(category:string,day:string):AvatarActor[]=>{
+  const unique=new Map<string,AvatarActor>()
+  for(const entry of cell(category,day)){
+    const name=entry.source==='Husky Pass'?'Husky Pass · Familia':entry.actor
+    const key=entry.source+'|'+(entry.actorEmail||name)
+    if(!unique.has(key))unique.set(key,{key,name,source:entry.source,avatar:entry.avatar})
   }
-  return Array.from(people.values())
+  return [...unique.values()]
 }
-const categoryTotals = computed(() => Object.fromEntries(categories.value.map(cat=>[cat.key,filteredEvents.value.filter(e=>e.category===cat.key).length])))
-const distinctStudents = computed(() => new Set(filteredEvents.value.map(e=>e.matricula)).size)
-const activeFields = computed(() => new Set(filteredEvents.value.map(e=>e.field)).size)
-const selectedEvents = computed(() => filteredEvents.value.filter(e=>
-  !focus.value || (e.category === focus.value.category && (!focus.value.day || e.date === focus.value.day))
+const countCategory=(category:string)=>filteredEvents.value.filter(e=>e.category===category).length
+const selectionTitle=computed(()=>{
+  if(!selected.value)return 'Cambios recientes'
+  const label=categories.value.find(c=>c.key===selected.value?.category)?.label||'Cambios'
+  return label+(selected.value.day?' · '+selected.value.day:'')
+})
+const selectedEvents=computed(()=>filteredEvents.value.filter(e=>
+  !selected.value||(e.category===selected.value.category&&(!selected.value.day||e.date===selected.value.day))
 ))
-const selectionTitle = computed(() => {
-  if (!focus.value) return 'Cambios recientes'
-  const category = categories.value.find(c=>c.key===focus.value?.category)
-  return (category?.label || 'Cambios') + (focus.value.day ? ' · '+focus.value.day : '')
-})
-const selectCell = (category: string, day: string) => {
-  focus.value = focus.value?.category===category && focus.value?.day===day ? null : {category,day}
-}
-const selectField = (category: string) => {
-  focus.value = focus.value?.category===category && !focus.value?.day ? null : {category}
-}
-const resetFilters = () => { search.value=''; system.value='all'; range.value=7; focus.value=null }
-watch([focus,search,system,range],()=>{visibleCount.value=30})
+const selectCell=(category:string,day:string)=>{selected.value=selected.value?.category===category&&selected.value?.day===day?null:{category,day}}
+const selectField=(category:string)=>{selected.value=selected.value?.category===category&&!selected.value.day?null:{category}}
+const sourceClass=(value:string)=>value==='Aurora'?'aurora':value==='Husky Pass'?'husky':'other'
+const initials=(name:string,system:string)=>system==='Husky Pass'?'HP':name.trim().split(/\s+/).filter(Boolean).slice(0,2).map(x=>x[0]).join('').toUpperCase()||'?'
+const hideBrokenImage=(event:Event)=>{const target=event.target as HTMLImageElement;if(target)target.style.display='none'}
+const displayValue=(value:string|null)=>value===null?'Sin dato':value===''?'Vacío':value
+const formatTime=(value:string)=>value.slice(0,16).replace(' ',' · ')
+const setRange=(value:string)=>{range.value=value;if(value==='custom'){customFrom.value=shift(today,-29);customTo.value=today}}
+const resetFilters=()=>{search.value='';source.value='ALL';plantel.value='ALL'}
+const refreshAll=()=>{refresh();refreshHistory()}
+const moveChart=(direction:number)=>{matrixScroller.value?.scrollBy({left:direction*450,behavior:'smooth'})}
+const scrollToLatest=async()=>{await nextTick();if(matrixScroller.value)matrixScroller.value.scrollLeft=matrixScroller.value.scrollWidth}
+onMounted(scrollToLatest)
+watch([from,to,plantel],()=>{selected.value=null;visibleCount.value=30;scrollToLatest()})
+watch(busy,loading=>{if(!loading)scrollToLatest()})
+watch([search,source,selected],()=>{visibleCount.value=30})
 </script>
 
 <style scoped>
-.change-workspace{--aurora:#198a5a;--husky:#287bc9;--other:#767f90;background:#fff;color:#213047;border:1px solid #dde5e8;border-radius:24px;padding:clamp(16px,2.5vw,30px);display:grid;gap:22px;font:500 16px/1.45 Montserrat,system-ui,sans-serif}
+.change-workspace{--green:#20885b;--blue:#3478b9;--gray:#788697;display:grid;gap:20px;min-width:0;max-width:100%;padding:24px;background:white;border:1px solid #dce8e3;border-radius:20px;font:500 16px/1.4 Montserrat,system-ui,sans-serif;color:#253a40}
 .change-workspace *{box-sizing:border-box}
-.change-header,.header-tools,.legend,.stat-line,.section-heading,.event-heading,.event-person,.value-diff,.event-student{display:flex;align-items:center}
-.change-header,.section-heading,.event-heading{justify-content:space-between;gap:16px}
-.change-header h1{font:650 clamp(28px,3vw,36px)/1.1 Fredoka,Montserrat,sans-serif;margin:5px 0}
-.eyebrow{font-size:14px;color:#31745d;font-weight:800;letter-spacing:.08em;margin:0}
-.subheading,.section-heading p,.matrix-note,.coverage{color:#5c6d7d;font-size:15px;margin:0}
-.header-tools{gap:10px}
-.filter-button,.refresh-button,.clear-button,.show-more{border:1px solid #cddadf;background:white;color:#263b50;border-radius:12px;min-height:44px;padding:10px 15px;font:750 15px Montserrat,sans-serif;cursor:pointer}
-.filter-button{display:flex;align-items:center;gap:9px}
-.refresh-button{width:47px;padding:8px;display:grid;place-items:center}
-button:focus-visible{outline:3px solid #178ac0;outline-offset:2px}
-.legend{gap:22px;flex-wrap:wrap;font-size:16px;font-weight:750}
-.legend>span{display:flex;align-items:center;gap:8px}
-.source-indicator{width:13px;height:13px;border-radius:5px;display:inline-block}
-.source-indicator.aurora{background:var(--aurora)}.source-indicator.husky{background:var(--husky)}.source-indicator.other{background:var(--other)}
-.filter-drawer{display:flex;flex-wrap:wrap;gap:14px;padding:18px;background:#f4f7f8;border-radius:16px;align-items:end}
-.filter-drawer label{display:grid;gap:7px;flex:1;min-width:200px;font-weight:750;font-size:15px}
-.filter-drawer input,.filter-drawer select{background:#fff;border:1px solid #bccdd5;padding:12px;border-radius:10px;min-height:45px;font:550 16px Montserrat,sans-serif}
-.stat-line{gap:10px}
-.stat-line>div{flex:1;min-width:0;display:grid;gap:1px;padding:16px;background:#f4f7f7;border-radius:16px}
-.stat-line strong{font-size:28px;font-weight:850;line-height:1.15}.stat-line span{font-size:15px;color:#536474}
-.section-heading{align-items:flex-end}.section-heading h2{font:650 25px Fredoka,Montserrat,sans-serif;margin:0 0 4px}
-.period-label{padding:8px 12px;border:1px solid #dce5e7;border-radius:10px;font-size:15px;font-weight:750;white-space:nowrap}
-.matrix-scroll{width:100%;overflow-x:auto;border:1px solid #e0e7ea;border-radius:16px;background:white}
-.matrix-grid{display:grid;grid-template-columns:210px repeat(var(--day-count),minmax(155px,1fr));min-width:max-content}
-.matrix-column-title,.matrix-day-title{background:#edf4f3;padding:14px;border-bottom:1px solid #dce7e7;font-weight:800;color:#334b50}
-.matrix-column-title{position:sticky;left:0;z-index:3;font-size:15px}
-.matrix-day-title{text-align:center;font-size:15px;display:grid;gap:3px}.matrix-day-title strong{font-size:17px}
-.field-title{position:sticky;left:0;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:6px;text-align:left;min-height:145px;padding:15px;background:#fafcfc;border:0;border-right:1px solid #dee7e8;border-bottom:1px solid #e6ecee;color:#253b4c;cursor:pointer}
-.field-title.chosen{background:#eaf2f1}
-.field-name{font-size:17px;font-weight:800}.field-total{display:grid;place-items:center;background:#e5efed;min-width:34px;height:34px;border-radius:11px;font-size:17px}
-.matrix-cell{min-height:145px;border:0;border-right:1px solid #e7ecef;border-bottom:1px solid #e7ecef;background:#fff;display:flex;flex-direction:column;align-items:stretch;gap:5px;padding:9px;text-align:left;cursor:pointer}
-.matrix-cell.filled{background:#f9fbfb}.matrix-cell.active{background:#e3f0ed;box-shadow:inset 0 0 0 2px #267a68}
-.cell-count{font-weight:850;font-size:19px;line-height:1.1;text-align:right;color:#274356}
-.cell-person{display:flex;align-items:center;gap:7px;min-width:0}
-.actor-avatar{width:32px;height:32px;min-width:32px;border-radius:50%;background:#d9eae3;color:#195438;display:grid;place-items:center;font-size:12px;font-weight:850;overflow:hidden;border:2px solid var(--aurora)}
-.actor-avatar.husky{background:#e2eefb;color:#1b5890;border-color:var(--husky)}
-.actor-avatar.other{background:#e8eaee;color:#626d7d;border-color:var(--other)}
-.actor-avatar.large{width:47px;height:47px;min-width:47px;font-size:15px;border-width:3px}
-.actor-avatar img{width:100%;height:100%;object-fit:cover}
-.actor-name{font-size:16px;font-weight:750;line-height:1.2;overflow-wrap:anywhere}
-.remaining{font-size:15px;font-weight:800;color:#446276}
-.cell-empty{margin:auto;color:#a7b3b9;font-size:20px}
-.matrix-note{font-size:15px}
-.entries-heading{padding-top:8px;border-top:1px solid #e2eaeb}
-.event-list{display:grid;gap:12px}
-.event-card{border:1px solid #dfe8eb;border-radius:17px;padding:18px;display:grid;gap:12px}
-.actor-copy{display:grid;gap:3px;min-width:0}.actor-copy strong{font-size:17px;overflow-wrap:anywhere}.actor-copy span,.event-student span{font-size:15px;color:#657686}
-.source-chip{background:#ecf7f0;color:#1f6d47;padding:8px 12px;font-size:15px;font-weight:800;border-radius:10px;white-space:normal;text-align:right}
-.source-chip.husky{background:#eaf3fc;color:#235a89}.source-chip.other{background:#f0f1f4;color:#566171}
-.event-person{gap:10px;min-width:0}.event-student{gap:10px;flex-wrap:wrap}.event-student strong{font-size:17px}
-.value-diff{gap:14px;align-items:center}
-.value-diff>div{min-width:0;flex:1;padding:14px;border:1px solid #e1e8eb;background:#f8fafb;border-radius:12px;display:grid;gap:4px}
-.value-diff>div:last-child{background:#f2f9f4;border-color:#d9e9dc}
-.value-diff span{color:#596b79;font-size:15px;font-weight:650}
-.value-diff strong{font-size:18px;overflow-wrap:anywhere;line-height:1.35}
-.event-reference{font-size:15px;color:#586c7d;overflow-wrap:anywhere}
-.historical-note{background:#f5f4ed;border-radius:10px;padding:12px;color:#795b2d;font-size:16px;font-weight:750}
-.empty-state,.audit-loading{padding:35px;text-align:center;display:grid;justify-items:center;gap:10px;color:#58707e}
-.empty-state strong{font-size:20px}.empty-state p{font-size:15px;margin:0}
-.show-more{width:100%;min-height:50px}
-.audit-warning{padding:16px;background:#fff5eb;color:#805522;border:1px solid #f0d0a7;border-radius:12px;font-size:16px}
-.audit-warning button{border:0;background:transparent;text-decoration:underline;font:inherit;cursor:pointer}
-.coverage{border-top:1px solid #e2eaeb;padding-top:14px}
-.spinning{animation:spin .85s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
-@media(max-width:700px){.change-workspace{padding:13px;border-radius:15px;gap:17px}.change-header{align-items:start}.change-header h1{font-size:27px}.stat-line strong{font-size:24px}.stat-line span{font-size:14px}.stat-line>div{padding:12px}.event-heading{align-items:start}.source-chip{max-width:45%}.matrix-grid{grid-template-columns:145px repeat(var(--day-count),minmax(160px,1fr))}.field-title{padding:10px}.field-name{font-size:16px}.filter-button{padding:9px}}
+.change-header,.top-controls,.legend,.totals,.chart-header,.chart-nav,.events-heading,.event-head,.event-actor,.student-line,.diff,.event-footer{display:flex;align-items:center}
+.change-header,.chart-header,.events-heading,.event-head{justify-content:space-between;gap:16px}
+.heading-copy h1{font:650 clamp(26px,3vw,35px)/1.1 Fredoka,Montserrat,sans-serif;margin:0 0 5px}
+.heading-copy p{font-size:16px;color:#617174;margin:0}
+.icon-button,.filter-button,.chart-nav button,.clear-selection,.load-more,.secondary-filters button{min-height:45px;min-width:45px;background:white;border:1px solid #cedfda;border-radius:12px;color:#31594d;font:700 16px Montserrat,system-ui,sans-serif;cursor:pointer}
+.icon-button{display:grid;place-items:center}.filter-button{display:flex;gap:9px;align-items:center;justify-content:center;padding:8px 15px}
+button:focus-visible,select:focus-visible,input:focus-visible{outline:3px solid #3c9a7c;outline-offset:2px}
+.top-controls{gap:14px;flex-wrap:wrap;align-items:end}
+.campus-control{display:grid;gap:7px;flex:1;min-width:210px}
+.campus-control>span,.filter-label{font-size:16px;font-weight:800;color:#4b5f65}
+.campus-control select,.secondary-filters select,.secondary-filters input,.custom-dates input{height:48px;border:1px solid #d0ded9;border-radius:12px;background:#fff;padding:0 14px;color:#223a40;font:650 16px Montserrat,system-ui,sans-serif;width:100%}
+.period-area{display:grid;gap:7px;flex:1;min-width:320px}
+.period-buttons{display:flex;gap:4px;border:1px solid #d0ded9;background:#f5f8f7;border-radius:12px;padding:4px;min-height:48px;align-items:center}
+.period-buttons button{border:0;border-radius:9px;background:transparent;color:#53676b;font:800 16px Montserrat,system-ui,sans-serif;min-height:38px;padding:4px 13px;display:flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;cursor:pointer;flex:1}
+.period-buttons button.selected{background:white;color:#196744;box-shadow:0 2px 9px #1b5c421a}
+.custom-dates{display:flex;gap:14px;flex-wrap:wrap}.custom-dates label{font-size:16px;font-weight:750;display:grid;gap:6px;flex:1;min-width:190px}
+.secondary-filters{display:flex;gap:10px;flex-wrap:wrap;padding:14px;border-radius:14px;background:#f4f8f7}.secondary-filters input{flex:2;min-width:220px}.secondary-filters select{flex:1;min-width:180px}.secondary-filters button{padding:7px 14px}
+.legend{gap:22px;flex-wrap:wrap;font-size:16px;font-weight:800}.legend>span{display:flex;gap:7px;align-items:center}
+.legend-color{width:13px;height:13px;border-radius:4px;display:inline-block}
+.legend-color.aurora{background:var(--green)}.legend-color.husky{background:var(--blue)}.legend-color.other{background:var(--gray)}
+.totals{gap:10px}.totals>div{background:#f1f6f4;border:1px solid #e6eeea;border-radius:14px;flex:1;padding:13px 16px;display:grid;gap:3px;min-width:0}
+.totals strong{font-size:29px;line-height:1.1}.totals span{font-size:16px;font-weight:700;color:#59706c}
+.chart-header h2,.events-heading h2{font:650 24px Fredoka,Montserrat,sans-serif;margin:0}
+.chart-nav{gap:7px}.chart-nav button{display:grid;place-items:center}
+.matrix-scroll{max-width:100%;width:100%;overflow:auto;overscroll-behavior-x:contain;border:1px solid #dfebe6;border-radius:15px;scrollbar-width:thin;scrollbar-color:#9bbcb0 #f1f6f4}
+.matrix-grid{display:grid;grid-template-columns:185px repeat(var(--day-count),minmax(135px,1fr));width:max-content;min-width:100%}
+.matrix-corner,.day-heading{min-height:67px;border-bottom:1px solid #ddebe5;background:#f2f8f4;display:grid;align-content:center;padding:9px 12px;font-weight:800;color:#37584e;position:sticky;top:0;z-index:2}
+.matrix-corner{left:0;z-index:4}.day-heading{text-align:center;font-size:16px}.day-heading strong{font-size:18px}
+.field-heading{border:0;border-bottom:1px solid #e6eeea;border-right:1px solid #dce8e3;background:#fbfdfc;position:sticky;left:0;z-index:3;padding:13px;min-height:125px;display:flex;align-items:center;justify-content:space-between;gap:10px;text-align:left;cursor:pointer;color:#263e38}
+.field-heading span{font-size:17px;font-weight:850;line-height:1.35}.field-heading strong{font-size:19px;background:#e8f0ec;border-radius:10px;min-width:35px;text-align:center;padding:5px}
+.field-heading.chosen,.matrix-cell.active{background:#e3f2e9;box-shadow:inset 0 0 0 2px #70b99b}
+.matrix-cell{border:0;border-right:1px solid #edf1ee;border-bottom:1px solid #e5ede8;background:white;min-height:125px;padding:9px;display:flex;flex-direction:column;gap:5px;align-items:stretch;text-align:left;cursor:pointer;color:#31453f}
+.matrix-cell:hover,.field-heading:hover{background:#f0f7f3}
+.cell-number{font-size:21px;font-weight:900;text-align:right;line-height:1}
+.mini-actor{display:flex;gap:7px;align-items:center;min-width:0}.mini-name{font-size:16px;line-height:1.18;font-weight:800;overflow-wrap:anywhere}
+.avatar{width:34px;height:34px;min-width:34px;border-radius:50%;background:#dcece2;border:2px solid var(--green);display:grid;place-items:center;position:relative;overflow:hidden;color:#245e43;font-size:15px;font-weight:850}
+.avatar.husky{border-color:var(--blue);background:#e5eff9;color:#225a92}.avatar.other{border-color:var(--gray);background:#e9ecf0;color:#5c6774}
+.avatar img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;background:white}
+.avatar.large{width:51px;height:51px;min-width:51px;font-size:18px}
+.more-actors{font-size:16px;font-weight:800;color:#526f68}
+.no-change{margin:auto;font-size:20px;color:#9fb0aa}
+.events-heading{border-top:1px solid #e5ede8;padding-top:16px}.events-heading span{font-size:16px;color:#6b7d78}
+.clear-selection{padding:9px 16px}.event-list{display:grid;gap:12px}
+.event-card{border:1px solid #dce8e3;border-radius:17px;padding:17px;display:grid;gap:13px}
+.event-actor{min-width:0;gap:12px}.actor-lines{display:grid;gap:4px;min-width:0}.actor-lines strong{font-size:18px;line-height:1.25;overflow-wrap:anywhere}.actor-lines span{font-size:16px;color:#61746f}
+.field-chip{font-size:16px;font-weight:850;border-radius:10px;padding:8px 12px;background:#e8f4ec;color:#20724c;text-align:center}
+.field-chip.husky{background:#e6f0fb;color:#276aa6}.field-chip.other{background:#eff1f4;color:#657280}
+.student-line{gap:12px;flex-wrap:wrap}.student-line strong{font-size:18px}.student-line span{font-size:16px;color:#62736c}
+.diff{gap:12px}.diff>div{flex:1;min-width:0;border-radius:12px;border:1px solid #e2ebe7;background:#f7faf8;padding:12px;display:grid;gap:3px}.diff>div:last-child{background:#edf7f1;border-color:#d5e8db}
+.diff>div span{font-size:16px;color:#526860;font-weight:750}.diff strong{font-size:18px;overflow-wrap:anywhere}
+.activity-mark{display:flex;align-items:center;gap:9px;background:#f1f6f9;color:#4f6682;padding:12px;border-radius:11px;font-size:16px;font-weight:800}
+.event-footer{justify-content:space-between;color:#73827b;font-size:16px;border-top:1px solid #eef2ef;padding-top:9px}
+.empty-area{min-height:175px;display:grid;place-content:center;justify-items:center;gap:10px;color:#687d74}.empty-area strong{font-size:18px}
+.load-more{width:100%;font-weight:850}.error-message,.minor-notice{border-radius:10px;background:#fff6eb;color:#815c35;padding:12px;font-size:16px}.error-message button{margin-left:10px;text-decoration:underline;background:none;border:none;cursor:pointer;font-size:16px}
+.spinning{animation:spin .9s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+@media(max-width:850px){.change-workspace{padding:15px}.top-controls{align-items:stretch}.campus-control,.period-area{min-width:100%}.filter-button{width:100%}.period-buttons{overflow:auto}.matrix-grid{grid-template-columns:155px repeat(var(--day-count),minmax(145px,1fr))}.field-heading{padding:9px}.field-heading span{font-size:16px}.event-head{align-items:flex-start}.field-chip{max-width:45%}}
 </style>

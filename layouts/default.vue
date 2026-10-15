@@ -372,6 +372,7 @@
         :class="{
           'income-content-dashboard': route.path === '/dashboard',
           'income-content-talleres-report': route.path === '/reporte-talleres',
+          'income-content-audit': route.path === '/auditoria-control-escolar',
         }"
       >
         <slot />
@@ -2758,7 +2759,8 @@ const logout = async () => {
 }
 
 .income-content.income-content-dashboard,
-.income-content.income-content-talleres-report {
+.income-content.income-content-talleres-report,
+.income-content.income-content-audit {
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior-y: contain;
@@ -3173,7 +3175,8 @@ const logout = async () => {
 
 
   .income-content.income-content-dashboard,
-  .income-content.income-content-talleres-report {
+  .income-content.income-content-talleres-report,
+  .income-content.income-content-audit {
     overflow-x: hidden;
     overflow-y: auto;
     overscroll-behavior-y: contain;
