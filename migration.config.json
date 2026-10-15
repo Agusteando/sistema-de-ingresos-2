@@ -8,7 +8,8 @@
       "CONTROL_ESCOLAR_MYSQL_CONNECTION_LIMIT": "30",
       "DB_TRANSPORT": "bridge",
       "AURORA_TALLERES_SNAPSHOT_REFRESH_ENABLED": "true",
-      "AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES": "10"
+      "AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES": "10",
+      "AUDIT_LOKI_URL": "http://observability_loki:3100"
     },
     "aliases": {
       "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
@@ -55,7 +56,8 @@
     "containerPort": 3000,
     "hostPort": "auto",
     "networks": [
-      "database_database_net"
+      "database_database_net",
+      "monitoring_net"
     ],
     "labels": {
       "com.casita.service": "aurora"

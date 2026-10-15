@@ -5,7 +5,7 @@ import {createContext,runInContext} from 'node:vm'
 import {createHash} from 'node:crypto'
 import ts from 'typescript'
 const source=readFileSync(new URL('../server/utils/historical-student-audit.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
-const js=ts.transpile(source,{target:ts.ScriptTarget.ES2022})+'\nglobalThis.api={queryLoki,parseMessage,loadHistoricalActions};'
+const js=ts.transpile(source,{target:ts.ScriptTarget.ES2022})+'\nglobalThis.api={queryLoki,parseMessage,loadHistoricalActions,allowedLokiUrl};'
 const at='2026-09-30T01:03:35.120Z'
 const ns=String(BigInt(new Date(at).getTime())*1000000n)
 const hash=v=>createHash('sha256').update(String(v)).digest('hex').slice(0,12)
@@ -18,7 +18,7 @@ function setup(responder,query=async(sql)=>sql.includes('FROM matricula')?[{matr
  const ctx=createContext({createHash,URL,URLSearchParams,AbortSignal,Buffer,Date,Intl,process:{env:{}},console:{info(){},warn(){}},controlEscolarCentralQuery:query,
  fetch:async(url)=>{const selector=url.searchParams.get('query');calls.push(selector);const data=await responder(selector,calls.length);return {ok:true,json:async()=>data}}})
  runInContext(js,ctx)
- return {...ctx.api,calls}
+ return {...ctx.api,calls,env:ctx.process.env}
 }
 const from=new Date('2026-09-29T06:00:00Z'),to=new Date('2026-09-30T05:59:59Z')
 test('combines Aurora and Husky Pass across label families instead of returning the first source',async()=>{
@@ -61,4 +61,11 @@ test('extracts the real actor email from console-style and structured actor logs
  assert.equal(s.parseMessage(plain,ns,{}).actorEmail,'erika@casitaiedis.edu.mx')
  assert.equal(s.parseMessage(JSON.stringify({...school,actor:{name:'Erika',email:'erika@casitaiedis.edu.mx'}}),ns,{}).actor,'Erika')
  assert.equal(s.parseMessage(JSON.stringify({...family,level:'error'}),ns,{}),null)
+})
+
+test('normalizes collector push URLs and existing query URLs without duplicating API paths',()=>{
+ for(const path of ['', '/', '/loki/api/v1/push','/loki/api/v1/query_range']){
+  const s=setup(()=>payload([]));s.env.AUDIT_LOKI_URL='http://observability_loki:3100'+path
+  assert.equal(s.allowedLokiUrl().toString(),'http://observability_loki:3100/loki/api/v1/query_range')
+ }
 })
