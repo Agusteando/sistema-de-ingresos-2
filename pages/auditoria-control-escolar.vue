@@ -2,16 +2,12 @@
   <div class="control-audit-page">
     <FieldChangeMatrix />
     <details class="legacy-audit" @toggle="handleLegacyToggle">
-      <summary>Auditoría anterior y avance</summary>
+      <summary>Actividad y avance</summary>
       <div class="legacy-audit-content">
     <section class="audit-hero">
       <div class="audit-hero-copy">
-        <span>Auditoría Control Escolar</span>
-        <h1>Avance Control Escolar</h1>
-        <p>
-          Resumen ligero por plantel y ciclo escolar: quién entró, qué vistas se resolvieron,
-          qué alumnos fueron actualizados y qué avance tenía la captura cuando Control Escolar estuvo en pantalla.
-        </p>
+        <span>Control Escolar</span>
+        <h1>Avance de expedientes</h1>
       </div>
       <div class="audit-hero-actions">
         <label>
@@ -41,29 +37,22 @@
           <span>avance</span>
         </div>
         <div>
-          <small>Ciclo observado</small>
+          <small>Ciclo escolar</small>
           <h2>{{ watchedCicloLabel }}</h2>
           <p>
             {{ summary.completedStudents || 0 }} expedientes completos de
-            {{ summary.totalStudents || 0 }} evaluados. Pendientes: {{ summary.pendingStudents || 0 }}.
+            {{ summary.totalStudents || 0 }} revisados. Pendientes: {{ summary.pendingStudents || 0 }}.
           </p>
         </div>
       </article>
 
       <article class="audit-stat-card">
-        <small>Actualizaciones alumno</small>
+        <small>Actualizaciones de expedientes</small>
         <strong>{{ summary.studentUpdateCount || 0 }}</strong>
-        <span>Matrículas modificadas recientemente</span>
       </article>
       <article class="audit-stat-card">
-        <small>Vistas auditadas</small>
-        <strong>{{ summary.snapshotCount || 0 }}</strong>
-        <span>Snapshots de estado capturados</span>
-      </article>
-      <article class="audit-stat-card">
-        <small>Logins Control Escolar</small>
+        <small>Accesos a Control Escolar</small>
         <strong>{{ summary.loginCount || 0 }}</strong>
-        <span>Entradas registradas</span>
       </article>
     </section>
 
@@ -71,10 +60,10 @@
       <article class="audit-panel audit-panel-main">
         <header>
           <div>
-            <small>Timeline</small>
+            <small>Actividad</small>
             <h2>Última actividad</h2>
           </div>
-          <span>{{ timeline.length }} eventos</span>
+          <span>{{ timeline.length }} actividades</span>
         </header>
 
         <div v-if="loading && !timeline.length" class="audit-empty-state">
@@ -90,20 +79,19 @@
             <div class="audit-timeline-card">
               <div class="audit-timeline-head">
                 <div>
-                  <span>{{ eventTypeLabel(event.type) }}</span>
-                  <h3>{{ event.summary }}</h3>
+                  <h3>{{ eventTypeLabel(event.type) }}</h3>
+                  <strong v-if="event.student">{{ event.student }}</strong>
                 </div>
                 <time>{{ formatDateTime(event.createdAt) }}</time>
               </div>
               <div class="audit-timeline-meta">
                 <b>Plantel {{ event.plantel || selectedPlantel }}</b>
                 <b v-if="event.ciclo">Ciclo {{ event.ciclo }}</b>
-                <b v-if="event.matricula">Matrícula {{ event.matricula }}</b>
+                <b v-if="event.student && event.matricula">Matrícula {{ event.matricula }}</b>
                 <b v-if="event.progressPercent != null">{{ Number(event.progressPercent).toFixed(0) }}% avance</b>
               </div>
               <p v-if="event.actorName || event.actorEmail">
                 {{ event.actorName || event.actorEmail }}
-                <span v-if="event.sourceFlow">· {{ event.sourceFlow }}</span>
               </p>
             </div>
           </li>
@@ -119,48 +107,19 @@
         <article class="audit-panel">
           <header>
             <div>
-              <small>Análisis</small>
-              <h2>Estado más reciente</h2>
-            </div>
-          </header>
-          <dl class="audit-facts">
-            <div>
-              <dt>Base usada</dt>
-              <dd>{{ summary.sourceBase || 'Sin snapshot reciente' }}</dd>
-            </div>
-            <div>
-              <dt>Flujo</dt>
-              <dd>{{ summary.sourceFlow || 'Sin flujo registrado' }}</dd>
-            </div>
-            <div>
-              <dt>Última actividad</dt>
-              <dd>{{ summary.latestAt ? formatDateTime(summary.latestAt) : 'Sin registro' }}</dd>
-            </div>
-            <div>
-              <dt>Planteles observados</dt>
-              <dd>{{ watchedPlantelesLabel }}</dd>
-            </div>
-          </dl>
-          <p class="audit-note">
-            Se conserva actividad reciente y se limita el historial por plantel/ciclo para evitar crecimiento innecesario.
-          </p>
-        </article>
-
-        <article class="audit-panel">
-          <header>
-            <div>
-              <small>Matrículas</small>
+              <small>Alumnos</small>
               <h2>Últimos alumnos actualizados</h2>
             </div>
           </header>
           <div v-if="updatedStudents.length" class="audit-student-list">
             <div v-for="student in updatedStudents" :key="`${student.plantel || selectedPlantel}-${student.matricula}`">
-              <strong>{{ student.matricula }}</strong>
+              <strong>{{ student.student || 'Nombre no disponible' }}</strong>
+              <small v-if="student.student">Matrícula {{ student.matricula }}</small>
               <span>{{ student.plantel ? `Plantel ${student.plantel}` : `Plantel ${selectedPlantel}` }}</span>
-              <small>{{ student.total }} cambio{{ Number(student.total) === 1 ? '' : 's' }} · {{ formatDateTime(student.lastAt) }}</small>
+              <small>{{ student.total }} actualización{{ Number(student.total) === 1 ? '' : 'es' }} · {{ formatDateTime(student.lastAt) }}</small>
             </div>
           </div>
-          <div v-else class="audit-mini-empty">Sin matrículas actualizadas en este filtro.</div>
+          <div v-else class="audit-mini-empty">Sin alumnos actualizados en este filtro.</div>
         </article>
 
         <article class="audit-panel">
@@ -176,7 +135,7 @@
               <span>{{ item.label }}</span>
             </div>
           </div>
-          <div v-else class="audit-mini-empty">Sin desglose de pendientes en el último snapshot.</div>
+          <div v-else class="audit-mini-empty">Sin pendientes registrados.</div>
         </article>
       </aside>
     </section>
@@ -250,12 +209,6 @@ const progressPercent = computed(() => {
 })
 const progressPercentLabel = computed(() => `${Math.round(progressPercent.value)}%`)
 const progressRingStyle = computed(() => ({ '--audit-progress': `${progressPercent.value}%` }))
-const watchedPlantelesLabel = computed(() => {
-  const list = audit.value.filters?.watchedPlanteles || []
-  if (!list.length) return selectedPlantel.value === 'ALL' ? 'Todos' : `Plantel ${selectedPlantel.value}`
-  if (list.length > 4) return `${list.length} planteles`
-  return list.map((plantel) => `Plantel ${plantel}`).join(', ')
-})
 
 const eventTone = (type) => ({
   control_login: 'login',
@@ -268,9 +221,9 @@ const eventIcon = (type) => ({
   student_update: LucideEdit3,
 }[type] || LucideCheckCircle)
 const eventTypeLabel = (type) => ({
-  control_login: 'Login Control Escolar',
-  page_snapshot: 'Snapshot de avance',
-  student_update: 'Actualización de alumno',
+  control_login: 'Acceso a Control Escolar',
+  page_snapshot: 'Consulta de expedientes',
+  student_update: 'Expediente actualizado',
 }[type] || 'Evento')
 const formatDateTime = (value) => {
   if (!value) return 'Sin fecha'
@@ -307,7 +260,7 @@ const loadAudit = async () => {
       },
     })
   } catch (requestError) {
-    error.value = requestError?.data?.message || requestError?.message || 'No se pudo cargar la auditoría.'
+    error.value = 'No se pudo cargar la actividad. Intenta de nuevo.'
   } finally {
     loading.value = false
   }
@@ -417,7 +370,7 @@ const handleLegacyToggle = (event) => { if (event?.target?.open) void loadAudit(
 
 .audit-summary-grid {
   display: grid;
-  grid-template-columns: minmax(280px, 1.35fr) repeat(3, minmax(160px, .65fr));
+  grid-template-columns: minmax(280px, 1.35fr) repeat(2, minmax(160px, .65fr));
   gap: 1rem;
 }
 
@@ -734,3 +687,5 @@ const handleLegacyToggle = (event) => { if (event?.target?.open) void loadAudit(
 .legacy-audit{flex:0 0 auto;max-height:60%;overflow:auto}
 .legacy-audit>summary{padding:10px 16px;min-height:42px;font-size:16px}
 </style>
+
+<style scoped>.audit-hero{padding:18px;border-radius:14px;background:#fff;box-shadow:none}.audit-hero h1{font-family:var(--font-display);font-size:24px;font-weight:600;letter-spacing:normal}.audit-panel,.audit-stat-card,.audit-progress-card{border-radius:12px;box-shadow:none}.audit-panel h2{font-weight:650;letter-spacing:normal}.audit-timeline-card{border-radius:10px;background:#fff}.audit-timeline-head h3{font-weight:600}.audit-stat-card strong{font-weight:650}</style>
