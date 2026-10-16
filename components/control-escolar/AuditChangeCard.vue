@@ -1,19 +1,10 @@
 <template>
-  <article class="audit-change-card" :class="{compact}">
-    <header>
-      <div class="actor">
-        <AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail" />
-        <div><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><span>{{ record.source }} · {{ dateLabel(record.recordedAt) }}</span></div>
-      </div>
-      <span class="field" :class="{family:record.source==='Husky Pass'}">{{ record.fieldLabel }}</span>
-    </header>
+  <article class="audit-change-card">
+    <header><div class="actor"><AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail"/><div><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><span :class="{family:record.source==='Husky Pass'}">{{ record.source }}</span></div></div><time>{{ dateLabel(record.recordedAt) }}</time></header>
     <div class="student"><strong>{{ namedStudent(record)?record.student:'Nombre no disponible' }}</strong><span v-if="namedStudent(record)">{{ record.matricula }} · {{ record.plantel }}</span></div>
-    <div v-if="compact&&record.quality==='verified'" class="inline-diff"><span>{{ record.fieldLabel }}:</span><strong>{{ value(record.before) }}</strong><LucideArrowRight :size="17"/><strong>{{ value(record.after) }}</strong></div>
-    <div v-else-if="record.quality==='verified'" class="diff">
-      <div><span>Antes</span><strong>{{ value(record.before) }}</strong></div><LucideArrowRight :size="22"/>
-      <div><span>Después</span><strong>{{ value(record.after) }}</strong></div>
-    </div>
-    <div v-else class="historical"><LucideHistory :size="20"/>{{ record.source==='Husky Pass'?'Envío registrado':'Actualización registrada' }}</div>
+    <div class="field">{{ record.fieldLabel }}</div>
+    <div v-if="record.quality==='verified'" class="diff"><div><span>Antes</span><strong>{{ value(record.before) }}</strong></div><LucideArrowRight :size="18"/><div><span>Después</span><strong>{{ value(record.after) }}</strong></div></div>
+    <div v-else class="historical"><LucideHistory :size="17"/>{{ record.source==='Husky Pass'?'Envío registrado':'Actualización registrada' }}</div>
 
   </article>
 </template>
@@ -26,15 +17,6 @@ const dateLabel=(value:string)=>{const date=new Date(value.replace(' ','T')+'-06
 const value=(v:string|null)=>v===null?'Sin dato':v===''?'Vacío':v
 </script>
 <style scoped>
-.audit-change-card{display:grid;gap:14px;padding:18px;border:1px solid #dce8e3;border-radius:16px;background:white;color:#253a40;font-family:var(--font-body);font-size:16px;line-height:1.4;font-weight:500;min-width:0}
-header,.actor,.student,.diff,footer{display:flex;align-items:center;gap:12px}header{justify-content:space-between;flex-wrap:wrap}.actor{min-width:0;flex:1}.actor>div{display:grid;gap:4px;min-width:0}.actor strong{font-size:18px;font-weight:700;overflow-wrap:anywhere}.actor span,.student>span{color:#61746f}.student{flex-wrap:wrap}.student strong{font-size:18px}.field{background:#e8f4ec;color:#20724c;padding:7px 10px;border-radius:9px;font-weight:700;overflow-wrap:anywhere}.field.family{background:#e6f0fb;color:#276aa6}
-.diff>div{display:grid;gap:5px;flex:1;min-width:0;background:#f7faf8;border:1px solid #e2ebe7;border-radius:12px;padding:12px}.diff>div:last-child{background:#edf7f1;border-color:#d5e8db}.diff span{color:#526860}.diff strong{font-size:18px;overflow-wrap:anywhere}.diff>svg{flex:0 0 22px}
-.historical{display:flex;align-items:center;gap:9px;padding:12px;border-radius:10px;background:#f1f6f9;color:#4f6682;font-weight:650}footer{justify-content:space-between;border-top:1px solid #eef2ef;padding-top:10px;color:#61746f}
-@media(max-width:430px){.audit-change-card{padding:14px}.diff{gap:7px}.diff>div{padding:9px}}
+.audit-change-card{display:grid;gap:12px;padding:15px;border:1px solid #dfe7e1;border-radius:12px;background:#fff;color:#223d2e;font-family:var(--font-body);font-size:15px;line-height:1.4;min-width:0}header{display:flex;justify-content:space-between;align-items:start;gap:10px}.student{display:grid;gap:4px;min-width:0}.student strong{font-size:16px;font-weight:500;overflow-wrap:anywhere}.student span{font-size:12px;color:#78897e}time{font-size:11px;color:#7c8d81;max-width:95px;flex:0 0 auto;text-align:right;line-height:1.5}.field{font-size:13px;color:#4b6656;font-weight:550;overflow-wrap:anywhere}.diff{display:flex;align-items:center;gap:8px;padding:11px 0;border-top:1px solid #edf1ee;border-bottom:1px solid #edf1ee}.diff>div{display:grid;gap:5px;min-width:0;flex:1}.diff span{font-size:11px;color:#7c8c80}.diff strong{font-size:15px;font-weight:550;overflow-wrap:anywhere}.diff>div:first-child strong{color:#77877b;font-weight:450}.diff>div:last-child strong{color:#00692f}.diff>svg{flex-shrink:0;color:#9db3a3}.actor{min-width:0;flex:1;display:flex;align-items:center;gap:8px}.actor :deep(.audit-avatar){width:35px;height:35px;flex-basis:35px;font-size:11px}.actor>div{display:grid;gap:1px;min-width:0}.actor strong{font-size:17px;font-weight:550;overflow-wrap:anywhere}.actor span{font-size:12px;color:#7b8f80}.actor .family{color:#2563b8}.historical{display:flex;align-items:center;gap:7px;padding:9px 0;border-top:1px solid #edf1ee;border-bottom:1px solid #edf1ee;font-size:13px;color:#5b7487}
+@media(max-width:760px){.student strong{font-size:18px}.diff strong{font-size:16px}.actor strong{font-size:17px}.actor span{font-size:12px}}
 </style>
-
-<style scoped>
-.audit-change-card{padding:14px;border-radius:10px;gap:12px}.actor strong{font-size:17px;font-weight:600}.field{font-size:15px;font-weight:550;padding:4px 7px}.student{display:grid;gap:3px}.student strong{font-size:17px;font-weight:600}.diff{gap:8px}.diff>div{padding:10px}.diff strong{font-size:19px;font-weight:650}.historical{font-weight:500}.compact{gap:8px;padding:12px}.compact .actor :deep(.audit-avatar){width:32px;height:32px;flex-basis:32px}.compact .actor strong{font-size:16px}.compact .actor span{font-size:15px}.compact .field{display:none}.compact .student strong{font-size:16px}.compact .student{gap:2px}.compact footer{display:none}.compact .historical{background:transparent;padding:0;font-size:15px}.inline-diff{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:16px}.inline-diff span{color:#607481}.inline-diff strong{font-weight:600;overflow-wrap:anywhere}
-</style>
-
-<style scoped>header{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}.actor{width:100%}.actor>div{flex:1}.actor strong{overflow-wrap:normal;word-break:normal}.actor span{font-size:14px}.field{justify-self:start;max-width:100%}</style>
