@@ -3,24 +3,26 @@
     <header>
       <div class="actor">
         <AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail" />
-        <div><strong>{{ record.source==='Husky Pass'?'Husky Pass · Familia':record.actor }}</strong><span>{{ record.source }} · {{ record.recordedAt.slice(0,16).replace(' ',' · ') }}</span></div>
+        <div><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><span>{{ record.source }} · {{ dateLabel(record.recordedAt) }}</span></div>
       </div>
       <span class="field" :class="{family:record.source==='Husky Pass'}">{{ record.fieldLabel }}</span>
     </header>
-    <div class="student"><strong>{{ record.student }}</strong><span>{{ record.matricula }} · {{ record.plantel }}</span></div>
+    <div class="student"><strong>{{ namedStudent(record)?record.student:'Nombre no disponible' }}</strong><span v-if="namedStudent(record)">{{ record.matricula }} · {{ record.plantel }}</span></div>
     <div v-if="compact&&record.quality==='verified'" class="inline-diff"><span>{{ record.fieldLabel }}:</span><strong>{{ value(record.before) }}</strong><LucideArrowRight :size="17"/><strong>{{ value(record.after) }}</strong></div>
     <div v-else-if="record.quality==='verified'" class="diff">
       <div><span>Antes</span><strong>{{ value(record.before) }}</strong></div><LucideArrowRight :size="22"/>
       <div><span>Después</span><strong>{{ value(record.after) }}</strong></div>
     </div>
     <div v-else class="historical"><LucideHistory :size="20"/>{{ record.source==='Husky Pass'?'Envío registrado':'Actualización registrada' }}</div>
-    <footer v-if="!compact"><span>{{ record.quality==='verified'?'Cambio guardado':'Registro histórico' }}</span><span v-if="record.eventId">#{{ record.eventId }}</span></footer>
+
   </article>
 </template>
 <script setup lang="ts">
 import { LucideArrowRight, LucideHistory } from 'lucide-vue-next'
 import AuditActorAvatar from './AuditActorAvatar.vue'
 defineProps<{compact?:boolean;record:{actorEmail?:string;actor:string;avatar:string;source:string;fieldLabel:string;recordedAt:string;student:string;matricula:string;plantel:string;quality:string;before:string|null;after:string|null;eventId:number}}>()
+const namedStudent=(record:{student:string;matricula:string})=>Boolean(record.student?.trim()&&record.student.trim().toUpperCase()!==record.matricula?.trim().toUpperCase())
+const dateLabel=(value:string)=>{const date=new Date(value.replace(' ','T')+'-06:00');return Number.isFinite(date.getTime())?new Intl.DateTimeFormat('es-MX',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit',timeZone:'America/Mexico_City'}).format(date):''}
 const value=(v:string|null)=>v===null?'Sin dato':v===''?'Vacío':v
 </script>
 <style scoped>
@@ -34,3 +36,5 @@ header,.actor,.student,.diff,footer{display:flex;align-items:center;gap:12px}hea
 <style scoped>
 .audit-change-card{padding:14px;border-radius:10px;gap:12px}.actor strong{font-size:17px;font-weight:600}.field{font-size:15px;font-weight:550;padding:4px 7px}.student{display:grid;gap:3px}.student strong{font-size:17px;font-weight:600}.diff{gap:8px}.diff>div{padding:10px}.diff strong{font-size:19px;font-weight:650}.historical{font-weight:500}.compact{gap:8px;padding:12px}.compact .actor :deep(.audit-avatar){width:32px;height:32px;flex-basis:32px}.compact .actor strong{font-size:16px}.compact .actor span{font-size:15px}.compact .field{display:none}.compact .student strong{font-size:16px}.compact .student{gap:2px}.compact footer{display:none}.compact .historical{background:transparent;padding:0;font-size:15px}.inline-diff{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:16px}.inline-diff span{color:#607481}.inline-diff strong{font-weight:600;overflow-wrap:anywhere}
 </style>
+
+<style scoped>header{display:grid;grid-template-columns:minmax(0,1fr);gap:8px}.actor{width:100%}.actor>div{flex:1}.actor strong{overflow-wrap:normal;word-break:normal}.actor span{font-size:14px}.field{justify-self:start;max-width:100%}</style>

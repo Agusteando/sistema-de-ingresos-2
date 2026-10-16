@@ -293,6 +293,16 @@ export const getControlEscolarAuditSummary = async (event: any, options: AuditQu
   const results = settled.flatMap((entry) => entry.status === 'fulfilled' ? [entry.value] : [])
   const unavailablePlanteles = planteles.filter((_, index) => settled[index]?.status === 'rejected')
   const merged = mergeAuditResults(results, limit)
+  const keys = [...new Set([...merged.events, ...merged.updatedStudents].map(row => row.matricula).filter(Boolean))]
+  const names = new Map<string,string>()
+  for (let i=0;i<keys.length;i+=200) {
+    const part=keys.slice(i,i+200)
+    const rows=await controlEscolarCentralQuery<any[]>(
+      'SELECT matricula,nombres,apellido_paterno,apellido_materno FROM matricula WHERE UPPER(matricula) IN ('+part.map(()=>'?').join(',')+')',part
+    )
+    for(const row of rows) names.set(String(row.matricula||'').toUpperCase(),[row.nombres,row.apellido_paterno,row.apellido_materno].filter(Boolean).join(' ').trim())
+  }
+  const withStudent = (row: any) => ({...row,student:names.get(String(row.matricula||'').toUpperCase())||''})
   const countMap = countsByType(merged.counts)
   const latest = merged.latestSnapshot
   const totalEvents = Object.values(countMap).reduce<number>((sum, value) => sum + Number(value || 0), 0)
@@ -320,7 +330,7 @@ export const getControlEscolarAuditSummary = async (event: any, options: AuditQu
       sourceBase: latest?.sourceBase || '',
       sourceFlow: latest?.sourceFlow || '',
     },
-    timeline: merged.events,
-    updatedStudents: merged.updatedStudents,
+    timeline: merged.events.map(withStudent),
+    updatedStudents: merged.updatedStudents.map(withStudent),
   }
 }

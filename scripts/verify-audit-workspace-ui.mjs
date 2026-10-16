@@ -44,11 +44,12 @@ try {
   const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
   const make=(id,actor,source='Aurora',category='nombre')=>({id,eventId:1,date:day,recordedAt:day+' 09:42:18',matricula:'PT0123',student:'Alumno de prueba visual',field:category,fieldLabel:categories.find(c=>c.key===category).label,category,before:'Valor anterior',after:'Valor nuevo',source,actor,actorEmail:source==='Aurora'?'visual'+id+'@casitaiedis.edu.mx':'',avatar:source==='Aurora'?'https://lh3.googleusercontent.com/a/'+(id==='2'?'expired-fixture':'audit-fixture'):'',flow:'test',quality:source==='Aurora'?'verified':'historical',plantel:'PT',ciclo:'2026'})
   const stored=[make('1','Erika Ramos'),make('2','Mónica Pérez'),make('3','Ismael García'),make('5','Erika Ramos','Aurora','trabajo')]
-  const external=[make('4','Husky Pass · Familia','Husky Pass')]
+  const external=[{...make('4','Husky Pass · Familia','Husky Pass'),fieldLabel:'Identidad · credencialización'}]
   await page.route('**/api/**',async route=>{
    const url=new URL(route.request().url())
    if(!url.pathname.startsWith('/api/'))return route.continue()
    if(url.pathname==='/api/directory/photo')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#9fc7b3"/></svg>'})
+   if(url.pathname==='/api/control-escolar/audit')return route.fulfill({json:{summary:{completedStudents:2,totalStudents:3,pendingStudents:1,studentUpdateCount:1,loginCount:2,progressPercent:67,sourceBase:'live-bridge-enriched',sourceFlow:'student_patch_matricula_overlay'},timeline:[{id:1,type:'student_update',createdAt:day+'T12:00:00Z',student:'Ana María García López',matricula:'PT0123',plantel:'PT',summary:'student_patch_matricula_overlay',sourceFlow:'student_patch_matricula_overlay'},{id:2,type:'page_snapshot',createdAt:day+'T12:00:00Z',summary:'Snapshot de avance',payload:{counters:{sinCurp:1}}}],updatedStudents:[{student:'Ana María García López',matricula:'PT0123',plantel:'PT',total:1,lastAt:day+'T12:00:00Z'}],filters:{}}})
    if(url.pathname==='/api/control-escolar/audit/changes')return route.fulfill({json:{events:stored,categories,allowedPlanteles:['PT','SM'],truncated:false}})
    if(url.pathname==='/api/control-escolar/audit/history')return unavailable?route.fulfill({status:503,json:{statusCode:503,message:'No se pudo completar la consulta.',data:{requestId:'fixture-history-failure',code:'AUDIT_HISTORY_UNAVAILABLE',retryable:true}}}):route.fulfill({json:{events:external,available:true,truncated:false}})
    return route.fulfill({status:401,json:{message:'Synthetic unauthenticated API; visual fixture only'}})
@@ -60,6 +61,7 @@ try {
    await page.screenshot({path:output+`/failure-${width}x${height}.png`})
    console.error(JSON.stringify({width,height,pageErrors:errors,warnings:warnings.slice(-10),html:(await page.locator('.income-content').innerHTML()).slice(0,2000),url:page.url(),body:(await page.locator('body').innerText()).slice(0,2200)}));throw error
   }
+  assert.match(await page.locator('.inline-summary').innerText(),/cambios/);
   const cell=page.locator('.matrix-cell').filter({hasText:'Husky Pass'})
   try{await cell.filter({hasText:'Erika Ramos'}).waitFor({timeout:30000})}catch(error){console.error((await page.locator('.change-workspace').innerText()).slice(0,2000));await page.screenshot({path:output+`/failure-${width}x${height}.png`});throw error}
   await cell.locator('img[src*="directory/photo"]').waitFor({timeout:30000})
@@ -85,7 +87,7 @@ try {
   const box=await inspector.boundingBox(),gridBox=await page.locator('.audit-overview').boundingBox()
   assert.ok(box.y>=0&&box.y+box.height<=height+1)
   if(width>760)assert.ok(box.x>=gridBox.x+gridBox.width-1,'inspector must not overlap matrix')
-  assert.ok(await inspector.getByText('Husky Pass · Familia',{exact:true}).isVisible())
+  assert.ok(await inspector.getByText('Familia',{exact:true}).isVisible())
   const after=await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop}))
   assert.deepEqual(after,before)
   assert.equal(await page.locator('.field-heading').count(),7)
@@ -115,6 +117,13 @@ try {
   assert.equal(await page.locator('.matrix-cell').filter({hasText:'Erika Ramos'}).count()>0,true)
   assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth),true)
   assert.deepEqual(errors,[])
+  await page.getByText('Actividad y avance',{exact:true}).click()
+  await page.locator('.audit-student-list').getByText('Ana María García López',{exact:true}).waitFor()
+  const copy=await page.locator('.legacy-audit').innerText()
+  assert.doesNotMatch(copy,/student_patch|live-bridge|Snapshot|source_flow|Se conserva actividad|Base usada|Análisis/i)
+  assert.match(copy,/Expediente actualizado/)
+  assert.match(copy,/Actualizaciones de expedientes/i)
+  await page.screenshot({path:output+`/audit-activity-${width}x${height}.png`})
   results.push({width,height,inspectorInViewport:true,scrollPositionPreserved:true,workspaceImagesRendered:true,allActorsAndHuskyVisible:true,nonModalInspector:true,existingFonts:true,searchableFilters:true,unavailableHistoryExplicit:true,pageErrors:errors})
   await browser.close();browser=null
  }
