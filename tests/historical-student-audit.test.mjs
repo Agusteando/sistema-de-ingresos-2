@@ -69,3 +69,17 @@ test('normalizes collector push URLs and existing query URLs without duplicating
   assert.equal(s.allowedLokiUrl().toString(),'http://observability_loki:3100/loki/api/v1/query_range')
  }
 })
+test('field drilldown discovers retained bounds, crosses empty periods beyond 90 days and scopes the source by student identities',async()=>{
+ const oldAt=new Date('2024-02-01T12:00:00Z').getTime(),calls=[]
+ const ctx=createContext({createHash,URL,URLSearchParams,AbortSignal,Buffer,Date,Intl,process:{env:{}},console:{info(){},warn(){}},controlEscolarCentralQuery:async(sql)=>sql.includes('FROM matricula')?[{matricula:'PT123'},{matricula:'PM0637'}]:[],fetch:async url=>{
+  const start=Number(BigInt(url.searchParams.get('start'))/1000000n),end=Number(BigInt(url.searchParams.get('end'))/1000000n),index=url.pathname.endsWith('/index/stats')
+  calls.push({index,start,end,query:url.searchParams.get('query')})
+  const found=start<=oldAt&&end>=oldAt
+  const data=index?{entries:found?2:0,chunks:found?1:0}: {status:'success',data:{result:found?[{stream:{container_name:'app-aurora'},values:[[String(BigInt(oldAt)*1000000n),JSON.stringify(school)],[String(BigInt(oldAt+1)*1000000n),JSON.stringify({...school,matricula:'PM0637'})]]}]:[]}}
+  return {ok:true,json:async()=>data}
+ }})
+ runInContext(js,ctx)
+ const result=await ctx.api.loadHistoricalActions({from:new Date(0),to:new Date('2026-10-16T12:00:00Z'),planteles:['PT'],matricula:'PT123',fullHistory:true})
+ assert.ok(result.events.length>0);assert.ok(result.events.every(e=>e.matricula==='PT123'));assert.equal(result.events[0].date,'2024-02-01')
+ assert.ok(calls.some(c=>c.index&&c.start===0));assert.ok(calls.filter(c=>!c.index).every(c=>c.query.includes('PT123')&&c.query.includes(hash('PT123'))));assert.ok(calls.filter(c=>!c.index).every(c=>c.end-c.start<=7*86400000));assert.equal(result.partial,false)
+})

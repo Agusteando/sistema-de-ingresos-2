@@ -81,7 +81,7 @@ export const allowedLokiUrl = () => {
   return url
 }
 type CaptureResult = { records: LokiRecord[]; available: boolean; truncated: boolean; partial: boolean }
-export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> => {
+export const queryLoki = async (from: Date, to: Date, identityTokens: string[] = []): Promise<CaptureResult> => {
   const url = allowedLokiUrl()
   const selectors = parseSelections(process.env.AUDIT_LOKI_SELECTOR || '')
   const token = compact(process.env.AUDIT_LOKI_TOKEN || process.env.LOKI_BEARER_TOKEN)
@@ -106,7 +106,7 @@ export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> =>
     let truncated = false
     try {
       for (let page = 0; page < 8 && ceiling >= startNs; page++) {
-        url.searchParams.set('query', selector + filter)
+        url.searchParams.set('query', selector + filter + (identityTokens.length?' |~ '+JSON.stringify('(?i)'+identityTokens.join('|')):''))
         url.searchParams.set('start', String(startNs))
         url.searchParams.set('end', String(ceiling))
         url.searchParams.set('direction', 'BACKWARD')
@@ -145,6 +145,54 @@ export const queryLoki = async (from: Date, to: Date): Promise<CaptureResult> =>
   }
   if (!anySuccess) throw lastError || new Error('No history selectors configured')
   return { records, available: true, truncated: anyTruncated, partial: failed > 0 }
+}
+// Discover retained stream bounds from the index, rather than treating an empty
+// week as the beginning of history or imposing the grid's 90-day window.
+const boundsCache=new Map<string,{at:number;from:number}>()
+const boundsPending=new Map<string,Promise<Date>>()
+const historicalStart=async(to:Date)=>{
+  const url=allowedLokiUrl()
+  url.pathname=url.pathname.replace(/query_range$/, 'index/stats')
+  const selectors=parseSelections(process.env.AUDIT_LOKI_SELECTOR||'')
+  const headers:Record<string,string>={Accept:'application/json'}
+  const token=compact(process.env.AUDIT_LOKI_TOKEN||process.env.LOKI_BEARER_TOKEN)
+  const username=compact(process.env.AUDIT_LOKI_USERNAME||process.env.LOKI_USERNAME)
+  const password=compact(process.env.AUDIT_LOKI_PASSWORD||process.env.LOKI_PASSWORD)
+  if(token)headers.Authorization='Bearer '+token
+  else if(username)headers.Authorization='Basic '+Buffer.from(username+':'+password).toString('base64')
+  const tenant=compact(process.env.AUDIT_LOKI_TENANT_ID)
+  if(tenant)headers['X-Scope-OrgID']=tenant
+  const key=[url.toString(),selectors.join('|'),tenant,hash12(headers.Authorization||'')].join('|')
+  const cached=boundsCache.get(key)
+  if(cached&&Date.now()-cached.at<300000)return new Date(cached.from)
+  const existing=boundsPending.get(key)
+  if(existing)return existing
+  const compute=async()=>{
+  const hasData=async(from:number,end:number)=>{
+    const results=await Promise.all(selectors.map(async selector=>{
+      const request=new URL(url)
+      request.search=new URLSearchParams({query:selector,start:String(BigInt(Math.floor(from))*1000000n),end:String(BigInt(Math.floor(end))*1000000n)}).toString()
+      const response=await fetch(request,{headers,signal:AbortSignal.timeout(7500)})
+      if(!response.ok)throw new Error('Historical index status '+response.status)
+      const body:any=await response.json()
+      if(typeof body.entries!=='number'||typeof body.chunks!=='number'||!Number.isFinite(body.entries)||!Number.isFinite(body.chunks)||body.entries<0||body.chunks<0)throw new Error('Historical index returned invalid bounds')
+      return Number(body.entries)>0||Number(body.chunks)>0
+    }))
+    return results.some(Boolean)
+  }
+  const end=to.getTime()
+  let from=Math.max(0,end-7*86400000) // Include recent, not-yet-indexed ingester data.
+  if(await hasData(0,end)){
+    let low=0,high=end
+    while(high-low>86400000){const mid=Math.floor((low+high)/2);if(await hasData(low,mid))high=mid;else low=mid}
+    from=Math.min(from,Math.max(0,Math.floor(low/86400000)*86400000-86400000))
+  }
+  if(boundsCache.size>6)boundsCache.clear()
+  boundsCache.set(key,{at:Date.now(),from})
+  return new Date(from)
+  }
+  const pending=compute();boundsPending.set(key,pending)
+  try{return await pending}finally{boundsPending.delete(key)}
 }
 type Account = { matricula: string; userId: number; name?: string }
 let accountsCache: { at: number; byMatricula: Map<string,Account>; byHash: Map<string,Account> } | null = null
@@ -192,20 +240,23 @@ const labelFor = (field: string) => ({
 } as Record<string,string>)[field] || field.replace(/([a-z])([A-Z])/g,'$1 $2').replace(/_/g,' ')
 const historyCache = new Map<string, { at: number; value: {events: HistoricalStudentAction[]; available: boolean; truncated: boolean; partial: boolean; checked: number; unmatched: number} }>()
 export const loadHistoricalActions = async (input: {
-  from: Date; to: Date; planteles: string[]
+  from: Date; to: Date; planteles: string[]; matricula?:string; fullHistory?:boolean
 }) => {
-  const key = [input.from.toISOString(), input.to.toISOString(), [...input.planteles].sort().join(',')].join('|')
+  if((input.fullHistory||input.matricula)&&!/^[A-Z]{1,6}\d{2,8}$/.test(input.matricula||''))throw new Error('Specific student required for full history')
+  const key = input.fullHistory?['all',input.matricula,[...input.planteles].sort().join(',')].join('|'):[input.from.toISOString(), input.to.toISOString(), [...input.planteles].sort().join(','),input.matricula||''].join('|')
   const stored = historyCache.get(key)
   if (stored && Date.now() - stored.at < 90000) return stored.value
   const accounts = await resolveHistoricalAccounts()
+  const from=input.fullHistory?await historicalStart(input.to):input.from
+  const identityTokens=input.matricula?[input.matricula,...[...accounts.byHash].filter(([,account])=>account.matricula===input.matricula).map(([hash])=>hash)]:[]
   const combined: LokiRecord[] = []
   let truncated = false
   let available = false
   let partial = false
   // Small windows bound memory and server load even for a broad retrospective date selection.
-  for (let start = input.from.getTime(); start < input.to.getTime();) {
+  for (let start = from.getTime(); start < input.to.getTime();) {
     const end = Math.min(start + 7 * 86400000, input.to.getTime())
-    const result = await queryLoki(new Date(start), new Date(end))
+    const result = await queryLoki(new Date(start), new Date(end), identityTokens)
     combined.push(...result.records)
     truncated ||= result.truncated
     available ||= result.available
@@ -224,7 +275,7 @@ export const loadHistoricalActions = async (input: {
     const matricula = account?.matricula || (/^[A-Z]{1,6}\d{2,8}$/.test(matriculaHash) ? matriculaHash : '')
     if (!matricula) { unmatched++; continue }
     const plantel = allCampuses(matricula)
-    if (!input.planteles.includes(plantel)) continue
+    if (!input.planteles.includes(plantel)||input.matricula&&matricula!==input.matricula) continue
     const fields = item.source === 'Husky Pass'
       ? (item.message.includes('credentialization.submission.database-committed') ? ['nombres'] : ['perfil_familiar'])
       : (item.fields?.length ? item.fields : ['perfil_escolar'])
