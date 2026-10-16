@@ -41,6 +41,7 @@
           </span>
         </button>
       </div>
+
     </section>
 
     <div
@@ -206,6 +207,24 @@
                   </h2>
                 </div>
                 <div class="ce-list-header-actions">
+                  <button type="button" class="ce-bulk-select-button ce-section-manage-button"
+                    :title="controlBulkSelectedCount ? 'Asignar secciones a alumnos seleccionados' : 'Crear y administrar secciones'"
+                    @click="controlBulkSelectedCount ? openSectionModalForSelection() : openSectionModal()">
+                    <LucideTags :size="15" /><span>{{ controlBulkSelectedCount ? 'Asignar sección' : 'Secciones' }}</span>
+                  </button>
+                  <div v-if="customSections.length" class="ce-section-rail" aria-label="Secciones personalizadas">
+                    <span class="ce-section-rail-title"><LucideTags :size="15" /> Secciones</span>
+                    <button
+                      v-for="section in customSections"
+                      :key="`section-filter-${section.id}`"
+                      type="button"
+                      :class="['ce-section-filter', { active: activeSectionFilter === sectionFilterKey(section.id) }]"
+                      :aria-pressed="activeSectionFilter === sectionFilterKey(section.id)"
+                      @click="toggleControlSectionFilter(section.id)"
+                    >
+                      <span>{{ section.name }}</span><b>{{ customSectionCounts[section.id] || 0 }}</b>
+                    </button>
+                  </div>
                   <button
                     v-if="pendingGroupDraftCount"
                     type="button"
@@ -451,6 +470,10 @@
                             >
                               Sin guardar
                             </span>
+                          </span>
+                          <span v-if="student.customSections?.length" class="ce-row-sections" :title="sectionBadgeTitle(student)">
+                            <span>{{ visibleStudentSections(student)[0]?.name }}</span>
+                            <b v-if="hiddenStudentSectionsCount(student)">+{{ hiddenStudentSectionsCount(student) }}</b>
                           </span>
                         </span>
                       </span>
@@ -1040,7 +1063,19 @@
                         </div>
                       </div>
                     </section>
-
+                    <div class="ce-section-detail" aria-label="Secciones personalizadas del alumno">
+                      <div class="ce-section-detail-title">
+                        <div><small>Secciones personalizadas</small>
+                          <strong>{{ selectedStudent.customSections?.length ? selectedStudent.customSections.map(section => section.name).join(' · ') : 'Sin sección asignada' }}</strong>
+                        </div>
+                        <button type="button" @click="openSectionModal(selectedStudent)">
+                          <LucideTags :size="15" /> {{ selectedStudent.customSections?.length ? 'Editar' : 'Asignar' }}
+                        </button>
+                      </div>
+                      <div v-if="selectedStudent.customSections?.length" class="ce-section-detail-tags">
+                        <span v-for="section in selectedStudent.customSections" :key="section.id">{{ section.name }}</span>
+                      </div>
+                    </div>
                   </section>
 
                   <section
@@ -1575,6 +1610,17 @@
       </div>
     </div>
 
+    <StudentSectionModal
+      :show="showSectionModal" :section-modal-student="sectionModalStudent"
+      :section-modal-students="sectionModalStudents" :new-section-name="newSectionName"
+      :custom-sections="customSections" :custom-section-counts="customSectionCounts"
+      :creating-section="creatingSection" :assigning-sections="assigningSections"
+      :bulk-section-state="bulkSectionState"
+      @close="closeSectionModal" @update-new-section-name="newSectionName = $event"
+      @create-section="createCustomSection" @toggle-student-section="toggleControlStudentSection"
+      @toggle-bulk-section="toggleControlBulkSection" @delete-section="deleteControlSection"
+    />
+
     <div
       v-if="showMassImportModal"
       class="ce-modal-backdrop"
@@ -1791,6 +1837,7 @@
       @send-husky="openControlHuskySend"
       @open-email="openControlEmailBulk"
       @open-whatsapp="openControlWhatsappBulk"
+      @open-sections="openSectionModalForSelection"
       @clear="clearControlBulkSelection"
     />
 
@@ -2015,6 +2062,7 @@ import {
   LucideSave,
   LucideSearch,
   LucideSearchX,
+  LucideTags,
   LucideSend,
   LucideShield,
   LucideShieldCheck,
@@ -2039,6 +2087,8 @@ import ControlEscolarHuskyBulkModal from "~/components/students/ControlEscolarHu
 import ControlEscolarReportModal from "~/components/students/ControlEscolarReportModal.vue";
 import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
 import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.vue";
+import StudentSectionModal from "~/components/students/StudentSectionModal.vue";
+import { useStudentSections } from "~/composables/useStudentSections";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
 import { normalizeCicloKey, formatCicloLabel } from "~/shared/utils/ciclo";
@@ -2048,6 +2098,11 @@ import {
   normalizeEnrollmentConceptIds,
   normalizeEnrollmentPlantelKey,
   normalizeStudentMatricula,
+  sectionFilterKey,
+  studentHasSection,
+  visibleStudentSections,
+  hiddenStudentSectionsCount,
+  sectionBadgeTitle,
   parseEnrollmentConceptsForPlantelHistory,
   parseEnrollmentConceptsForScope,
   photoStorageKey,
@@ -2225,6 +2280,46 @@ const filters = reactive({
   group: "",
   recent: "",
 });
+const activeSectionFilter = ref("");
+const {
+  customSections, customSectionCounts, showSectionModal, sectionModalStudent,
+  sectionModalStudents, newSectionName, creatingSection, assigningSections,
+  loadCustomSections, openSectionModal, closeSectionModal,
+  openSectionModalForSelection,
+  createCustomSection, toggleStudentSection, bulkSectionState,
+  toggleBulkSection, deleteCustomSection
+} = useStudentSections({
+  students: controlStudentsIndex,
+  selectedStudent,
+  selectedMatriculas: computed(() => new Set(controlBulkSelection.keys())),
+  selectedCount: computed(() => controlBulkSelection.size),
+  activeFilter: activeSectionFilter
+});
+const refreshSectionAssignments = () => {
+  applyInstantStudentFilters();
+  persistCurrentControlStudentsCache();
+};
+const toggleControlStudentSection = async (...args) => {
+  await toggleStudentSection(...args);
+  refreshSectionAssignments();
+};
+const toggleControlBulkSection = async (section) => {
+  await toggleBulkSection(section);
+  refreshSectionAssignments();
+};
+const deleteControlSection = async (section) => {
+  await deleteCustomSection(section);
+  refreshSectionAssignments();
+};
+const toggleControlSectionFilter = (id) => {
+  const key = sectionFilterKey(id);
+  activeSectionFilter.value = activeSectionFilter.value === key ? "" : key;
+  filters.status = activeSectionFilter.value ? "all" : DEFAULT_QUICK_FILTER;
+  filters.quality = "";
+  activeQuickFilter.value = filters.status;
+  pagination.page = 1;
+  applyInstantStudentFilters();
+};
 const editForm = reactive({});
 const isStudentBaja = computed(() => Number(editForm.baja || 0) === 1);
 const photoCache = ref({});
@@ -2769,6 +2864,7 @@ const hasActiveFilters = computed(() =>
     filters.grado ||
     filters.group ||
     filters.recent ||
+    activeSectionFilter.value ||
     (filters.status && filters.status !== DEFAULT_QUICK_FILTER),
   ),
 );
@@ -2779,6 +2875,11 @@ const activeFilterLabel = computed(() => {
   if (filters.quality) active.push(qualityLabel(filters.quality));
   if (filters.grado) active.push(filters.grado);
   if (filters.group) active.push(`Grupo ${filters.group}`);
+  if (activeSectionFilter.value) {
+    const id = Number(activeSectionFilter.value.split(":")[1]);
+    const section = customSections.value.find(entry => Number(entry.id) === id);
+    if (section) active.unshift(section.name);
+  }
   if (filters.search) active.push("Búsqueda");
   return active.slice(0, 2).join(" · ");
 });
@@ -5261,6 +5362,7 @@ const filteredControlStudents = () => {
   const grupo = normalizeGroupPickerText(filters.group);
 
   return controlStudentsIndex.value.filter((student) => {
+    if (activeSectionFilter.value && !studentHasSection(student, Number(activeSectionFilter.value.split(":")[1]))) return false;
     if (search && !controlStudentSearchHaystack(student).includes(search))
       return false;
     if (!localStudentMatchesStatus(student, filters.status)) return false;
@@ -5687,6 +5789,7 @@ const refreshAll = async (options = {}) => {
   const { forceNetwork = false, ...studentOptions } = safeOptions;
   kpisLoading.value = true;
   try {
+    await loadCustomSections();
     await loadStudents({ useCache: !forceNetwork, ...studentOptions });
   } finally {
     kpisLoading.value = false;
@@ -5755,6 +5858,7 @@ const selectGrade = (grado) => {
 };
 
 const clearFilters = () => {
+  activeSectionFilter.value = "";
   Object.assign(filters, {
     search: "",
     status: DEFAULT_QUICK_FILTER,
@@ -5768,6 +5872,7 @@ const clearFilters = () => {
 };
 
 const applyPrimaryFilter = (key) => {
+  activeSectionFilter.value = "";
   filters.status = key;
   filters.quality = "";
   activeQuickFilter.value = key;
@@ -5782,6 +5887,7 @@ const toggleQualityFilter = (key) => {
 };
 
 const applyKpiFilter = (key) => {
+  activeSectionFilter.value = "";
   if (key === "incomplete") {
     filters.status = DEFAULT_QUICK_FILTER;
     filters.quality = filters.quality === "incomplete" ? "" : "incomplete";
@@ -7204,6 +7310,8 @@ watch(
   { flush: "post" },
 );
 watch(selectedAgentId, () => {
+  activeSectionFilter.value = "";
+  customSections.value = [];
   if (controlBulkSelectedCount.value) {
     clearControlBulkSelection();
   }
@@ -18062,5 +18170,71 @@ onBeforeUnmount(() => {
 .control-escolar-screen .ce-workspace .ce-secondary-filter-row > * { gap: 3px !important; padding-inline: 2px !important; }
 @container control-filters (min-width: 391px) and (max-width: 450px) {
  .control-escolar-screen .ce-workspace .ce-secondary-filter-row :deep(.ui-chip) { padding-inline: 6px !important; font-size: 10px !important; }
+}
+
+/* Campus section membership is independent of the student's academic group. */
+.control-escolar-screen .ce-section-rail {
+  display: flex; align-items: center; gap: 6px; min-width: 0;
+  flex: 0 1 320px; max-width: min(32vw, 320px);
+  min-height: 28px; padding: 2px 6px; overflow-x: auto; scrollbar-width: thin;
+  overscroll-behavior-x: contain; border: 1px solid #dfe9e4;
+  border-radius: 9px; background: #f8fbf8;
+}
+.control-escolar-screen .ce-section-rail-title {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  color: #385c48; font-size: 11px; font-weight: 650; padding-inline: 4px 8px;
+}
+.control-escolar-screen .ce-section-filter {
+  display: inline-flex; align-items: center; gap: 7px; flex: 0 0 auto;
+  max-width: 215px; min-height: 28px; padding: 3px 9px;
+  border: 1px solid #d7e5d8; border-radius: 999px; background: #fff;
+  color: #375248; font-size: 11px; font-weight: 600; cursor: pointer;
+}
+.control-escolar-screen .ce-section-filter span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.control-escolar-screen .ce-section-filter b { font-size: 10px; font-variant-numeric: tabular-nums; }
+.control-escolar-screen .ce-section-filter.active {
+  border-color: #4e844e; background: #e8f5e4; color: #20612e;
+}
+.control-escolar-screen .ce-section-filter:focus-visible,
+.control-escolar-screen .ce-section-manage-button:focus-visible,
+.control-escolar-screen .ce-section-detail-title button:focus-visible {
+  outline: 2px solid #3b8b50; outline-offset: 2px;
+}
+.control-escolar-screen .ce-section-manage-button { color: #276f41; flex: 0 0 auto; }
+.control-escolar-screen .ce-row-sections {
+  display: inline-flex; align-items: center; gap: 3px; min-width: 0;
+  max-width: min(150px, 35%); padding: 2px 6px; border-radius: 7px;
+  background: #eaf4e7; color: #37634b; font-size: 10px; font-weight: 650; line-height: 1.1;
+}
+.control-escolar-screen .ce-row-sections > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.control-escolar-screen .ce-row-sections > b { flex: 0 0 auto; font-size: 10px; }
+.control-escolar-screen .ce-section-detail {
+  display: grid; gap: 9px; padding: 12px 14px; border: 1px solid #dfe9e4;
+  border-radius: 12px; background: #f8fbf8;
+}
+.control-escolar-screen .ce-section-detail-title {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+}
+.control-escolar-screen .ce-section-detail-title > div { display: grid; gap: 3px; min-width: 0; }
+.control-escolar-screen .ce-section-detail-title small { color: #6a7e73; font-size: 10px; font-weight: 600; }
+.control-escolar-screen .ce-section-detail-title strong { color: #2a4c3a; font-size: 13px; font-weight: 600; overflow-wrap: anywhere; }
+.control-escolar-screen .ce-section-detail-title button {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 7px 10px; border: 1px solid #cee0ce; border-radius: 8px;
+  background: #fff; color: #2e7540; font-size: 12px; font-weight: 650;
+}
+.control-escolar-screen .ce-section-detail-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+.control-escolar-screen .ce-section-detail-tags span {
+  padding: 5px 9px; border-radius: 7px; color: #306b40; background: #eaf5e9;
+  font-size: 11px; font-weight: 600;
+}
+@media (min-width: 821px) and (max-height: 550px) {
+  .control-escolar-screen .ce-section-rail { padding-block: 1px; }
+  .control-escolar-screen .ce-section-filter { min-height: 23px; padding-block: 2px; }
+}
+@media (max-width: 820px) {
+  .control-escolar-screen .ce-section-rail { flex-basis: 145px; max-width: 145px; padding-inline: 4px; }
+  .control-escolar-screen .ce-section-rail-title { font-size: 10px; }
+  .control-escolar-screen .ce-section-filter { padding-inline: 8px; }
 }
 </style>

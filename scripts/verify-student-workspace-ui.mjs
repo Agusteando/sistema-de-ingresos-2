@@ -21,6 +21,8 @@ try {
  await p.route('https://fonts.googleapis.com/**',route=>route.fulfill({contentType:'text/css',body:fontCss}));
  const data=Array.from({length:48},(_,i)=>({matricula:`VIS${String(i).padStart(3,'0')}`,fullName:i===0?'Alumno Prueba Apellido Largo Completo':`Alumno Prueba ${i+1} Apellido`,nombreCompleto:`Alumno Prueba ${i+1} Apellido`,nombreCompletoAlumno:`Alumno Prueba ${i+1} Apellido`,nombres:'Alumno Prueba',apellidoPaterno:'Apellido',apellidoMaterno:'Completo',status:'Activo',estatus:'Activo',enrollmentState:'inscrito',tipoIngresoValue:i%3?'interno':'externo',overlayExists:true,nivel:'primaria',grado:['primero','segundo','tercero','cuarto','quinto','sexto'][i%6],group:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],grupo:['AFRICA','AMERICA','ASIA','EUROPA'][i%4],sexo:'Masculino',curp:'VISUAL000000HMCXXX00',nombrePadre:i<2?'Padre Prueba':`Padre Prueba ${i}`,telefonoPadre:String(7220000000+(i<2?0:i)),emailPadre:'visual@example.invalid',nombreMadre:i<2?'Madre Prueba':`Madre Prueba ${i}`,telefonoMadre:String(7230000000+(i<2?0:i)),emailMadre:'visual2@example.invalid',huskyPassUsername:`fixture-${i}`,huskyPassPlaintext:i%2?'fixture-password':'',huskyPassAvailable:Boolean(i%2),missingFields:[],missingBasicFields:[],recordCompleteness:100}));
  const kpis={inscritos:48,internos:32,externos:16,noInscritos:0,bajas:0};
+  const campusSections=[{id:901,name:'Extensión horaria',plantel:'PT',color:'#4e844e'},{id:902,name:'Apoyo académico',plantel:'PT',color:'#4e844e'}];
+  data.forEach((student,index)=>{student.customSections=index<6?[campusSections[0]]:index<9?[campusSections[1]]:[];});
  const photoFixture = 'data:image/svg+xml;charset=UTF-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="200"><rect width="160" height="200" fill="#eef3e8"/><circle cx="80" cy="70" r="38" fill="#c89775"/><path d="M18 200V155Q80 95 142 155V200" fill="#507728"/></svg>');
  // Exercise the real face-image processor with synthetic geometry and pixels.
  await p.route('https://vision.casitaapps.com/**',route=>route.fulfill({
@@ -32,7 +34,8 @@ try {
  const requests=[];
  await p.route('http://127.0.0.1:3004/api/**',async route=>{const u=new URL(route.request().url());requests.push(u.pathname);let body={};let status=200;
  if(u.pathname==='/api/control-escolar/options')body={activePlantel:'PT',planteles:[{id:'PT',nombre:'Primaria Toluca'}],access:{controlEscolar:true,financial:true,superAdmin:true}};
- else if(u.pathname==='/api/control-escolar/students')body={data,kpis,catalogs:{niveles:['primaria'],grados:['primero','segundo','tercero','cuarto','quinto','sexto'],grupos:['AFRICA','AMERICA','ASIA','EUROPA'],gruposPorGrado:{}},source:{base:'synthetic-visual-fixture',overlayRows:48}};
+  else if(u.pathname==='/api/student-sections' && route.request().method()==='GET')body=campusSections.map(section=>({...section,studentCount:0}));
+ else if(u.pathname==='/api/control-escolar/students')body={data,kpis,catalogs:{niveles:['primaria'],grados:['primero','segundo','tercero','cuarto','quinto','sexto'],grupos:['AFRICA','AMERICA','ASIA','EUROPA'],gruposPorGrado:{}},source:{base:'synthetic-visual-fixture',overlayRows:48,sections:{status:'ready',linkedStudents:9}}};
  else if(u.pathname==='/api/control-escolar/kpis')body={kpis};
  else if(u.pathname==='/api/control-escolar/enrollment-config')body={};
  else if(u.pathname==='/api/auth/session')body={email:'visual@example.invalid',role:'superadmin,role_ctrl',planteles:['PT','SM'],activePlantel:'PT',hasFinancialAccess:true,hasControlEscolarRole:true,isSuperAdmin:true};
@@ -212,6 +215,22 @@ try {
  }
  await p.setViewportSize({width:1920,height:941});
  await p.goto('http://127.0.0.1:3004/__visual-lab/control-escolar',{waitUntil:'domcontentloaded',timeout:60000});await p.locator('.ce-student-row').first().waitFor({timeout:60000});await p.waitForTimeout(1500);
+  if(await p.locator('.ce-section-filter').count()!==2)throw Error('Control Escolar lost the two campus section filters');
+  await p.locator('.ce-section-filter').first().click();
+  if(await p.locator('.ce-student-row').count()!==6)throw Error('Control Escolar section filter did not return the six matching pupils');
+  await p.locator('.ce-section-filter').first().click();
+  await p.locator('.ce-section-manage-button').click();
+  if(!await p.locator('.section-modal-card').isVisible())throw Error('Section manager could not open in Control Escolar');
+  await p.locator('.section-modal-card button').first().click();
+  await p.locator('.ce-student-hero-menu').click();
+ // Return to browsing before the existing multi-viewport baseline checks.
+  if(!await p.locator('.ce-row-sections').first().isVisible())throw Error('Control Escolar section badges missing from student rows');
+  await p.locator('.ce-student-row').first().click();
+  await p.locator('.ce-detail-tabs button').nth(2).click();
+  if(!await p.locator('.ce-section-detail').innerText().then(text=>text.includes('Extensión horaria')))throw Error('Selected student lost campus section membership');
+  await p.locator('.ce-section-detail-title button').click();
+  if(!await p.locator('.section-modal-card input[type="checkbox"]').first().isChecked())throw Error('Shared section manager did not select existing membership');
+  await p.locator('.section-modal-card button').first().click();
  for(const [w,h] of [[1920,941],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]) {
  await p.setViewportSize({width:w,height:h});await p.waitForTimeout(700);
  const m=await p.evaluate(()=>{const row=document.querySelector('.ce-student-row'),copy=row.querySelector('.student-copy'),r=copy.getBoundingClientRect(),s=getComputedStyle(row.querySelector('.student-identity')),box=document.querySelector('.student-list-scroll').getBoundingClientRect();return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,copyWidth:r.width,rowHeight:row.getBoundingClientRect().height,identityColumns:s.gridTemplateColumns,visibleRows:[...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom}).length,sigil:getComputedStyle(row.querySelector('.student-group-sigil')).display};});results.push(m);console.log('CONTROL',JSON.stringify(m));await p.screenshot({path:`${output}/${label}-control-${w}.png`,timeout:10000});

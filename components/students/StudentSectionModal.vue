@@ -5,7 +5,7 @@
         <header>
           <div>
             <span>Secciones personalizadas</span>
-            <h3 v-if="sectionModalStudent">{{ sectionModalStudent.nombreCompleto }}</h3>
+            <h3 v-if="sectionModalStudent">{{ sectionModalStudent.nombreCompleto || sectionModalStudent.fullName || sectionModalStudent.matricula }}</h3>
             <h3 v-else-if="sectionModalStudents.length">{{ sectionModalStudents.length }} alumnos seleccionados</h3>
             <h3 v-else>Administrar secciones</h3>
           </div>

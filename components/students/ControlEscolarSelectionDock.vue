@@ -54,7 +54,10 @@
             </button>
           </div>
 
-          <button type="button" class="dock-action email" :disabled="huskyBusy" @click="$emit('open-email')">
+          <button type="button" class="dock-action email"          <button type="button" class="dock-action secondary" :disabled="huskyBusy" @click="$emit('open-sections')">
+            <LucideTags :size="17" /><span>Secciones</span>
+          </button>
+ :disabled="huskyBusy" @click="$emit('open-email')">
             <LucideMail :size="17" />
             <span>Email</span>
           </button>
@@ -81,6 +84,7 @@ import {
   LucideMail,
   LucideMessageCircle,
   LucideSend,
+  LucideTags,
   LucideX,
 } from 'lucide-vue-next'
 
@@ -109,6 +113,7 @@ defineEmits([
   'send-husky',
   'open-email',
   'open-whatsapp',
+  'open-sections',
   'clear',
 ])
 </script>

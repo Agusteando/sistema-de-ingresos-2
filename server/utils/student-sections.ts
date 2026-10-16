@@ -3,52 +3,41 @@ import { query } from './db'
 
 export const isScopedToActivePlantel = (user: any) => !user?.isSuperAdmin || (user?.isSuperAdmin && user?.active_plantel !== 'GLOBAL')
 
-export const attachCustomSectionsToStudents = async <T extends Record<string, any>>(students: T[], user: any): Promise<Array<T & { customSections: any[] }>> => {
+export const attachCustomSectionsToStudents = async <T extends Record<string, any>>(
+  students: T[], user: any, options: { plantel?: string } = {}
+): Promise<Array<T & { customSections: any[] }>> => {
   const canonicalStudents = canonicalizeStudentGroups(students)
-  if (!canonicalStudents.length) return canonicalStudents.map((student) => ({ ...student, customSections: [] }))
+  if (!canonicalStudents.length) return []
+  const matriculas = Array.from(new Set(canonicalStudents.map(student => String(student.matricula || '').trim()).filter(Boolean)))
+  if (!matriculas.length) return canonicalStudents.map(student => ({ ...student, customSections: [] }))
 
-  const matriculas = Array.from(new Set(canonicalStudents.map((student) => String(student.matricula || '').trim()).filter(Boolean)))
-  if (!matriculas.length) return canonicalStudents.map((student) => ({ ...student, customSections: [] }))
-
-  const params: any[] = [...matriculas]
-  let scopeSql = ''
-
-  if (isScopedToActivePlantel(user)) {
-    scopeSql = ' AND S.plantel = ?'
-    params.push(user.active_plantel)
-  }
-
-  const memberships = await query<any[]>(`
-    SELECT
-      M.matricula,
-      S.id,
-      S.name,
-      S.plantel,
-      S.color
-    FROM student_custom_section_memberships M
-    JOIN student_custom_sections S ON S.id = M.section_id
-    WHERE M.matricula IN (${matriculas.map(() => '?').join(',')})
-      AND S.is_active = 1
-      ${scopeSql}
-    ORDER BY S.sort_order ASC, S.name ASC
-  `, params)
-
+  // An explicitly authorized Control Escolar plantel takes precedence. All
+  // existing financial callers retain their original global/active scope.
+  const plantel = String(options.plantel || (isScopedToActivePlantel(user) ? user.active_plantel : '') || '').trim().toUpperCase()
   const byMatricula = new Map<string, any[]>()
-  memberships.forEach((membership) => {
-    const key = String(membership.matricula || '').trim()
-    const list = byMatricula.get(key) || []
-    list.push({
-      id: Number(membership.id),
-      name: membership.name,
-      plantel: membership.plantel,
-      color: membership.color
+  for (let offset = 0; offset < matriculas.length; offset += 400) {
+    const chunk = matriculas.slice(offset, offset + 400)
+    const params: any[] = [...chunk]
+    if (plantel) params.push(plantel)
+    const memberships = await query<any[]>(`
+      SELECT M.matricula, S.id, S.name, S.plantel, S.color
+      FROM student_custom_section_memberships M
+      JOIN student_custom_sections S ON S.id = M.section_id
+      WHERE M.matricula IN (${chunk.map(() => '?').join(',')})
+      AND S.is_active = 1
+      ${plantel ? 'AND S.plantel = ?' : ''}
+      ORDER BY S.sort_order ASC, S.name ASC
+    `, params)
+    memberships.forEach(membership => {
+      const key = String(membership.matricula || '').trim().toUpperCase()
+      const list = byMatricula.get(key) || []
+      list.push({ id: Number(membership.id), name: membership.name, plantel: membership.plantel, color: membership.color })
+      byMatricula.set(key, list)
     })
-    byMatricula.set(key, list)
-  })
-
-  return canonicalStudents.map((student) => ({
+  }
+  return canonicalStudents.map(student => ({
     ...student,
-    customSections: byMatricula.get(String(student.matricula || '').trim()) || []
+    customSections: byMatricula.get(String(student.matricula || '').trim().toUpperCase()) || []
   }))
 }
 
