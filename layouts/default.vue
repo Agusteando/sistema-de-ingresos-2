@@ -1805,6 +1805,14 @@ const logout = async () => {
   line-height: 1.2;
 }
 
+/* The consolidated option has a sentence-length status; do not truncate it. */
+.plantel-option.global .plantel-option-message {
+  display: block;
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .plantel-status-dot {
   width: 7px;
   height: 7px;

@@ -222,8 +222,6 @@ try {
   await p.locator('.ce-section-manage-button').click();
   if(!await p.locator('.section-modal-card').isVisible())throw Error('Section manager could not open in Control Escolar');
   await p.locator('.section-modal-card button').first().click();
-  await p.locator('.ce-student-hero-menu').click();
- // Return to browsing before the existing multi-viewport baseline checks.
   if(!await p.locator('.ce-row-sections').first().isVisible())throw Error('Control Escolar section badges missing from student rows');
   await p.locator('.ce-student-row').first().click();
   await p.locator('.ce-detail-tabs button').nth(2).click();
@@ -231,10 +229,13 @@ try {
   await p.locator('.ce-section-detail-title button').click();
   if(!await p.locator('.section-modal-card input[type="checkbox"]').first().isChecked())throw Error('Shared section manager did not select existing membership');
   await p.locator('.section-modal-card button').first().click();
+  // First complete the detail assertions, then return to the student list for
+  // the original responsive viewport checks.
+  await p.locator('.ce-student-hero-menu').click();
  for(const [w,h] of [[1920,941],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]) {
  await p.setViewportSize({width:w,height:h});await p.waitForTimeout(700);
- const m=await p.evaluate(()=>{const row=document.querySelector('.ce-student-row'),copy=row.querySelector('.student-copy'),r=copy.getBoundingClientRect(),s=getComputedStyle(row.querySelector('.student-identity')),box=document.querySelector('.student-list-scroll').getBoundingClientRect();return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,copyWidth:r.width,rowHeight:row.getBoundingClientRect().height,identityColumns:s.gridTemplateColumns,visibleRows:[...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom}).length,sigil:getComputedStyle(row.querySelector('.student-group-sigil')).display};});results.push(m);console.log('CONTROL',JSON.stringify(m));await p.screenshot({path:`${output}/${label}-control-${w}.png`,timeout:10000});
- if(m.copyWidth<90||m.overflow||m.visibleRows<({1920:4,1366:4,1024:5,900:3,390:1,1150:1})[w])throw Error('Control Escolar row layout gate failed');
+ const m=await p.evaluate(()=>{const row=document.querySelector('.ce-student-row'),copy=row.querySelector('.student-copy'),r=copy.getBoundingClientRect(),s=getComputedStyle(row.querySelector('.student-identity')),box=document.querySelector('.student-list-scroll').getBoundingClientRect();return {width:innerWidth,overflow:document.documentElement.scrollWidth>innerWidth+1,copyWidth:r.width,rowHeight:row.getBoundingClientRect().height,metaHeight:row.querySelector('.student-meta-line')?.getBoundingClientRect().height,listViewportHeight:box.height,titlebarHeight:document.querySelector('.ce-list-titlebar')?.getBoundingClientRect().height,identityColumns:s.gridTemplateColumns,visibleRows:[...document.querySelectorAll('.ce-student-row')].filter(e=>{const r=e.getBoundingClientRect();return r.top>=box.top&&r.bottom<=box.bottom}).length,sigil:getComputedStyle(row.querySelector('.student-group-sigil')).display};});results.push(m);console.log('CONTROL',JSON.stringify(m));await p.screenshot({path:`${output}/${label}-control-${w}.png`,timeout:10000});
+ if(m.copyWidth<90||m.overflow||m.visibleRows<({1920:4,1366:4,1024:5,900:3,390:1,1150:1})[w])throw Error(`Control Escolar row layout gate failed: ${JSON.stringify(m)}`);
  }
 
  // Slide selectors remain bounded with a selected record and without one.

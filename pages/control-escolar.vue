@@ -18206,6 +18206,28 @@ onBeforeUnmount(() => {
   max-width: min(150px, 35%); padding: 2px 6px; border-radius: 7px;
   background: #eaf4e7; color: #37634b; font-size: 10px; font-weight: 650; line-height: 1.1;
 }
+/* Keep custom-section metadata on the matrícula line. In the summary split
+   view the list is intentionally narrower, so a wrapped badge must not reduce
+   the number of students visible in the roster. */
+.control-escolar-screen .ce-student-row .student-meta-line:has(.ce-row-sections) {
+  flex-wrap: nowrap;
+  overflow: hidden;
+}
+.control-escolar-screen .ce-student-row .student-meta-line:has(.ce-row-sections) .student-type-line {
+  flex: 0 0 auto;
+}
+.control-escolar-screen .ce-student-row .ce-row-sections {
+  flex: 0 1 auto;
+  max-width: 45%;
+  min-width: 0;
+}
+/* Between tablet and wide desktop, the roster must remain wide enough to
+   display complete student names beside the enrollment summary. */
+@media (min-width: 960px) and (max-width: 1100px) {
+  .control-escolar-screen .ce-workspace.has-empty-detail {
+    grid-template-columns: minmax(430px, 54fr) minmax(0, 46fr);
+  }
+}
 .control-escolar-screen .ce-row-sections > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .control-escolar-screen .ce-row-sections > b { flex: 0 0 auto; font-size: 10px; }
 .control-escolar-screen .ce-section-detail {
