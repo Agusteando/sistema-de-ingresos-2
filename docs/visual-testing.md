@@ -221,3 +221,12 @@ Deployment configuration includes Aurora's existing database network plus `monit
 ### Audit language and student identity (2026-10-16)
 
 Grid totals/cells explicitly count cambios. The activity disclosure keeps progress, pending fields, accesses and student updates; it never renders raw summaries, source flows, bridge/base names or storage explanations. Update counts describe updates, not distinct students. Summary API enriches authorized activity and recently updated students with complete names from matricula; no schema/write changes. Missing student names display Nombre no disponible without a standalone matrícula. Cards separate source identity from long field labels. The browser gate opens Actividad y avance at all six widths with deliberately technical fixture values and asserts these remain absent, alongside named student rendering. Run the existing backend gates plus tests/audit-summary-student-names.test.mjs.
+
+
+### Actor-first audit workspace (2026-10-16)
+
+This screen audits who changed student data. It deliberately excludes progress, access statistics, pending fields and the previous Activity/Progress disclosure; existing collection/API code remains intact. Preserve the sidebar and Montserrat/Fredoka families.
+
+Design review: competing headings/filters/counters obscured the entry point; icon-only actions and hidden source filtering required inference; ascending dates hid the latest activity; repeated source pills and oversized empty cells diluted the data; inconsistent detail cards impeded comparisons; splitting a narrow mobile viewport made both panes too small. Actor identity is the primary card heading, followed by student and field/value details. Dates are descending, newest immediately after the frozen field/total columns. Campus and person/student search are visible, source chips are actionable with stable cross-source counts, and date presets/range are grouped. Navigation has explicit labels and boundary-disabled controls. Empty, loading and failed retrieval states remain distinct.
+
+The browser gate checks descending 7/30-day headers, initial/reset scroll at the newest column, older-date navigation, actor-first card headers, direct source filtering/count stability, full student identity, existing font families/sidebar, absence of progress/internal copy, desktop selection scroll preservation, and the mobile detail/back flow. Mobile uses one full pane at a time; desktop keeps the inspector alongside the grid. All APIs/images in that gate are synthetic. Real historical-source acceptance is a separate concern.
