@@ -1,5 +1,5 @@
 <template>
-  <section class="change-workspace" :class="{'detail-open':Boolean(selected)}" aria-label="Historial de cambios" @keydown.esc="clearSelection">
+  <section class="change-workspace" :class="{'detail-open':Boolean(selected||fieldTarget)}" aria-label="Historial de cambios" @keydown.esc="clearSelection">
     <div class="audit-overview">
       <header class="change-header">
         <div class="heading-copy"><span>Control Escolar</span><h1>Historial de cambios</h1></div>
@@ -44,9 +44,9 @@
       <div v-if="busy && !filteredEvents.length" class="loading-line" role="status"><LucideRefreshCw class="spinning" :size="18"/>Cargando cambios…</div>
     </div>
     <aside :id="inspectorId" class="audit-inspector" aria-label="Detalle de cambios">
-      <header class="detail-header"><button v-if="selected" type="button" class="mobile-back" @click="clearSelection"><LucideChevronLeft :size="18"/>Volver al historial</button><div class="detail-title"><div><span class="detail-eyebrow">{{ selected?'Selección':'Última actividad' }}</span><h2>{{ selectionTitle }}</h2><span class="detail-count">{{ selectedEvents.length }} {{ selectedEvents.length===1?'cambio':'cambios' }}</span></div><button v-if="selected" class="clear-selection" type="button" aria-label="Ver todos los cambios" @click="clearSelection"><LucideX :size="16"/>Ver todos</button></div></header>
-      <div ref="detailRecords" class="detail-records" :aria-busy="busy"><AuditChangeCard v-for="record in selectedEvents.slice(0,detailCount)" :key="record.id" :record="record"/><div v-if="!selectedEvents.length" class="empty-area"><LucideInbox :size="28"/><strong>{{ busy?'Cargando cambios…':historyUnavailable?'Historial pendiente de cargar':'Sin cambios en esta selección' }}</strong></div><button v-if="selectedEvents.length>detailCount" type="button" class="load-more" @click="detailCount+=30">Ver más cambios ({{ selectedEvents.length-detailCount }})</button></div>
-    </aside>
+      <AuditFieldHistory v-if="fieldTarget" :record="fieldTarget" @close="closeFieldHistory"/><template v-else><header class="detail-header"><button v-if="selected" type="button" class="mobile-back" @click="clearSelection"><LucideChevronLeft :size="18"/>Volver al historial</button><div class="detail-title"><div><span class="detail-eyebrow">{{ selected?'Selección':'Última actividad' }}</span><h2>{{ selectionTitle }}</h2><span class="detail-count">{{ selectedEvents.length }} {{ selectedEvents.length===1?'cambio':'cambios' }}</span></div><button v-if="selected" class="clear-selection" type="button" aria-label="Ver todos los cambios" @click="clearSelection"><LucideX :size="16"/>Ver todos</button></div></header>
+      <div ref="detailRecords" class="detail-records" :aria-busy="busy"><AuditChangeCard v-for="record in selectedEvents.slice(0,detailCount)" :key="record.id" :record="record" @history="openFieldHistory(record)"/><div v-if="!selectedEvents.length" class="empty-area"><LucideInbox :size="28"/><strong>{{ busy?'Cargando cambios…':historyUnavailable?'Historial pendiente de cargar':'Sin cambios en esta selección' }}</strong></div><button v-if="selectedEvents.length>detailCount" type="button" class="load-more" @click="detailCount+=30">Ver más cambios ({{ selectedEvents.length-detailCount }})</button></div>
+    </template></aside>
   </section>
 </template>
 <script setup lang="ts">
@@ -54,6 +54,7 @@ import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount, useId } fro
 import SearchableSelect from '~/components/SearchableSelect.vue'
 import AuditActorAvatar from './AuditActorAvatar.vue'
 import AuditChangeCard from './AuditChangeCard.vue'
+import AuditFieldHistory from './AuditFieldHistory.vue'
 import {
   LucideRefreshCw,
   LucideCalendarDays, LucideChevronLeft, LucideChevronRight, LucideChevronDown, LucideSearch, LucideInbox, LucideX
@@ -86,6 +87,10 @@ const customTo=ref(today)
 const plantel=ref('ALL')
 const source=ref('ALL')
 const search=ref('')
+const fieldTarget=ref<Change|null>(null)
+let previousDetailScroll=0
+const openFieldHistory=(record:Change)=>{previousDetailScroll=detailRecords.value?.scrollTop||0;fieldTarget.value=record}
+const closeFieldHistory=async()=>{const id=fieldTarget.value?.id;fieldTarget.value=null;await nextTick();if(detailRecords.value){const card=[...detailRecords.value.querySelectorAll<HTMLElement>('[data-record-id]')].find(el=>el.dataset.recordId===id);card?.querySelector<HTMLElement>('.field-history-link')?.focus({preventScroll:true});detailRecords.value.scrollTop=previousDetailScroll}}
 const selected=ref<{category:string;day?:string}|null>(null)
 const detailCount=ref(30)
 const detailRecords=ref<HTMLElement|null>(null)
@@ -210,7 +215,7 @@ onBeforeUnmount(()=>scrollerObserver?.disconnect())
 watch([from,to,plantel],()=>{selected.value=null;detailCount.value=30;scrollToLatest()})
 
 watch([search,source],()=>{detailCount.value=30;selected.value=null})
-const clearSelection=()=>{selected.value=null}
+const clearSelection=()=>{if(fieldTarget.value){void closeFieldHistory();return}selected.value=null}
 watch(selected,async()=>{detailCount.value=30;await nextTick();detailRecords.value?.scrollTo({top:0})})
 </script>
 

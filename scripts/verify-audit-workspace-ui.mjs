@@ -40,6 +40,8 @@ try {
    await page.route('**/__audit_font__/**',route=>route.fulfill({contentType:'font/woff2',body:fonts.get(new URL(route.request().url()).pathname)}))
   }
   let unavailable=false
+  let fieldHistoryFailure=false
+  const fieldRequests=[]
   const categories=[['grupo','Grupo'],['nombre','Nombre'],['grado','Grado'],['estatus','Estatus'],['contacto','Contacto'],['trabajo','Lugares de trabajo'],['otros','Otros campos']].map(([key,label])=>({key,label}))
   const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
   const make=(id,actor,source='Aurora',category='nombre')=>({id,eventId:1,date:day,recordedAt:day+' 09:42:18',matricula:'PT0123',student:'Alumno de prueba visual',field:category,fieldLabel:categories.find(c=>c.key===category).label,category,before:'Valor anterior',after:'Valor nuevo',source,actor,actorEmail:source==='Aurora'?'visual'+id+'@casitaiedis.edu.mx':'',avatar:source==='Aurora'?'https://lh3.googleusercontent.com/a/'+(id==='2'?'expired-fixture':'audit-fixture'):'',flow:'test',quality:source==='Aurora'?'verified':'historical',plantel:'PT',ciclo:'2026'})
@@ -50,6 +52,13 @@ try {
    if(!url.pathname.startsWith('/api/'))return route.continue()
    if(url.pathname==='/api/directory/photo')return route.fulfill({contentType:'image/svg+xml',body:'<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80"><circle cx="40" cy="40" r="40" fill="#9fc7b3"/></svg>'})
    if(url.pathname==='/api/control-escolar/audit')return route.fulfill({json:{summary:{completedStudents:2,totalStudents:3,pendingStudents:1,studentUpdateCount:1,loginCount:2,progressPercent:67,sourceBase:'live-bridge-enriched',sourceFlow:'student_patch_matricula_overlay'},timeline:[{id:1,type:'student_update',createdAt:day+'T12:00:00Z',student:'Ana María García López',matricula:'PT0123',plantel:'PT',summary:'student_patch_matricula_overlay',sourceFlow:'student_patch_matricula_overlay'},{id:2,type:'page_snapshot',createdAt:day+'T12:00:00Z',summary:'Snapshot de avance',payload:{counters:{sinCurp:1}}}],updatedStudents:[{student:'Ana María García López',matricula:'PT0123',plantel:'PT',total:1,lastAt:day+'T12:00:00Z'}],filters:{}}})
+   if(url.pathname==='/api/control-escolar/audit/field-history'){
+    fieldRequests.push(Object.fromEntries(url.searchParams))
+    if(fieldHistoryFailure)return route.fulfill({status:503,json:{message:'No se pudo cargar el historial del campo.',data:{requestId:'fixture-field-failure'}}})
+    const older={...make('field-2024','Mónica Pérez'),date:'2024-02-01',recordedAt:'2024-02-01 09:00:00',before:'Nombre previo',after:'Nombre corregido'}
+    const oldest={...make('field-2023','Erika Ramos'),date:'2023-01-01',recordedAt:'2023-01-01 08:00:00',before:'Nombre original',after:'Nombre previo'}
+    return route.fulfill({json:{events:url.searchParams.has('cursor')?[oldest]:[stored[0],older],nextCursor:url.searchParams.has('cursor')?null:'fixture-next',partial:false,requestId:'fixture-field-reference'}})
+   }
    if(url.pathname==='/api/control-escolar/audit/changes')return route.fulfill({json:{events:stored,categories,allowedPlanteles:['PT','SM'],truncated:false}})
    if(url.pathname==='/api/control-escolar/audit/history')return unavailable?route.fulfill({status:503,json:{statusCode:503,message:'No se pudo completar la consulta.',data:{requestId:'fixture-history-failure',code:'AUDIT_HISTORY_UNAVAILABLE',retryable:true}}}):route.fulfill({json:{events:external,available:true,truncated:false}})
    return route.fulfill({status:401,json:{message:'Synthetic unauthenticated API; visual fixture only'}})
@@ -111,6 +120,29 @@ try {
   if(width===1920){const last=await page.locator('.field-heading').last().boundingBox(),matrix=await page.locator('.matrix-scroll').boundingBox();assert.ok(last.y+last.height<=matrix.y+matrix.height+1,'all seven field rows visible at desktop size '+JSON.stringify({last,matrix}));const lastDay=await page.locator('.day-heading').last().boundingBox();assert.ok(lastDay.x+lastDay.width<=matrix.x+matrix.width+1,'all seven dates visible at desktop size')}
   assert.ok(await page.locator('.change-workspace').evaluate(el=>getComputedStyle(el).fontFamily.includes('Montserrat')))
   await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
+  await inspector.locator('.audit-change-card').first().getByRole('button',{name:'Ver historial del campo',exact:true}).scrollIntoViewIfNeeded()
+  const savedDetail=await page.locator('.detail-records').evaluate(el=>el.scrollTop)
+  await inspector.locator('.audit-change-card').first().getByRole('button',{name:'Ver historial del campo',exact:true}).click()
+  const fieldPanel=page.getByRole('region',{name:'Historial del campo',exact:true})
+  await fieldPanel.getByText('Nombre corregido',{exact:true}).waitFor()
+  assert.equal(fieldRequests[0].field,'nombre');assert.equal(fieldRequests[0].matricula,'PT0123');assert.equal(fieldRequests[0].plantel,'PT')
+  assert.equal('from' in fieldRequests[0],false);assert.equal('source' in fieldRequests[0],false)
+  assert.match(await fieldPanel.innerText(),/2024/)
+  assert.equal(await fieldPanel.getByRole('button',{name:'Ver historial del campo',exact:true}).count(),0)
+  await fieldPanel.getByRole('button',{name:'Cargar cambios anteriores',exact:true}).click()
+  await fieldPanel.getByText('Nombre original',{exact:true}).waitFor()
+  const historicalDates=await fieldPanel.locator('time').allTextContents();assert.match(historicalDates.at(-1),/2023/)
+  await page.screenshot({path:output+`/audit-field-history-${width}x${height}.png`})
+  await fieldPanel.getByRole('button',{name:'Volver a cambios',exact:true}).click()
+  await page.locator('.detail-records').waitFor()
+  assert.equal(await page.locator('.detail-records').evaluate(el=>el.scrollTop),savedDetail)
+  fieldHistoryFailure=true
+  await inspector.locator('.audit-change-card').first().getByRole('button',{name:'Ver historial del campo',exact:true}).click()
+  await page.getByText('Ref. fixture-field-failure',{exact:true}).waitFor()
+  fieldHistoryFailure=false
+  await page.getByRole('region',{name:'Historial del campo',exact:true}).getByRole('button',{name:'Reintentar',exact:true}).click()
+  await page.getByText('Nombre corregido',{exact:true}).waitFor()
+  await page.getByRole('button',{name:'Volver a cambios',exact:true}).click()
   if(width<=760)await page.getByRole('button',{name:'Volver al historial',exact:true}).click();else await page.keyboard.press('Escape')
   if(width>760)await inspector.getByRole('heading',{name:'Cambios recientes'}).waitFor();else {await page.locator('.matrix-scroll').waitFor();assert.deepEqual(await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop})),before)}
   await page.getByRole('button',{name:'Filtrar plantel',exact:true}).click()
