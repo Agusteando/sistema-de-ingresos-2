@@ -1,5 +1,6 @@
 import { refreshVerifiedControlEscolarCacheForScope, resolveControlEscolarAuth, runControlEscolar } from '../../../utils/control-escolar'
 import { fetchControlEscolarStudentsWithCanonicalGroups } from '../../../utils/control-escolar-groups'
+import { attachCustomSectionsToStudents } from '../../../utils/student-sections'
 
 export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Cache-Control', 'no-store')
@@ -10,6 +11,21 @@ export default defineEventHandler(async (event) => {
     try {
       const result = await fetchControlEscolarStudentsWithCanonicalGroups(auth.agentId, queryParams)
       const source: any = result?.source || {}
+      let sectionsStatus = 'ready'
+      try {
+        result.data = await attachCustomSectionsToStudents(result.data || [], auth.user, { plantel: auth.agentId })
+      } catch (error: any) {
+        sectionsStatus = 'unavailable'
+        console.warn('[Control Escolar Sections] Membership lookup failed.', {
+          plantel: auth.agentId, code: error?.code || null, message: error?.message || String(error)
+        })
+        // Do not make the academic list unavailable if sections cannot be loaded.
+        result.data = (result.data || []).map((student: any) => ({ ...student, customSections: [] }))
+      }
+      result.source = { ...source, sections: {
+        status: sectionsStatus,
+        linkedStudents: result.data.filter((student: any) => student.customSections?.length).length
+      } }
       if (source.cacheRefreshDue && source.cacheRows > 0) {
         const refreshPromise = refreshVerifiedControlEscolarCacheForScope(auth.agentId, queryParams).catch((error: any) => {
           console.warn('[Control Escolar Cache] Background refresh after stale cache read failed.', {

@@ -72,6 +72,13 @@ export default defineEventHandler(async (event) => {
     /^\/api\/students\/[^/]+\/ingreso-cycle$/.test(url.pathname)
   const isStudentWhatsappEndpoint = url.pathname.startsWith('/api/students/whatsapp/')
   const isStudentEmailEndpoint = url.pathname.startsWith('/api/students/email/')
+  // Sections are shared operational data between /alumnos and Control Escolar.
+  // Restrict this exception to the existing section CRUD/assignment paths.
+  const isStudentSectionEndpoint =
+    url.pathname === '/api/student-sections' ||
+    /^\/api\/student-sections\/[^/]+$/.test(url.pathname) ||
+    /^\/api\/students\/[^/]+\/sections$/.test(url.pathname) ||
+    url.pathname === '/api/students/sections/bulk'
 
 
   if (isPlantelDashboardEndpoint) {
@@ -118,7 +125,8 @@ export default defineEventHandler(async (event) => {
     !isBuscadorEndpoint &&
     !isControlEscolarAcademicMutation &&
     !(isStudentWhatsappEndpoint && user.hasControlEscolarRole) &&
-    !(isStudentEmailEndpoint && user.hasControlEscolarRole)
+    !(isStudentEmailEndpoint && user.hasControlEscolarRole) &&
+    !(isStudentSectionEndpoint && user.hasControlEscolarRole)
   ) {
     if (isNoAdeudoEndpoint) {
       return noAdeudoMiddlewareDiagnostic(event, {
