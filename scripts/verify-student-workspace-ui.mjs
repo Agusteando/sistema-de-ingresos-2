@@ -179,6 +179,38 @@ try {
 
  await p.setViewportSize({width:1920,height:941});
  await p.goto('http://127.0.0.1:3004/__visual-lab/students-account?chrome=0&workspace=1&appchrome=1',{waitUntil:'domcontentloaded',timeout:60000});await p.locator('.sidebar-nav').waitFor();
+ // The sidebar picker must preserve every campus code at desktop and mobile widths.
+ // This is a synthetic display fixture; no plantel switch is submitted.
+ const expectedCampusCodes=['PREEM','PREET','CT','CM','DM','CO','DC','GM','PM','PT','SM','ST','IS','ISM'];
+ for(const [width,height] of [[1366,768],[390,844]]) {
+   await p.setViewportSize({width,height});
+   const picker=p.locator('.plantel-select-button');
+   await picker.click();
+   await p.locator('.plantel-option-code').last().waitFor();
+   const campusGeometry=await p.evaluate(()=>{
+     const entries=[...document.querySelectorAll('.plantel-option')];
+     const optionLabels=entries.map(entry=>{
+       const name=entry.querySelector('.plantel-option-code');
+       const status=entry.querySelector('.plantel-option-message');
+       const nameBox=name.getBoundingClientRect(),optionBox=entry.getBoundingClientRect();
+       return {
+         text:name.textContent.trim(),
+         nameClipped:name.scrollWidth>name.clientWidth+1||name.scrollHeight>name.clientHeight+1||nameBox.right>optionBox.right-3,
+         statusClipped:!status||status.scrollWidth>status.clientWidth+1,
+       };
+     });
+     const compact=document.querySelector('.plantel-label-compact');
+     const full=document.querySelector('.plantel-label-full');
+     return {optionLabels,compactVisible:getComputedStyle(compact).display!=='none',fullVisible:getComputedStyle(full).display!=='none',compactLabel:compact.textContent.trim()};
+   });
+   const visibleCodes=campusGeometry.optionLabels.slice(1).map(entry=>entry.text);
+   if(campusGeometry.optionLabels.length!==15||expectedCampusCodes.some((code,index)=>visibleCodes[index]!==`PLANTEL ${code}`)||campusGeometry.optionLabels.some(entry=>entry.nameClipped||entry.statusClipped))throw Error(`Campus picker clips plantel or status at ${width}: ${JSON.stringify(campusGeometry)}`);
+   if(width===390&&(!campusGeometry.compactVisible||campusGeometry.fullVisible||campusGeometry.compactLabel!=='PT'))throw Error(`Mobile selected campus is unreadable: ${JSON.stringify(campusGeometry)}`);
+   if(width===1366&&(!campusGeometry.fullVisible||campusGeometry.compactVisible))throw Error('Desktop selected campus label is not complete');
+   await p.screenshot({path:`${output}/plantel-picker-${width}.png`,timeout:10000});
+   await picker.click();
+ }
+ await p.setViewportSize({width:1920,height:941});
  await p.goto('http://127.0.0.1:3004/__visual-lab/control-escolar',{waitUntil:'domcontentloaded',timeout:60000});await p.locator('.ce-student-row').first().waitFor({timeout:60000});await p.waitForTimeout(1500);
  for(const [w,h] of [[1920,941],[1366,768],[1024,768],[900,640],[390,844],[1150,410]]) {
  await p.setViewportSize({width:w,height:h});await p.waitForTimeout(700);

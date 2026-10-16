@@ -110,7 +110,10 @@
             >
               <LucideBuilding2 :size="21" />
               <span class="plantel-current">
-                <strong id="sidebar-plantel-value">{{ activePlantelLabel }}</strong>
+                <strong id="sidebar-plantel-value" :title="activePlantelLabel">
+                  <span class="plantel-label-full">{{ activePlantelLabel }}</span>
+                  <span class="plantel-label-compact">{{ activePlantel === 'GLOBAL' ? 'GLOBAL' : activePlantel }}</span>
+                </strong>
                 <small v-if="activePlantel !== 'GLOBAL'" :class="`status-${activePlantelStatus.status}`">
                   <span class="plantel-status-dot" aria-hidden="true" />
                   {{ activePlantelStatus.message }}
@@ -139,7 +142,6 @@
                   <span class="plantel-option-code">CONSOLIDADO</span>
                   <span class="plantel-option-message status-global">Vista global de administración</span>
                 </span>
-                <span class="plantel-option-chip status-global">Global</span>
               </button>
 
               <button
@@ -147,6 +149,7 @@
                 :key="p"
                 type="button"
                 class="plantel-option"
+                :title="`Plantel ${p} · ${getPlantelStatus(p).label}`"
                 :class="{
                   selected: p === activePlantel,
                   offline: getPlantelStatus(p).status === 'offline'
@@ -159,11 +162,8 @@
                   <span class="plantel-option-code">PLANTEL {{ p }}</span>
                   <span class="plantel-option-message" :class="`status-${getPlantelStatus(p).status}`">
                     <span class="plantel-status-dot" aria-hidden="true" />
-                    {{ getPlantelStatus(p).message }}
+                    {{ getPlantelStatus(p).label }}
                   </span>
-                </span>
-                <span class="plantel-option-chip" :class="`status-${getPlantelStatus(p).status}`">
-                  {{ getPlantelStatus(p).label }}
                 </span>
               </button>
             </div>
@@ -1772,6 +1772,18 @@ const logout = async () => {
   white-space: nowrap;
 }
 
+.plantel-label-compact {
+  display: none;
+}
+
+.plantel-option-code {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.2;
+}
+
 .plantel-current small,
 .plantel-option-message {
   display: inline-flex;
@@ -1785,6 +1797,12 @@ const logout = async () => {
   line-height: 1.1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.plantel-option-message {
+  font-size: 0.7rem;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
 .plantel-status-dot {
@@ -1858,36 +1876,6 @@ const logout = async () => {
 .plantel-option.offline:hover,
 .plantel-option.offline.selected {
   background: #fff3f0;
-}
-
-.plantel-option-chip {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 4px 6px;
-  color: #607086;
-  background: #f2f5f8;
-  font-size: 0.52rem;
-  font-weight: 950;
-  line-height: 1;
-  text-transform: uppercase;
-}
-
-.plantel-option-chip.status-online {
-  color: #207b37;
-  background: #eaf8ec;
-}
-
-.plantel-option-chip.status-offline {
-  color: #b42318;
-  background: #fff0ed;
-}
-
-.plantel-option-chip.status-global {
-  color: #286d2b;
-  background: #e9f7e7;
 }
 
 .plantel-status-note {
@@ -3364,6 +3352,14 @@ const logout = async () => {
   .sidebar-design-canvas .plantel-select svg:first-child {
     width: 17px;
     height: 17px;
+  }
+
+  .plantel-label-full {
+    display: none;
+  }
+
+  .plantel-label-compact {
+    display: inline;
   }
 
   .sidebar-design-canvas .plantel-current strong {
