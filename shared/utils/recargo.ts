@@ -33,7 +33,7 @@ export const shouldApplyLateFee = ({
   )
 )
 
-export const LATE_FEE_REMOVAL_LOCK_DAY = 16
+export const LATE_FEE_REMOVAL_LOCK_DAY = 17
 
 export const hasLateFeeRemovalAccess = ({
   roles,

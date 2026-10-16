@@ -430,11 +430,11 @@
               <div class="flex-1 p-5">
                 <div class="flex items-start justify-between gap-4 rounded-xl border border-gray-200 bg-gray-50/70 px-4 py-4">
                   <div class="min-w-0">
-                    <p class="text-sm font-bold text-gray-800">Permitir retirar recargos después del día 15</p>
+                    <p class="text-sm font-bold text-gray-800">Permitir retirar recargos después del día 16</p>
                     <p class="mt-1 text-xs leading-5 text-gray-500">
                       {{ globalRecargoRemovalOverride
                         ? 'Activado: las administradoras pueden retirar recargos durante todo el mes.'
-                        : 'Desactivado: las administradoras solo pueden retirarlos del día 1 al 15.' }}
+                        : 'Desactivado: las administradoras solo pueden retirarlos del día 1 al 16.' }}
                     </p>
                   </div>
                   <button
@@ -443,7 +443,7 @@
                     class="relative mt-0.5 inline-flex h-6 w-11 shrink-0 items-center rounded-full transition disabled:cursor-wait disabled:opacity-60"
                     :class="globalRecargoRemovalOverride ? 'bg-emerald-600' : 'bg-gray-300'"
                     :aria-checked="globalRecargoRemovalOverride ? 'true' : 'false'"
-                    aria-label="Permitir retirar recargos después del día 15"
+                    aria-label="Permitir retirar recargos después del día 16"
                     :disabled="globalRecargoOverrideUpdating"
                     @click="toggleGlobalRecargoOverride"
                   >
