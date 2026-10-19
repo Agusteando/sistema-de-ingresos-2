@@ -3354,6 +3354,7 @@ const upsertMatriculaOverlay = async (
   basePlantel: unknown,
   schema: ControlEscolarSchema,
   auditFlow = "aurora_control_escolar_write",
+  auditContext: any = {},
 ) => {
   const connection = await getControlEscolarCentralDb().getConnection();
   const key = canonicalMatriculaKey(normalizedMatricula);
@@ -3377,6 +3378,10 @@ const upsertMatriculaOverlay = async (
       [key],
     );
     const before = beforeRows[0] || null;
+    if (auditContext.groupMutation && before?.grupo != null &&
+        normalizeUpper(before.grupo,40) !== normalizeUpper(auditContext.groupMutation.expectedGroup,40)) {
+      throw createError({statusCode:409,message:'El grupo cambió. Actualiza la ficha antes de guardar.',data:{requestId:auditContext.auditRequestId,code:'GROUP_CONFLICT'}});
+    }
     if (before) {
       const assignments = editableEntries.map((entry) => `${escapeColumn(entry.column)} = ?`);
       const params: any[] = editableEntries.map((entry) => entry.value);
@@ -3427,16 +3432,20 @@ const upsertMatriculaOverlay = async (
         before: valueForAudit(before?.[entry.column], entry.field),
         after: valueForAudit(after?.[entry.column], entry.field),
       }));
+    let auditEventId: number | null = null;
     if (changes.length) {
       const payload = JSON.stringify({
         version: 2,
         evidence: "transactional",
         recordedAt: after.audit_recorded_at,
+        requestId: String(auditContext.auditRequestId || ''),
+        action: auditContext.groupMutation?.action || 'edit',
+        origin: auditFlow,
         changes,
         fields: changes.map((change) => change.field),
         operation: auditFlow,
       });
-      await connection.query(
+      const [auditResult] = await connection.query<any>(
         `INSERT INTO control_escolar_audit_events (
           event_type, plantel, ciclo, matricula,
           actor_email, actor_name, actor_role, summary,
@@ -3455,9 +3464,12 @@ const upsertMatriculaOverlay = async (
           payload,
         ],
       );
+      auditEventId = Number(auditResult.insertId);
     }
     await connection.commit();
-    console.info("[Control Escolar] matricula audited write", {
+    if (auditEventId) console.info("[Control Escolar] matricula audited write", {
+      auditEventId,
+      requestId: String(auditContext.auditRequestId || ""),
       matricula: normalizedMatricula,
       agentId,
       actor: user.email,
@@ -3756,6 +3768,8 @@ export const updateControlEscolarStudent = async (
     user,
     agentId,
     schema,
+    "aurora_control_escolar_write",
+    _filters,
   );
 
   const [updatedRow, huskyPass] = await Promise.all([

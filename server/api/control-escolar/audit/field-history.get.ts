@@ -40,17 +40,18 @@ export default defineEventHandler(async event=>{
     let historical:any[]=[]
     let partial=false
     let historyUnavailable=false
-    if(!cursor){
+    if(!cursor&&query.phase!=='stored'){
       try{
         const result=await loadHistoricalActions({from:new Date(0),to:new Date(),planteles:[plantel],matricula,fullHistory:true})
         historical=result.events.filter(e=>e.matricula===matricula&&canonicalAuditField(e.field)===field)
         partial=result.partial||result.truncated||!result.available
+        if(partial)console.warn('[audit-field-history] incomplete source',{requestId,available:result.available,truncated:result.truncated,checked:result.checked,unmatched:result.unmatched})
       }catch(error:any){
         partial=true;historyUnavailable=true
         console.warn('[audit-field-history] historical source failed',{requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
       }
     }
-    const columns=await getCentralTableColumns('matricula').catch(()=>new Set<string>())
+    const columns=field==='grupo'?new Set(['grupo']):await getCentralTableColumns('matricula').catch(()=>new Set<string>())
     const currentColumn=[...columns].find(column=>canonicalAuditField(column)===field&&!/foto|adjunt|ine|curp|password|token/i.test(column))
     const currentSelection=currentColumn?', `'+currentColumn.replace(/`/g,'``')+'` AS audit_current_value':''
     const names=await controlEscolarCentralQuery<any[]>('SELECT matricula,nombres,apellido_paterno,apellido_materno'+currentSelection+' FROM matricula WHERE UPPER(matricula) = ?',[matricula])

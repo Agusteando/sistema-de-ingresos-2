@@ -65,3 +65,7 @@ test('current value comes from the authorized student row rather than assuming t
  const unavailable=await setup({query:{field:'grado'}}).invoke()
  assert.equal(unavailable.currentValueAvailable,false);assert.equal(unavailable.currentValue,null)
 })
+test('stored phase returns current value and committed changes without contacting historical backend',async()=>{
+ const s=setup({query:{phase:'stored'},history:async()=>{throw Error('unreachable')}}),result=await s.invoke()
+ assert.equal(s.historyCalls.length,0);assert.equal(result.currentValue,'B');assert.equal(result.events[0].after,'B');assert.equal(result.partial,false)
+})

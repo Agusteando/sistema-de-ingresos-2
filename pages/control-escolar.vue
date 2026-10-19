@@ -4940,6 +4940,8 @@ const pendingGroupDraftForStudent = (student) => {
       !Object.prototype.hasOwnProperty.call(stored.dirty, "grupo")) return null;
 
   const draftGroup = normalizeGroupPickerText(stored.values.grupo);
+  if (stored.groupIntent?.value !== draftGroup ||
+      stored.groupIntent?.action !== (draftGroup ? 'select' : 'remove')) return null;
   const currentGroup = normalizeGroupPickerText(student?.group ?? student?.grupo);
   if (draftGroup === currentGroup) return null;
   return {
@@ -5972,10 +5974,9 @@ const persistEditDraft = () => {
 const restoreEditDraft = () => {
   const stored = readStoredDraft();
   if (!stored?.values || typeof stored.values !== "object") return;
-  Object.assign(editForm, stored.values);
-  if (Object.prototype.hasOwnProperty.call(stored.values, "grupo")) {
-    editForm.grupo = normalizeGroupPickerText(stored.values.grupo);
-  }
+  // Group has its own explicit write path; old drafts must not replay it.
+  const { grupo: ignoredGroup, ...values } = stored.values;
+  Object.assign(editForm, values);
   draftRestored.value = true;
   draftSavedAt.value = stored.savedAt || "";
 };
@@ -6558,7 +6559,7 @@ const writeGroupDraftForStudent = (studentOrMatricula, groupValue, agentId = sel
       ? { ...stored.dirty, grupo: normalizedGroup }
       : { grupo: normalizedGroup };
 
-    localStorage.setItem(key, JSON.stringify({ savedAt, values, dirty }));
+    localStorage.setItem(key, JSON.stringify({ savedAt, values, dirty, groupIntent: { value: normalizedGroup, action: normalizedGroup ? "select" : "remove" } }));
     if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(matricula)) {
       draftSavedAt.value = savedAt;
       draftRestored.value = true;
@@ -6677,7 +6678,7 @@ const saveGroupChange = async (studentOrMatricula, groupValue, options = {}, con
       {
         method: "PATCH",
         query: scopeQuery,
-        body: { grupo: normalizedGroup },
+        body: { grupo: normalizedGroup, groupMutation: { action: normalizedGroup ? "select" : "remove", expectedGroup: currentSavedGroup } },
       },
     );
 
@@ -6832,7 +6833,7 @@ const saveStudent = async () => {
     return;
   }
   formatEditNameFields();
-  const payload = readDirtyEditForm({ normalizeNames: true });
+  const { grupo: ignoredGroup, ...payload } = readDirtyEditForm({ normalizeNames: true });
   const dirtyFields = Object.keys(payload);
   if (!dirtyFields.length) {
     clearEditDraft();

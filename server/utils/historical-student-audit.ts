@@ -1,14 +1,14 @@
 import { createHash } from 'node:crypto'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 
-export type LokiRecord = { at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
+export type LokiRecord = { auditEventId?:number; at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
 export type HistoricalStudentAction = {
   id: string; eventId: number; date: string; recordedAt: string; matricula: string
   student: string; field: string; fieldLabel: string; category: string
   before: null; after: null; source: 'Aurora' | 'Husky Pass'
   actor: string; actorEmail: string; avatar: string; flow: string
   quality: 'historical'; plantel: string; ciclo: string
-  evidenceHash: string
+  relatedEventId?: number; evidenceHash: string
 }
 
 const hash12 = (value: unknown) => createHash('sha256').update(String(value ?? '')).digest('hex').slice(0, 12)
@@ -56,6 +56,7 @@ export const parseMessage = (line: string, ns: string, labels: Record<string, st
     : Array.from(line.matchAll(/['"]((?:grupo|grado|nivel|ciclo|nombres|apellidoPaterno|apellidoMaterno|lugarTrabajoPadre|lugarTrabajoMadre|emailPadre|emailMadre|telefonoPadre|telefonoMadre))['"]/g)).map(match => match[1])
   return {
     at: safeDate(ns), message,
+    auditEventId: Number(obj.auditEventId || line.match(/\bauditEventId:\s*(\d+)/)?.[1]) || undefined,
     userId: obj.userId, matricula, fields,
     source, actor: compact(obj.actorName || obj.userName || obj.actor?.name || actorEmail), actorEmail,
     requestId: compact(obj.requestId),
@@ -285,7 +286,7 @@ export const loadHistoricalActions = async (input: {
       dedupe.add(fingerprint)
       result.push({
         id: 'history:' + item.rawHash.slice(0, 20) + ':' + field,
-        eventId: 0, date: item.at.slice(0,10), recordedAt: item.at,
+        eventId: 0, relatedEventId:item.auditEventId, date: item.at.slice(0,10), recordedAt: item.at,
         matricula, student: matricula, field, fieldLabel: field === 'nombres' && item.source === 'Husky Pass' ? 'Identidad · credencialización' : labelFor(field),
         category: classify(field), before: null, after: null,
         source: item.source, actor: item.source === 'Husky Pass' ? 'Husky Pass · Familia' : (item.actor || item.actorEmail || 'Aurora'),
@@ -298,6 +299,6 @@ export const loadHistoricalActions = async (input: {
   const value = { events: result, available, truncated, partial, checked: combined.length, unmatched }
   console.info('[historical-student-audit] capture completed', {checked:combined.length,resolved:result.length,unmatched,partial,truncated,systems:[...new Set(result.map(e=>e.source))]})
   if (historyCache.size > 24) historyCache.clear()
-  historyCache.set(key, { at: Date.now(), value })
+  if(value.available&&!value.partial&&!value.truncated)historyCache.set(key, { at: Date.now(), value })
   return value
 }
