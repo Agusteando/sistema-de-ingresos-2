@@ -26,7 +26,7 @@ const safeDate = (epochNs: string) => {
       hour: '2-digit', minute: '2-digit', second: '2-digit', hourCycle: 'h23'
     }).formatToParts(date)
     const get = (type: string) => parts.find(part => part.type === type)?.value || ''
-    return get('year') + '-' + get('month') + '-' + get('day') + ' ' + get('hour') + ':' + get('minute') + ':' + get('second')
+    return get('year') + '-' + get('month') + '-' + get('day') + ' ' + get('hour') + ':' + get('minute') + ':' + get('second') + '.' + String(BigInt(epochNs) % 1000000000n).padStart(9, '0')
   } catch { return '' }
 }
 const getHash = (item: any) => {

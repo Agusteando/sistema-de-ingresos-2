@@ -54,6 +54,7 @@ import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount, useId } fro
 import SearchableSelect from '~/components/SearchableSelect.vue'
 import AuditActorAvatar from './AuditActorAvatar.vue'
 import AuditChangeCard from './AuditChangeCard.vue'
+import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 import AuditFieldHistory from './AuditFieldHistory.vue'
 import {
   LucideRefreshCw,
@@ -148,7 +149,7 @@ const allEvents=computed(()=>{
       &&s.category===entry.category&&Math.abs(new Date(s.recordedAt.replace(' ','T')+'-06:00').getTime()-new Date(entry.recordedAt.replace(' ','T')+'-06:00').getTime())<120000)
     if(!overlap) result.push(entry)
   }
-  return result.sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt))
+  return result.sort(compareAuditNewest)
 })
 const baseEvents=computed(()=>allEvents.value.filter(e=>{
   if(e.date<from.value||e.date>to.value)return false

@@ -3,13 +3,14 @@ import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {createContext,runInContext} from 'node:vm'
 import ts from 'typescript'
+const timeline=readFileSync(new URL('../shared/utils/auditTimeline.ts',import.meta.url),'utf8').replace(/export /g,'')
 const util=readFileSync(new URL('../server/utils/audit-change-events.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
 const handler=readFileSync(new URL('../server/api/control-escolar/audit/field-history.get.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export default defineEventHandler','globalThis.handler=defineEventHandler')
 const row=(id,field='grupo',at='2025-01-02 12:00:00')=>({id,matricula:'PT0123',plantel:'PT',recorded_at:at,cursor_at:at+'.000123',actor_name:'Erika Ramos',actor_email:'erika@casitaiedis.edu.mx',source_flow:'aurora',payload:JSON.stringify({changes:[{field,before:'A',after:'B'}]})})
 function setup({rows=[row(2)],query={},history=async()=>({events:[],available:true,partial:false,truncated:false}),user={hasControlEscolarRole:true,plantelesList:['PT']},failDb=false}={}){
  const calls=[],historyCalls=[]
- const ctx=createContext({Intl,Date,Buffer,console:{warn(){}},PLANTELES_LIST:['PT','PM'],getTrustedAuthUser:async()=>user,normalizePlantel:v=>String(v||'').toUpperCase(),getQuery:()=>({matricula:'PT0123',plantel:'PT',field:'grupo',...query}),setResponseHeader(){},defineEventHandler:fn=>fn,createError:v=>Object.assign(new Error(v.message),v),loadAuditStaffProfiles:async()=>new Map(),isCasitaWorkspaceEmail:()=>false,buildWorkspacePhotoUrl:()=>'',cleanAuditAvatar:()=>'',loadHistoricalActions:async args=>{historyCalls.push(args);return history(args)},controlEscolarCentralQuery:async(sql,params)=>{calls.push({sql,params});if(failDb)throw new Error('db down');return sql.includes('FROM matricula')?[{matricula:'PT0123',nombres:'Ana María',apellido_paterno:'García',apellido_materno:'López'}]:rows}})
- runInContext(ts.transpile(util+'\n'+handler,{target:ts.ScriptTarget.ES2022}),ctx)
+ const ctx=createContext({Intl,Date,Buffer,getCentralTableColumns:async()=>new Set(['grupo']),console:{warn(){}},PLANTELES_LIST:['PT','PM'],getTrustedAuthUser:async()=>user,normalizePlantel:v=>String(v||'').toUpperCase(),getQuery:()=>({matricula:'PT0123',plantel:'PT',field:'grupo',...query}),setResponseHeader(){},defineEventHandler:fn=>fn,createError:v=>Object.assign(new Error(v.message),v),loadAuditStaffProfiles:async()=>new Map(),isCasitaWorkspaceEmail:()=>false,buildWorkspacePhotoUrl:()=>'',cleanAuditAvatar:()=>'',loadHistoricalActions:async args=>{historyCalls.push(args);return history(args)},controlEscolarCentralQuery:async(sql,params)=>{calls.push({sql,params});if(failDb)throw new Error('db down');return sql.includes('FROM matricula')?[{matricula:'PT0123',nombres:'Ana María',apellido_paterno:'García',apellido_materno:'López',audit_current_value:'B'}]:rows}})
+ runInContext(ts.transpile(timeline+'\n'+util+'\n'+handler,{target:ts.ScriptTarget.ES2022}),ctx)
  return {invoke:()=>ctx.handler({context:{auroraRequestId:'field-test'}}),calls,historyCalls}
 }
 test('all-time exact-field history contains full names, values and actors; includes older years and ignores grid filters',async()=>{
@@ -42,4 +43,25 @@ test('full field history never discards distinct writes merely because actors/ti
  const historical={id:'source-evidence',eventId:0,field:'grupo',matricula:'PT0123',source:'Aurora',actor:'Erika Ramos',actorEmail:'erika@casitaiedis.edu.mx',recordedAt:'2025-01-02 12:00:01',quality:'historical',before:null,after:null}
  const r=await setup({rows:[row(2),legacy],history:async()=>({events:[historical],available:true,partial:false,truncated:false})}).invoke()
  assert.equal(r.events.length,3);assert.ok(r.events.some(e=>e.id==='source-evidence'));assert.ok(r.events.some(e=>e.id==='1:0'))
+})
+
+test('orders same-second writes by retained microseconds, then insertion id without losing values',async()=>{
+ const first=row(9,'grupo','2026-10-19 09:03:01.123001')
+ const last=row(10,'grupo','2026-10-19 09:03:01.123999')
+ const result=await setup({rows:[first,last]}).invoke()
+ assert.deepEqual(Array.from(result.events,e=>e.eventId),[10,9])
+ assert.ok(result.events.every(e=>e.before==='A'&&e.after==='B'))
+})
+test('transaction payload retains precise write time even when legacy created_at has seconds only',async()=>{
+ const precise=row(10);precise.payload=JSON.stringify({recordedAt:'2025-01-02 12:00:00.123456',changes:[{field:'grupo',before:'OCEANÍA',after:'ÁFRICA'}]})
+ const result=await setup({rows:[precise]}).invoke()
+ assert.equal(result.events[0].recordedAt,'2025-01-02 12:00:00.123456')
+})
+
+test('current value comes from the authorized student row rather than assuming the last event is current',async()=>{
+ const s=setup(),result=await s.invoke()
+ assert.equal(result.currentValueAvailable,true);assert.equal(result.currentValue,'B')
+ assert.ok(s.calls.some(c=>c.sql.includes('`grupo` AS audit_current_value')&&c.params[0]==='PT0123'))
+ const unavailable=await setup({query:{field:'grado'}}).invoke()
+ assert.equal(unavailable.currentValueAvailable,false);assert.equal(unavailable.currentValue,null)
 })

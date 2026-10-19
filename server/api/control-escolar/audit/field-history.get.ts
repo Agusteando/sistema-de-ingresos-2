@@ -1,7 +1,8 @@
+import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 import { getQuery, setResponseHeader } from 'h3'
 import { PLANTELES_LIST } from '../../../../utils/constants'
 import { getTrustedAuthUser, normalizePlantel } from '../../../utils/auth-session'
-import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
+import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
 import { buildAuditChanges, canonicalAuditField } from '../../../utils/audit-change-events'
 import { loadHistoricalActions } from '../../../utils/historical-student-audit'
 import { loadAuditStaffProfiles } from '../../../utils/audit-actor-profile'
@@ -29,7 +30,7 @@ export default defineEventHandler(async event=>{
     // Cursor traverses raw events so an event with many fields is never split or skipped.
     const where=cursor?' AND (created_at < ? OR (created_at = ? AND id < ?))':''
     const rows=await controlEscolarCentralQuery<any[]>(
-      "SELECT id,matricula,plantel,ciclo,actor_email,actor_name,source_flow,payload,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s') AS recorded_at,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') AS cursor_at FROM control_escolar_audit_events WHERE event_type = 'student_update' AND plantel = ? AND matricula = ?"+where+' ORDER BY created_at DESC,id DESC LIMIT 501',
+      "SELECT id,matricula,plantel,ciclo,actor_email,actor_name,source_flow,payload,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') AS recorded_at,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') AS cursor_at FROM control_escolar_audit_events WHERE event_type = 'student_update' AND plantel = ? AND matricula = ?"+where+' ORDER BY created_at DESC,id DESC LIMIT 501',
       [plantel,matricula,...(cursor?[cursor.at,cursor.at,cursor.id]:[])]
     )
     const page=rows.slice(0,500)
@@ -49,13 +50,18 @@ export default defineEventHandler(async event=>{
         console.warn('[audit-field-history] historical source failed',{requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
       }
     }
-    const names=await controlEscolarCentralQuery<any[]>('SELECT matricula,nombres,apellido_paterno,apellido_materno FROM matricula WHERE UPPER(matricula) = ?',[matricula])
+    const columns=await getCentralTableColumns('matricula').catch(()=>new Set<string>())
+    const currentColumn=[...columns].find(column=>canonicalAuditField(column)===field&&!/foto|adjunt|ine|curp|password|token/i.test(column))
+    const currentSelection=currentColumn?', `'+currentColumn.replace(/`/g,'``')+'` AS audit_current_value':''
+    const names=await controlEscolarCentralQuery<any[]>('SELECT matricula,nombres,apellido_paterno,apellido_materno'+currentSelection+' FROM matricula WHERE UPPER(matricula) = ?',[matricula])
+    const currentValueAvailable=Boolean(currentColumn&&names.length)
+    const currentValue=currentValueAvailable&&names[0].audit_current_value!=null?String(names[0].audit_current_value).trim().slice(0,500):null
     const student=[names[0]?.nombres,names[0]?.apellido_paterno,names[0]?.apellido_materno].filter(Boolean).join(' ').trim()
     const profiles=await loadAuditStaffProfiles([...new Set(historical.filter(e=>e.source==='Aurora').map(e=>String(e.actorEmail||'')))])
     for(const e of historical){e.student=student;const profile=profiles.get(String(e.actorEmail||'').toLowerCase());if(profile){e.actor=profile.name||e.actor;e.avatar=profile.avatar||''}}
     const events=[...ledger,...historical]
-    events.sort((a,b)=>b.recordedAt.localeCompare(a.recordedAt)||b.eventId-a.eventId)
-    return {events,nextCursor,partial,historyUnavailable,requestId,student,field,plantel,matricula}
+    events.sort(compareAuditNewest)
+    return {events,nextCursor,partial,historyUnavailable,requestId,student,field,plantel,matricula,currentValueAvailable,currentValue}
   }catch(error:any){
     console.warn('[audit-field-history] query failed',{requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
     throw createError({statusCode:503,message:'No se pudo cargar el historial del campo.',data:{requestId,code:'AUDIT_FIELD_HISTORY_UNAVAILABLE',retryable:true}})

@@ -131,6 +131,7 @@ try {
   assert.equal(await fieldPanel.getByRole('button',{name:'Ver historial del campo',exact:true}).count(),0)
   await fieldPanel.getByRole('button',{name:'Cargar cambios anteriores',exact:true}).click()
   await fieldPanel.getByText('Nombre original',{exact:true}).waitFor()
+  assert.equal(await fieldPanel.locator('.history-timeline>li').count(),3);assert.equal(await fieldPanel.locator('.latest-label').count(),1);
   const historicalDates=await fieldPanel.locator('time').allTextContents();assert.match(historicalDates.at(-1),/2023/)
   await page.screenshot({path:output+`/audit-field-history-${width}x${height}.png`})
   await fieldPanel.getByRole('button',{name:'Volver a cambios',exact:true}).click()
