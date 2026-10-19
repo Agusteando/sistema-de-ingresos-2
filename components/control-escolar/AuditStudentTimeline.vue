@@ -4,21 +4,21 @@
       <summary class="student-heading">
         <LucideChevronDown :size="15" class="branch-chevron"/>
         <span class="student-identity"><strong>{{ named(group)?group.student:'Nombre no disponible' }}</strong><small v-if="named(group)">{{ group.matricula }} · {{ group.plantel }}</small></span>
-        <span class="student-count"><b>{{ group.changes.length||group.observations.length }}</b><small>{{ group.changes.length?(group.changes.length===1?'cambio':'cambios'):(group.observations.length===1?'registro':'registros') }}</small></span>
+        <span class="student-count"><b>{{ group.changes.length+group.observations.length }}</b><small>{{ group.observations.length?(group.changes.length+group.observations.length===1?'registro':'registros'):(group.changes.length===1?'cambio':'cambios') }}</small></span>
       </summary>
       <ol class="change-tree">
-        <li v-for="(record,index) in group.changes.slice(0,limits[group.key]||3)" :key="record.id" :class="{'latest-node':index===0}" :data-record-id="record.id">
-          <div class="event-time"><time :datetime="record.recordedAt.replace(' ','T')+'-06:00'" :aria-label="auditDateLabel(record.recordedAt)" :title="auditDateLabel(record.recordedAt)"><span v-if="!singleDay" class="event-date">{{ shortDate(record.recordedAt) }}</span><strong>{{ clock(record.recordedAt) }}</strong><small>{{ fraction(record.recordedAt) }}</small></time><span v-if="index===0" class="latest-badge">{{ singleDay?'Último del día':'Más reciente' }}</span></div>
+        <li v-for="(record,index) in entries(group).slice(0,limits[group.key]||3)" :key="record.id" :class="{'latest-node':index===0}" :data-record-id="record.id">
+          <div class="event-time"><time :datetime="record.recordedAt.replace(' ','T')+'-06:00'" :aria-label="auditDateLabel(record.recordedAt)" :title="auditDateLabel(record.recordedAt)"><span v-if="!singleDay" class="event-date">{{ shortDate(record.recordedAt) }}</span><strong>{{ clock(record.recordedAt) }}</strong><small>{{ fraction(record.recordedAt) }}</small></time></div>
           <article class="timeline-change">
             <header class="event-actor"><AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail"/><span><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><small>{{ record.source }}</small></span></header>
             <div class="event-field">{{ record.fieldLabel }}</div>
-            <div class="event-diff"><span><small>Antes</small><span>{{ value(record.before) }}</span></span><LucideArrowRight :size="16"/><span><small>Después</small><strong>{{ value(record.after) }}</strong></span></div>
-            <button class="field-history-link" type="button" @click="$emit('history',record)"><LucideHistory :size="13"/>Historial de {{ record.fieldLabel.toLowerCase() }}</button>
+            <div class="event-diff"><span><small>Antes</small><span>{{ record.quality==='verified'?value(record.before):'—' }}</span></span><LucideArrowRight :size="16"/><span><small>Después</small><strong>{{ record.quality==='verified'?value(record.after):'—' }}</strong></span></div>
+            <button v-if="showHistory" class="field-history-link" type="button" @click="$emit('history',record)"><LucideHistory :size="13"/>Historial de {{ record.fieldLabel.toLowerCase() }}</button>
           </article>
         </li>
       </ol>
-      <button v-if="group.changes.length>(limits[group.key]||3)" class="branch-more" type="button" @click="limits[group.key]=(limits[group.key]||3)+10">{{ group.changes.length-(limits[group.key]||3) }} cambios anteriores <LucideChevronDown :size="14"/></button>
-      <details v-if="group.observations.length" class="supporting-records"><summary>Otros registros · {{ group.observations.length }}</summary><div v-for="record in group.observations" :key="record.id" class="supporting-event" :data-record-id="record.id"><time :title="auditDateLabel(record.recordedAt)">{{ singleDay?clock(record.recordedAt):auditDateLabel(record.recordedAt) }}</time><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><button class="field-history-link" type="button" @click="$emit('history',record)">{{ record.fieldLabel }} <LucideChevronRight :size="13"/></button></div></details>
+      <button v-if="entries(group).length>(limits[group.key]||3)" class="branch-more" type="button" @click="limits[group.key]=(limits[group.key]||3)+10">{{ entries(group).length-(limits[group.key]||3) }} anteriores <LucideChevronDown :size="14"/></button>
+
     </details>
     <button v-if="groups.length>studentLimit" class="students-more" type="button" @click="studentLimit+=10">Ver más alumnos · {{ groups.length-studentLimit }}</button>
   </div>
@@ -27,12 +27,13 @@
 import {computed,ref,reactive} from 'vue'
 import {LucideArrowRight,LucideChevronDown,LucideChevronRight,LucideHistory} from 'lucide-vue-next'
 import AuditActorAvatar from './AuditActorAvatar.vue'
-import {auditDateLabel} from '~/shared/utils/auditTimeline'
+import {compareAuditNewest,auditDateLabel} from '~/shared/utils/auditTimeline'
 import {groupAuditStudents} from '~/shared/utils/auditStudentTimeline'
-type Record={id:string;eventId:number;recordedAt:string;matricula:string;plantel:string;student:string;quality:'verified'|'historical';actor:string;source:string;avatar:string;actorEmail:string;field:string;fieldLabel:string;category:string;before:string|null;after:string|null;date:string;flow:string;ciclo:string}
-const props=defineProps<{records:Record[];singleDay?:boolean}>()
+import {type AuditStudentRecord as Record} from '~/shared/utils/auditStudentTimeline'
+const props=withDefaults(defineProps<{records:Record[];singleDay?:boolean;showHistory?:boolean}>(),{showHistory:true})
 defineEmits<{history:[record:Record]}>()
 const groups=computed(()=>groupAuditStudents(props.records))
+const entries=(group:{changes:Record[];observations:Record[]})=>[...group.changes,...group.observations].sort(compareAuditNewest)
 const studentLimit=ref(10),limits=reactive<{[key:string]:number}>({})
 const named=(group:{student:string;matricula:string})=>Boolean(group.student&&group.student.toUpperCase()!==group.matricula.toUpperCase())
 const clock=(time:string)=>time.slice(11,19)

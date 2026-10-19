@@ -13,3 +13,11 @@ export const groupAuditStudents = <T extends AuditStudentEvent>(records:T[]) => 
   for(const group of groups.values())group.latest=group.changes[0]||group.observations[0]
   return [...groups.values()].sort((a,b)=>compareAuditNewest(a.latest,b.latest))
 }
+export type AuditStudentRecord = AuditStudentEvent & {quality:'verified'|'historical';actor:string;source:string;avatar:string;actorEmail:string;field:string;fieldLabel:string;category:string;before:string|null;after:string|null;date:string;flow:string;ciclo:string}
+export const groupAuditDates = <T extends AuditStudentEvent>(records:T[],focusedDate?:string) => {
+  const days=new Map<string,T[]>()
+  for(const record of records){const date=record.recordedAt.slice(0,10);if(!days.has(date))days.set(date,[]);days.get(date)!.push(record)}
+  if(focusedDate&&!days.has(focusedDate))days.set(focusedDate,[])
+  return [...days].sort(([a],[b])=>b.localeCompare(a)).map(([date,events])=>({date,events:[...events].sort(compareAuditNewest)}))
+}
+export const auditRecordNoun=(records:{quality:string}[])=>records.every(record=>record.quality==='verified')?(records.length===1?'cambio':'cambios'):(records.length===1?'registro':'registros')
