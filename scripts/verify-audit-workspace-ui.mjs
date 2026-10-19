@@ -139,7 +139,7 @@ try {
   assert.equal(await page.locator('.detail-records').evaluate(el=>el.scrollTop),savedDetail)
   fieldHistoryFailure=true
   await inspector.locator('.audit-change-card').first().getByRole('button',{name:'Ver historial del campo',exact:true}).click()
-  await page.getByText('Ref. fixture-field-failure',{exact:true}).waitFor()
+  await page.getByRole('region',{name:'Historial del campo',exact:true}).getByRole('button',{name:'Copiar referencia del error'}).waitFor()
   fieldHistoryFailure=false
   await page.getByRole('region',{name:'Historial del campo',exact:true}).getByRole('button',{name:'Reintentar',exact:true}).click()
   await page.getByText('Nombre corregido',{exact:true}).waitFor()

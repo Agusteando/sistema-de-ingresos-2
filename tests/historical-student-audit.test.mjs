@@ -83,3 +83,12 @@ test('field drilldown discovers retained bounds, crosses empty periods beyond 90
  assert.ok(result.events.length>0);assert.ok(result.events.every(e=>e.matricula==='PT123'));assert.equal(result.events[0].date,'2024-02-01')
  assert.ok(calls.some(c=>c.index&&c.start===0));assert.ok(calls.filter(c=>!c.index).every(c=>c.query.includes('PT123')&&c.query.includes(hash('PT123'))));assert.ok(calls.filter(c=>!c.index).every(c=>c.end-c.start<=7*86400000));assert.equal(result.partial,false)
 })
+
+test('retry does not reuse a cached partial historical result',async()=>{
+ let fail=true
+ const s=setup(selector=>{if(fail&&selector.includes('container='))throw Error('temporary source failure');return payload([school],{container_name:'app-aurora'})})
+ const input={from:new Date('2026-09-29T00:00:00Z'),to:new Date('2026-10-01T00:00:00Z'),planteles:['PT']}
+ const first=await s.loadHistoricalActions(input);assert.equal(first.partial,true)
+ const calls=s.calls.length;fail=false
+ const second=await s.loadHistoricalActions(input);assert.ok(s.calls.length>calls);assert.equal(second.partial,false)
+})
