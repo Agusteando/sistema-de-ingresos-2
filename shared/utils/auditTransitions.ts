@@ -5,6 +5,20 @@ const isGroup=(field:string)=>/^(grupo|group)$/i.test(field)
 const millis=(at:string)=>Date.parse(at.replace(' ','T')+'-06:00')
 const fieldKey=(field:string)=>field.replace(/[_\s-]/g,'').toLowerCase().replace(/^group$/,'grupo')
 export const reconcileAuditMirrors=<T extends Transition>(records:T[]):T[]=>{
+  // Only an explicit source event id can enrich a stored observation. Never join
+  // students, actors or writes by time proximity.
+  const evidence=new Map<string,T[]>()
+  const link=(id:number,record:T)=>[id,record.plantel,record.matricula,record.source,fieldKey(record.field)].join('|')
+  for(const source of records)if(source.relatedEventId&&source.quality==='verified'){
+    const key=link(source.relatedEventId,source)
+    evidence.set(key,[...(evidence.get(key)||[]),source])
+  }
+  records=records.map(record=>{
+    if(record.eventId<=0||record.quality==='verified')return record
+    const matches=evidence.get(link(record.eventId,record))||[]
+    if(!matches.length||matches.some(source=>source.before!==matches[0].before||source.after!==matches[0].after))return record
+    return {...record,before:matches[0].before,after:matches[0].after,quality:'verified',sourceEvidence:matches.map(source=>source.id)}
+  })
   const ledger=new Map(records.filter(record=>record.eventId>0&&record.quality==='verified').map(record=>[[record.eventId,record.plantel,record.matricula,fieldKey(record.field)].join('|'),record]))
   return records.filter(record=>{
     if(!record.relatedEventId)return true
