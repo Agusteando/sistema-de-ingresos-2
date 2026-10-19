@@ -26,15 +26,17 @@ const namedStudent=computed(()=>props.record.student&&props.record.student.toUpp
 const currentValueAvailable=ref(false),currentValue=ref<string|null>(null)
 const events=ref<any[]>([]),nextCursor=ref<string|null>(null),busy=ref(false),failure=ref(false),partial=ref(false),requestId=ref('')
 const changes=computed(()=>events.value.filter(item=>item.quality==='verified'))
-const observations=computed(()=>events.value.filter(item=>item.quality!=='verified'&&(!item.relatedEventId||!changes.value.some(change=>change.eventId===item.relatedEventId))))
+const observations=computed(()=>events.value.filter(item=>item.quality!=='verified'))
 const visibleRecords=computed(()=>compactAuditTransitions([...changes.value,...observations.value].sort(compareAuditNewest)))
 const historyBusy=ref(false),copied=ref(false)
 const copyReference=async()=>{try{await navigator.clipboard.writeText(requestId.value);copied.value=true}catch{copied.value=false}}
 let controller:AbortController|null=null
 let generation=0
+const scopeField=(value:unknown)=>{const field=String(value||'').replace(/[_\s-]/g,'').toLowerCase();return ({nombre:'nombres',status:'estatus'} as Record<string,string>)[field]||field}
+const matchesScope=(item:any)=>item.matricula===props.record.matricula&&item.plantel===props.record.plantel&&scopeField(item.field)===scopeField(props.record.field)
 const mergeEvents=(incoming:any[])=>{
   const combined=new Map<string,any>(events.value.map(item=>[item.id,item]))
-  for(const item of incoming||[])combined.set(item.id,item)
+  for(const item of incoming||[])if(matchesScope(item))combined.set(item.id,item)
   events.value=[...combined.values()].sort(compareAuditNewest)
 }
 const loadHistorical=async(current:number,signal:AbortSignal)=>{

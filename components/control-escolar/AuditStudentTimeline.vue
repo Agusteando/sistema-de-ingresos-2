@@ -1,13 +1,13 @@
 <template>
   <div class="student-timeline" aria-label="Cambios por alumno">
-    <details v-for="group in groups.slice(0,studentLimit)" :key="group.key" class="student-branch" open>
-      <summary class="student-heading">
+    <component :is="hideIdentity?'div':'details'" v-for="group in groups.slice(0,studentLimit)" :key="group.key" class="student-branch" open>
+      <summary v-if="!hideIdentity" class="student-heading">
         <LucideChevronDown :size="15" class="branch-chevron"/>
         <span class="student-identity"><strong>{{ named(group)?group.student:'Nombre no disponible' }}</strong><small v-if="named(group)">{{ group.matricula }} · {{ group.plantel }}</small></span>
         <span class="student-count"><b>{{ group.changes.length+group.observations.length }}</b><small>{{ group.observations.length?(group.changes.length+group.observations.length===1?'registro':'registros'):(group.changes.length===1?'cambio':'cambios') }}</small></span>
       </summary>
       <ol class="change-tree">
-        <li v-for="(record,index) in entries(group).slice(0,limits[group.key]||3)" :key="record.id" :class="{'latest-node':index===0}" :data-record-id="record.id">
+        <li v-for="(record,index) in entries(group).slice(0,limits[group.key]||3)" :key="record.id" :class="{'latest-node':latestRecordId?record.id===latestRecordId:index===0}" :data-record-id="record.id">
           <div class="event-time"><time :datetime="record.recordedAt.replace(' ','T')+'-06:00'" :aria-label="auditDateLabel(record.recordedAt)" :title="auditDateLabel(record.recordedAt)"><span v-if="!singleDay" class="event-date">{{ shortDate(record.recordedAt) }}</span><strong>{{ clock(record.recordedAt) }}</strong><small>{{ fraction(record.recordedAt) }}</small></time></div>
           <article class="timeline-change">
             <header class="event-actor"><AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail"/><span><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><small>{{ record.source }}</small></span></header>
@@ -20,7 +20,7 @@
       </ol>
       <button v-if="entries(group).length>(limits[group.key]||3)" class="branch-more" type="button" @click="limits[group.key]=(limits[group.key]||3)+10">{{ entries(group).length-(limits[group.key]||3) }} anteriores <LucideChevronDown :size="14"/></button>
 
-    </details>
+    </component>
     <button v-if="groups.length>studentLimit" class="students-more" type="button" @click="studentLimit+=10">Ver más alumnos · {{ groups.length-studentLimit }}</button>
   </div>
 </template>
@@ -31,7 +31,7 @@ import AuditActorAvatar from './AuditActorAvatar.vue'
 import {compareAuditNewest,auditDateLabel} from '~/shared/utils/auditTimeline'
 import {groupAuditStudents} from '~/shared/utils/auditStudentTimeline'
 import {type AuditStudentRecord as Record} from '~/shared/utils/auditStudentTimeline'
-const props=withDefaults(defineProps<{records:Record[];singleDay?:boolean;showHistory?:boolean}>(),{showHistory:true})
+const props=withDefaults(defineProps<{records:Record[];singleDay?:boolean;showHistory?:boolean;hideIdentity?:boolean;latestRecordId?:string}>(),{showHistory:true,hideIdentity:false})
 defineEmits<{history:[record:Record]}>()
 const groups=computed(()=>groupAuditStudents(props.records))
 const entries=(group:{changes:Record[];observations:Record[]})=>[...group.changes,...group.observations].sort(compareAuditNewest)

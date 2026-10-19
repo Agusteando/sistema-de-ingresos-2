@@ -145,12 +145,7 @@ const categories=computed(()=>data.value?.categories?.length?data.value.categori
 const allEvents=computed(()=>{
   const stored=data.value?.events||[]
   const external=history.value?.events||[]
-  const result=[...stored]
-  for (const entry of external){
-    const overlap=stored.some(s=>s.matricula===entry.matricula&&s.source===entry.source
-      &&s.category===entry.category&&Math.abs(new Date(s.recordedAt.replace(' ','T')+'-06:00').getTime()-new Date(entry.recordedAt.replace(' ','T')+'-06:00').getTime())<120000)
-    if(!overlap) result.push(entry)
-  }
+  const result=[...stored,...external]
   return compactAuditTransitions(result.sort(compareAuditNewest))
 })
 const baseEvents=computed(()=>allEvents.value.filter(e=>{
