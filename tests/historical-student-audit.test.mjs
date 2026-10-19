@@ -92,3 +92,24 @@ test('retry does not reuse a cached partial historical result',async()=>{
  const calls=s.calls.length;fail=false
  const second=await s.loadHistoricalActions(input);assert.ok(s.calls.length>calls);assert.equal(second.partial,false)
 })
+test('recovers explicit before/after from successful raw logs, but never guesses values from field names or hashes',()=>{
+ const s=setup(()=>payload([]))
+ const explicit=s.parseMessage(JSON.stringify({...school,changes:[{field:'grupo',before:'AMÉRICA',after:'ANTÁRTIDA'}]}),ns,{})
+ assert.equal(explicit.changes[0].before,'AMÉRICA');assert.equal(explicit.changes[0].after,'ANTÁRTIDA')
+ const legacy=s.parseMessage(JSON.stringify(school),ns,{})
+ assert.equal(legacy.changes.length,0)
+ const hashed=s.parseMessage(JSON.stringify({...school,changes:[{field:'grupo',before:{hash:'secret'},after:'ANTÁRTIDA'}]}),ns,{})
+ assert.equal(hashed.changes.length,0)
+})
+test('explicit group log differences survive resolution into the historical API events',async()=>{
+ const s=setup(()=>payload([{...school,changes:[{field:'grupo',before:'AMÉRICA',after:'ANTÁRTIDA'}]}],{container_name:'app-aurora'}))
+ const result=await s.loadHistoricalActions({from:new Date('2026-09-29T00:00:00Z'),to:new Date('2026-10-01T00:00:00Z'),planteles:['PT']})
+ assert.ok(result.events.length);assert.equal(result.events[0].quality,'verified');assert.equal(result.events[0].before,'AMÉRICA');assert.equal(result.events[0].after,'ANTÁRTIDA')
+})
+
+test('a collector-wrapped single-line audit JSON retains exact group differences and write identity',()=>{
+ const s=setup(()=>payload([]))
+ const data={...school,auditEventId:42,changes:[{field:'grupo',before:'AMÉRICA',after:'ANTÁRTIDA'}]}
+ const parsed=s.parseMessage(JSON.stringify({log:JSON.stringify(data),stream:'stdout'}),ns,{})
+ assert.equal(parsed.auditEventId,42);assert.equal(parsed.changes[0].before,'AMÉRICA');assert.equal(parsed.changes[0].after,'ANTÁRTIDA')
+})

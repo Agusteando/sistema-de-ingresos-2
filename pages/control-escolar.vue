@@ -4401,7 +4401,6 @@ const EDIT_FORM_FIELDS = [
   "peso",
   "tipoSangre",
   "alergias",
-  "foto",
   "grupo",
   "baja",
   "motivoBaja",
@@ -5975,7 +5974,7 @@ const restoreEditDraft = () => {
   const stored = readStoredDraft();
   if (!stored?.values || typeof stored.values !== "object") return;
   // Group has its own explicit write path; old drafts must not replay it.
-  const { grupo: ignoredGroup, ...values } = stored.values;
+  const { grupo: ignoredGroup, foto: ignoredPhoto, ...values } = stored.values;
   Object.assign(editForm, values);
   draftRestored.value = true;
   draftSavedAt.value = stored.savedAt || "";
@@ -6434,7 +6433,6 @@ const readEditFormFromStudent = (student = {}) => ({
   peso: student.peso || "",
   tipoSangre: student.tipoSangre || "",
   alergias: student.alergias || "",
-  foto: student.foto || "",
   grupo: normalizeGroupPickerText(student.group || student.grupo),
   baja: Number(student.baja || 0),
   motivoBaja: student.motivoBaja || "",

@@ -55,6 +55,7 @@ import SearchableSelect from '~/components/SearchableSelect.vue'
 import AuditActorAvatar from './AuditActorAvatar.vue'
 import AuditDateTimeline from './AuditDateTimeline.vue'
 import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
+import {compactAuditTransitions} from '~/shared/utils/auditTransitions'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 import AuditFieldHistory from './AuditFieldHistory.vue'
 import {
@@ -150,7 +151,7 @@ const allEvents=computed(()=>{
       &&s.category===entry.category&&Math.abs(new Date(s.recordedAt.replace(' ','T')+'-06:00').getTime()-new Date(entry.recordedAt.replace(' ','T')+'-06:00').getTime())<120000)
     if(!overlap) result.push(entry)
   }
-  return result.sort(compareAuditNewest)
+  return compactAuditTransitions(result.sort(compareAuditNewest))
 })
 const baseEvents=computed(()=>allEvents.value.filter(e=>{
   if(e.date<from.value||e.date>to.value)return false

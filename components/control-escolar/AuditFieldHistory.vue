@@ -18,6 +18,7 @@ import {computed,ref,watch,onBeforeUnmount} from 'vue'
 import {LucideChevronLeft,LucideRefreshCw} from 'lucide-vue-next'
 import AuditDateTimeline from './AuditDateTimeline.vue'
 import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
+import {compactAuditTransitions} from '~/shared/utils/auditTransitions'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 const props=defineProps<{record:{matricula:string;plantel:string;field:string;fieldLabel:string;student:string}}>()
 defineEmits<{close:[]}>()
@@ -26,7 +27,7 @@ const currentValueAvailable=ref(false),currentValue=ref<string|null>(null)
 const events=ref<any[]>([]),nextCursor=ref<string|null>(null),busy=ref(false),failure=ref(false),partial=ref(false),requestId=ref('')
 const changes=computed(()=>events.value.filter(item=>item.quality==='verified'))
 const observations=computed(()=>events.value.filter(item=>item.quality!=='verified'&&(!item.relatedEventId||!changes.value.some(change=>change.eventId===item.relatedEventId))))
-const visibleRecords=computed(()=>[...changes.value,...observations.value].sort(compareAuditNewest))
+const visibleRecords=computed(()=>compactAuditTransitions([...changes.value,...observations.value].sort(compareAuditNewest)))
 const historyBusy=ref(false),copied=ref(false)
 const copyReference=async()=>{try{await navigator.clipboard.writeText(requestId.value);copied.value=true}catch{copied.value=false}}
 let controller:AbortController|null=null

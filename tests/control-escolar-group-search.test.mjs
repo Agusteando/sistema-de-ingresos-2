@@ -45,9 +45,9 @@ test('modal clear and empty save never remove group; selection still saves', () 
 });
 
 test('old browser drafts cannot restore or replay a group without explicit intent', () => {
-  const context=createContext({process:{client:true},readStoredDraft:()=>({values:{grupo:'',nombres:'Ana'}}),editForm:{grupo:'ÁFRICA',nombres:''},draftRestored:{value:false},draftSavedAt:{value:''},normalizeMatriculaKey:value=>value,normalizeGroupPickerText:value=>String(value??'').trim(),controlDraftIndex:{value:{TEST:{values:{grupo:''},dirty:{grupo:''}}}}});
+  const context=createContext({process:{client:true},readStoredDraft:()=>({values:{grupo:'',foto:'',nombres:'Ana'}}),editForm:{grupo:'ÁFRICA',foto:'photo-reference',nombres:''},draftRestored:{value:false},draftSavedAt:{value:''},normalizeMatriculaKey:value=>value,normalizeGroupPickerText:value=>String(value??'').trim(),controlDraftIndex:{value:{TEST:{values:{grupo:''},dirty:{grupo:''}}}}});
   const restore=source.slice(source.indexOf('const restoreEditDraft ='),source.indexOf('const controlBulkStudentKey ='));
   const pending=source.slice(source.indexOf('const pendingGroupDraftForStudent ='),source.indexOf('const pendingGroupDraftStudents ='));
   runInContext(restore+'\n'+pending+'\nrestoreEditDraft();globalThis.pending=pendingGroupDraftForStudent({matricula:"TEST",group:"ÁFRICA"})',context);
-  assert.equal(context.editForm.grupo,'ÁFRICA');assert.equal(context.editForm.nombres,'Ana');assert.equal(context.pending,null);
+  assert.equal(context.editForm.foto,'photo-reference');assert.equal(context.editForm.grupo,'ÁFRICA');assert.equal(context.editForm.nombres,'Ana');assert.equal(context.pending,null);
 });

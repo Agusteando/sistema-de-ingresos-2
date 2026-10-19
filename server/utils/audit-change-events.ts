@@ -24,7 +24,7 @@ const fieldCategory = (raw: string) => {
 }
 
 const FIELD_NAMES: Record<string, string> = {
-  grupo: 'Grupo', grado: 'Grado', nivel: 'Nivel', ciclo: 'Ciclo',
+  foto: 'Foto', grupo: 'Grupo', grado: 'Grado', nivel: 'Nivel', ciclo: 'Ciclo',
   nombres: 'Nombre(s)', apellido_paterno: 'Apellido paterno',
   apellido_materno: 'Apellido materno', apellidoPaterno: 'Apellido paterno',
   apellidoMaterno: 'Apellido materno', nombreVerificado: 'Nombre verificado',

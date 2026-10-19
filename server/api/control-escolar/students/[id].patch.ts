@@ -12,6 +12,9 @@ export default defineEventHandler(async (event) => {
   const matricula = String(event.context.params?.id || '').trim()
   const incoming = await readBody(event)
   const { groupMutation, ...body } = incoming || {}
+  if (Object.prototype.hasOwnProperty.call(body, 'foto')) {
+    throw createError({statusCode:409,message:'Actualiza la página y vuelve a guardar.',data:{requestId:event.context.auroraRequestId,code:'STALE_PHOTO_FIELD'}})
+  }
   if (Object.prototype.hasOwnProperty.call(body, 'grupo') &&
       (!groupMutation || !['select','remove'].includes(groupMutation.action) ||
        typeof groupMutation.expectedGroup !== 'string' ||
