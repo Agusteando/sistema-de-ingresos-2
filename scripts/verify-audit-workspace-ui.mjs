@@ -89,7 +89,7 @@ try {
   await page.locator('.student-branch').first().waitFor()
   assert.ok(await page.locator('.student-heading').count()>0)
   assert.ok(await page.locator('.student-count b').count()>0)
-  assert.equal(await page.locator('.latest-badge').count(),await page.locator('.student-branch').filter({has:page.locator('.change-tree>li')}).count())
+  assert.ok(await page.locator('.date-divider').count()>0)
   if(width<=760)await page.getByRole('button',{name:'Volver al historial',exact:true}).click()
   else await page.getByRole('button',{name:'Ver todos los cambios',exact:true}).click()
   const cell=page.locator('.matrix-cell').filter({hasText:'Husky Pass'})
@@ -117,7 +117,6 @@ try {
   const box=await inspector.boundingBox(),gridBox=await page.locator('.audit-overview').boundingBox()
   assert.ok(box.y>=0&&box.y+box.height<=height+1)
   if(width>760)assert.ok(box.x>=gridBox.x+gridBox.width-1,'inspector must not overlap matrix')
-  if(await inspector.locator('.supporting-records>summary').count())await inspector.locator('.supporting-records>summary').first().click()
   assert.ok(await inspector.getByText('Familia',{exact:true}).isVisible())
   assert.match(await inspector.locator('.timeline-change').first().locator('header').innerText(),/Erika Ramos/)
   assert.equal(await inspector.locator('.timeline-change').first().locator('header .student').count(),0)
@@ -139,8 +138,8 @@ try {
   assert.equal(await fieldPanel.getByRole('button',{name:'Ver historial del campo',exact:true}).count(),0)
   await fieldPanel.getByRole('button',{name:'Cargar cambios anteriores',exact:true}).click()
   await fieldPanel.getByText('Nombre original',{exact:true}).waitFor()
-  assert.equal(await fieldPanel.locator('.history-timeline>li').count(),3);assert.equal(await fieldPanel.locator('.latest-label').count(),1);
-  const historicalDates=await fieldPanel.locator('time').allTextContents();assert.match(historicalDates.at(-1),/2023/)
+  assert.equal(await fieldPanel.locator('.change-tree>li').count(),3);assert.equal(await fieldPanel.locator('.date-divider').count(),3);
+  const historicalDates=await fieldPanel.locator('.date-divider strong').allTextContents();assert.match(historicalDates.at(-1),/2023/)
   await page.screenshot({path:output+`/audit-field-history-${width}x${height}.png`})
   await fieldPanel.getByRole('button',{name:'Volver a cambios',exact:true}).click()
   await page.locator('.detail-records').waitFor()

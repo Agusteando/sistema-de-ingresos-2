@@ -1,6 +1,6 @@
 <template>
   <article class="audit-change-card" :data-record-id="record.id" :class="{ 'is-latest': latest }">
-    <span v-if="latest" class="latest-label">{{ current?'Valor vigente · más reciente':'Más reciente' }}</span>
+    <span v-if="latest" class="latest-label">{{ current?'Actual':'Reciente' }}</span>
     <header><div class="actor"><AuditActorAvatar :src="record.avatar" :name="record.actor" :source="record.source" :email="record.actorEmail"/><div><strong>{{ record.source==='Husky Pass'?'Familia':record.actor }}</strong><span :class="{family:record.source==='Husky Pass'}">{{ record.source }}</span></div></div><time :datetime="record.recordedAt.replace(' ','T')+'-06:00'">{{ dateLabel(record.recordedAt) }}</time></header>
     <div class="student"><strong>{{ namedStudent(record)?record.student:'Nombre no disponible' }}</strong><span v-if="namedStudent(record)">{{ record.matricula }} · {{ record.plantel }}</span></div>
     <div class="field">{{ record.fieldLabel }}</div>

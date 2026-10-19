@@ -3,7 +3,7 @@
     <div class="audit-overview">
       <header class="change-header">
         <div class="heading-copy"><span>Control Escolar</span><h1>Historial de cambios</h1></div>
-        <div class="inline-summary" aria-live="polite"><template v-if="busy">Cargando…</template><template v-else><strong>{{ filteredEvents.length }}</strong> {{ filteredEvents.length===1?'cambio':'cambios' }}<span>·</span>{{ studentCount }} {{ studentCount===1?'alumno':'alumnos' }}</template></div>
+        <div class="inline-summary" aria-live="polite"><template v-if="busy">Cargando…</template><template v-else><strong>{{ filteredEvents.length }}</strong> {{ auditRecordNoun(filteredEvents) }}<span>·</span>{{ studentCount }} {{ studentCount===1?'alumno':'alumnos' }}</template></div>
       </header>
       <div class="audit-toolbar">
         <label class="campus-control"><span>Plantel</span><SearchableSelect v-model="plantel" :options="campusOptions" :clearable="false" accessible-label="Filtrar plantel" search-placeholder="Buscar plantel…" /></label>
@@ -33,8 +33,8 @@
           <template v-for="category in categories" :key="category.key">
             <button type="button" class="field-heading" :class="{chosen:selected?.category===category.key&&!selected?.day}" :aria-pressed="selected?.category===category.key&&!selected?.day" @mousedown.prevent="focusMatrixButton" @click="selectField(category.key)"><span>{{ category.label }}</span><LucideChevronRight :size="14"/></button>
             <div class="field-total"><span>{{ countCategory(category.key) }}</span></div>
-            <button v-for="day in days" :key="category.key+'-'+day.key" type="button" class="matrix-cell" :class="{active:selected?.category===category.key&&selected?.day===day.key,filled:cell(category.key,day.key).length>0}" :aria-pressed="selected?.category===category.key&&selected?.day===day.key" :aria-controls="inspectorId" :aria-label="category.label+' '+day.label+', '+cell(category.key,day.key).length+' cambios'" @mousedown.prevent="focusMatrixButton" @click="selectCell(category.key,day.key)">
-              <template v-if="cell(category.key,day.key).length"><span class="cell-number"><strong>{{ cell(category.key,day.key).length }}</strong> {{ cell(category.key,day.key).length===1?'cambio':'cambios' }}<LucideChevronRight :size="15"/></span>
+            <button v-for="day in days" :key="category.key+'-'+day.key" type="button" class="matrix-cell" :class="{active:selected?.category===category.key&&selected?.day===day.key,filled:cell(category.key,day.key).length>0}" :aria-pressed="selected?.category===category.key&&selected?.day===day.key" :aria-controls="inspectorId" :aria-label="category.label+' '+day.label+', '+cell(category.key,day.key).length+' '+auditRecordNoun(cell(category.key,day.key))" @mousedown.prevent="focusMatrixButton" @click="selectCell(category.key,day.key)">
+              <template v-if="cell(category.key,day.key).length"><span class="cell-number"><strong>{{ cell(category.key,day.key).length }}</strong> {{ auditRecordNoun(cell(category.key,day.key)) }}<LucideChevronRight :size="15"/></span>
                 <span v-for="actor in cellActors(category.key,day.key)" :key="actor.key" class="mini-actor"><AuditActorAvatar :src="actor.avatar" :name="actor.name" :source="actor.source" :email="actor.email"/><span class="identity-copy"><span class="mini-name">{{ actor.source==='Husky Pass'?'Familias':actor.name }}</span><span class="cell-source" :class="sourceClass(actor.source)">{{ actor.source==='Otro'?'Otros':actor.source }}</span></span></span>
               </template><span v-else class="no-change">—</span>
             </button>
@@ -44,8 +44,8 @@
       <div v-if="busy && !filteredEvents.length" class="loading-line" role="status"><LucideRefreshCw class="spinning" :size="18"/>Cargando cambios…</div>
     </div>
     <aside :id="inspectorId" class="audit-inspector" aria-label="Detalle de cambios">
-      <AuditFieldHistory v-if="fieldTarget" :record="fieldTarget" @close="closeFieldHistory"/><div v-show="!fieldTarget" class="detail-pane"><header class="detail-header"><button v-if="selected" type="button" class="mobile-back" @click="clearSelection"><LucideChevronLeft :size="18"/>Volver al historial</button><div class="detail-title"><div><span class="detail-eyebrow">{{ selected?'Selección':'Última actividad' }}</span><h2>{{ selectionTitle }}</h2><span class="detail-count">{{ selectedChangeCount }} {{ selectedChangeCount===1?'cambio':'cambios' }} · {{ selectedStudentCount }} {{ selectedStudentCount===1?'alumno':'alumnos' }}</span></div><button v-if="selected" class="clear-selection" type="button" aria-label="Ver todos los cambios" @click="clearSelection"><LucideX :size="16"/>Ver todos</button></div></header>
-      <div ref="detailRecords" class="detail-records" :aria-busy="busy"><AuditStudentTimeline :key="(selected?.category||'all')+'|'+(selected?.day||'all')+'|'+source+'|'+search+'|'+plantel" :records="selectedEvents" :single-day="Boolean(selected?.day)" @history="openFieldHistory"/><div v-if="!selectedEvents.length" class="empty-area"><LucideInbox :size="28"/><strong>{{ busy?'Cargando cambios…':historyUnavailable?'Historial pendiente de cargar':'Sin cambios en esta selección' }}</strong></div></div>
+      <AuditFieldHistory v-if="fieldTarget" :record="fieldTarget" @close="closeFieldHistory"/><div v-show="!fieldTarget" class="detail-pane"><header class="detail-header"><button v-if="selected" type="button" class="mobile-back" @click="clearSelection"><LucideChevronLeft :size="18"/>Volver al historial</button><div class="detail-title"><div><span class="detail-eyebrow">{{ selected?'Selección':'Última actividad' }}</span><h2>{{ selectionTitle }}</h2><span class="detail-count">{{ selectionCount }} · {{ selectedStudentCount }} {{ selectedStudentCount===1?'alumno':'alumnos' }}</span></div><button v-if="selected" class="clear-selection" type="button" aria-label="Ver todos los cambios" @click="clearSelection"><LucideX :size="16"/>Ver todos</button></div></header>
+      <div ref="detailRecords" class="detail-records" :aria-busy="busy"><AuditDateTimeline :key="(selected?.category||'all')+'|'+source+'|'+search+'|'+plantel+'|'+from+'|'+to" :records="selectedEvents" :focus-date="selected?.day" @focus="focusDrawerDay" @history="openFieldHistory"/><div v-if="!selectedEvents.length" class="empty-area"><LucideInbox :size="28"/><strong>{{ busy?'Cargando cambios…':historyUnavailable?'Historial pendiente de cargar':'Sin cambios en esta selección' }}</strong></div></div>
     </div></aside>
   </section>
 </template>
@@ -53,7 +53,8 @@
 import { computed, ref, watch, nextTick, onMounted, onBeforeUnmount, useId } from 'vue'
 import SearchableSelect from '~/components/SearchableSelect.vue'
 import AuditActorAvatar from './AuditActorAvatar.vue'
-import AuditStudentTimeline from './AuditStudentTimeline.vue'
+import AuditDateTimeline from './AuditDateTimeline.vue'
+import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 import AuditFieldHistory from './AuditFieldHistory.vue'
 import {
@@ -198,12 +199,15 @@ const selectionTitle=computed(()=>{
   return label+(selected.value.day?' · '+dayLabel(selected.value.day):'')
 })
 const selectedEvents=computed(()=>filteredEvents.value.filter(e=>
-  !selected.value||((!selected.value.category||e.category===selected.value.category)&&(!selected.value.day||e.date===selected.value.day))
+  !selected.value||((!selected.value.category||e.category===selected.value.category))
 ))
-const selectedChangeCount=computed(()=>selectedEvents.value.filter(event=>event.quality==='verified').length)
-const selectedStudentCount=computed(()=>new Set(selectedEvents.value.map(event=>event.plantel+'|'+event.matricula)).size)
+const focusedEvents=computed(()=>selected.value?.day?selectedEvents.value.filter(event=>event.date===selected.value?.day):selectedEvents.value)
+const selectionCount=computed(()=>{const records=focusedEvents.value;const detailed=records.every(event=>event.quality==='verified');return records.length+' '+(detailed?(records.length===1?'cambio':'cambios'):(records.length===1?'registro':'registros'))})
+const selectedChangeCount=computed(()=>focusedEvents.value.filter(event=>event.quality==='verified').length)
+const selectedStudentCount=computed(()=>new Set(focusedEvents.value.map(event=>event.plantel+'|'+event.matricula)).size)
 const focusMatrixButton=(event:MouseEvent)=>(event.currentTarget as HTMLElement)?.focus({preventScroll:true})
 const selectCell=(category:string,day:string)=>{selected.value=selected.value?.category===category&&selected.value?.day===day?null:{category,day}}
+const focusDrawerDay=(day:string)=>{selected.value={...selected.value,day}}
 const selectDay=(day:string)=>{selected.value=selected.value?.day===day&&!selected.value.category?null:{day}}
 const selectField=(category:string)=>{selected.value=selected.value?.category===category&&!selected.value.day?null:{category}}
 const sourceClass=(value:string)=>value==='Aurora'?'aurora':value==='Husky Pass'?'husky':'other'
@@ -221,7 +225,7 @@ watch([from,to,plantel],()=>{selected.value=null;detailCount.value=30;scrollToLa
 
 watch([search,source],()=>{detailCount.value=30;selected.value=null})
 const clearSelection=()=>{if(fieldTarget.value){void closeFieldHistory();return}selected.value=null}
-watch(selected,async()=>{detailCount.value=30;await nextTick();detailRecords.value?.scrollTo({top:0})})
+watch(()=>selected.value?.category,async()=>{detailCount.value=30;await nextTick()})
 </script>
 
 <style scoped>

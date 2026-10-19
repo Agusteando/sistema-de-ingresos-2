@@ -1,11 +1,10 @@
 <template>
   <section class="field-history" aria-label="Historial del campo">
-    <header class="field-history-header"><button type="button" class="history-back" @click="$emit('close')"><LucideChevronLeft :size="17"/>Volver a cambios</button><span>Historial del campo</span><h2>{{ record.fieldLabel }}</h2><strong>{{ namedStudent?record.student:'Nombre no disponible' }}</strong><small v-if="namedStudent">{{ record.matricula }} · {{ record.plantel }}</small><div v-if="currentValueAvailable" class="current-value"><span>Valor actual</span><strong>{{ currentValue===null?'Sin dato':currentValue===''?(record.field==='grupo'?'Sin grupo':'Vacío'):currentValue }}</strong></div></header>
+    <header class="field-history-header"><button type="button" class="history-back" @click="$emit('close')"><LucideChevronLeft :size="17"/>Volver a cambios</button><span>Historial del campo</span><h2>{{ record.fieldLabel }}</h2><strong>{{ namedStudent?record.student:'Nombre no disponible' }}</strong><small v-if="namedStudent">{{ record.matricula }} · {{ record.plantel }}</small><div v-if="currentValueAvailable" class="current-value"><span>Actual</span><strong>{{ currentValue===null?'Sin dato':currentValue===''?(record.field==='grupo'?'Sin grupo':'Vacío'):currentValue }}</strong></div></header>
     <div class="field-history-records" :aria-busy="busy">
       <div v-if="failure" class="history-notice" role="alert"><span>No se pudo cargar.</span><button type="button" :disabled="busy" @click="load(true)">Reintentar</button><button v-if="requestId" type="button" @click="copyReference" aria-label="Copiar referencia del error">{{ copied?'Copiado':'Copiar referencia' }}</button></div>
-      <span class="history-count" v-if="changes.length">{{ changes.length }} {{ changes.length===1?'cambio':'cambios' }}<span v-if="nextCursor"> · hay más</span></span>
-      <ol class="history-timeline"><li v-for="(item,index) in changes" :key="item.id" :class="{'is-latest':index===0}"><AuditChangeCard :record="item" :latest="index===0" :current="index===0&&currentValueAvailable&&item.after===currentValue" :show-history="false"/></li></ol>
-      <details v-if="observations.length" class="history-observations"><summary>Otros registros · {{ observations.length }}</summary><AuditChangeCard v-for="item in observations" :key="item.id" :record="item" :show-history="false"/></details>
+      <span class="history-count" v-if="visibleRecords.length">{{ visibleRecords.length }} {{ auditRecordNoun(visibleRecords) }}<span v-if="nextCursor"> · hay más</span></span>
+      <AuditDateTimeline :records="visibleRecords" @history="()=>{}" :show-history="false"/>
       <div v-if="historyBusy" class="history-loading" role="status">Cargando anteriores…</div>
       <div v-else-if="partial" class="history-notice" role="status"><span>Historial anterior pendiente</span><button type="button" @click="retryHistory">Reintentar</button><button v-if="requestId" type="button" @click="copyReference" aria-label="Copiar referencia del error">{{ copied?'Copiado':'Copiar referencia' }}</button></div>
       <div v-if="busy" class="history-loading" role="status"><LucideRefreshCw :size="18" class="spinning"/>Cargando historial…</div>
@@ -17,7 +16,8 @@
 <script setup lang="ts">
 import {computed,ref,watch,onBeforeUnmount} from 'vue'
 import {LucideChevronLeft,LucideRefreshCw} from 'lucide-vue-next'
-import AuditChangeCard from './AuditChangeCard.vue'
+import AuditDateTimeline from './AuditDateTimeline.vue'
+import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 const props=defineProps<{record:{matricula:string;plantel:string;field:string;fieldLabel:string;student:string}}>()
 defineEmits<{close:[]}>()
@@ -26,6 +26,7 @@ const currentValueAvailable=ref(false),currentValue=ref<string|null>(null)
 const events=ref<any[]>([]),nextCursor=ref<string|null>(null),busy=ref(false),failure=ref(false),partial=ref(false),requestId=ref('')
 const changes=computed(()=>events.value.filter(item=>item.quality==='verified'))
 const observations=computed(()=>events.value.filter(item=>item.quality!=='verified'&&(!item.relatedEventId||!changes.value.some(change=>change.eventId===item.relatedEventId))))
+const visibleRecords=computed(()=>[...changes.value,...observations.value].sort(compareAuditNewest))
 const historyBusy=ref(false),copied=ref(false)
 const copyReference=async()=>{try{await navigator.clipboard.writeText(requestId.value);copied.value=true}catch{copied.value=false}}
 let controller:AbortController|null=null
