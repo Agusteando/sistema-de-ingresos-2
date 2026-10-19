@@ -17,6 +17,8 @@ RUN apk upgrade --no-cache \
 WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 COPY --from=build /app/.output ./.output
+COPY --from=build /app/scripts/import-audit-recovery.mjs ./scripts/import-audit-recovery.mjs
+COPY --from=build /app/shared/utils/auditRecovery.mjs ./shared/utils/auditRecovery.mjs
 COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 RUN node -e "const {PrismaClient}=require('@prisma/client');const db=new PrismaClient();if(!db.base)throw new Error('Prisma Base model missing');console.log('Aurora Prisma musl client ready');db.\$disconnect()"

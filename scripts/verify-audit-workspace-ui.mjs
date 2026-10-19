@@ -138,6 +138,9 @@ try {
   assert.equal(await fieldPanel.getByRole('button',{name:'Ver historial del campo',exact:true}).count(),0)
   await fieldPanel.getByRole('button',{name:'Cargar cambios anteriores',exact:true}).click()
   await fieldPanel.getByText('Nombre original',{exact:true}).waitFor()
+  assert.equal(await fieldPanel.locator('.student-root').count(),1,'one student above every date');
+  assert.equal(await fieldPanel.locator('.student-root .date-section').count(),3,'all dates stay beneath their student');
+  assert.equal(await fieldPanel.locator('.student-heading').count(),0,'student identity must not repeat per date');
   assert.equal(await fieldPanel.locator('.change-tree>li').count(),3);assert.equal(await fieldPanel.locator('.date-divider').count(),3);
   const historicalDates=await fieldPanel.locator('.date-divider strong').allTextContents();assert.match(historicalDates.at(-1),/2023/)
   await page.screenshot({path:output+`/audit-field-history-${width}x${height}.png`})

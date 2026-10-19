@@ -1,0 +1,37 @@
+name: Audit forensics regression
+on:
+  pull_request:
+    paths:
+      - 'components/control-escolar/Audit*.vue'
+      - 'components/control-escolar/FieldChangeMatrix.vue'
+      - 'shared/utils/audit*.ts'
+      - 'shared/utils/audit*.mjs'
+      - 'scripts/import-audit-recovery.mjs'
+      - 'scripts/read-audit-binlog.py'
+      - 'tests/audit-binlog-reader.test.py'
+      - 'server/utils/audit-change-events.ts'
+      - 'tests/fixtures/audit-recovery-*.json'
+      - 'Containerfile'
+      - 'server/utils/historical-student-audit.ts'
+      - 'server/api/control-escolar/audit/**'
+      - 'scripts/inspect-student-loki.mjs'
+      - 'tests/audit-*.test.mjs'
+      - 'tests/historical-student-audit.test.mjs'
+      - 'tests/student-loki-forensics.test.mjs'
+      - '.github/workflows/audit-forensics.yml'
+permissions:
+  contents: read
+jobs:
+  source-regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - run: node --experimental-vm-modules --test tests/audit-*.test.mjs tests/historical-student-audit.test.mjs tests/student-loki-forensics.test.mjs
+      - run: python3 tests/audit-binlog-reader.test.py
+      - run: npm run build
