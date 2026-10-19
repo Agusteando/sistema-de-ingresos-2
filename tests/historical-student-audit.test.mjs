@@ -5,7 +5,7 @@ import {createContext,runInContext} from 'node:vm'
 import {createHash} from 'node:crypto'
 import ts from 'typescript'
 const source=readFileSync(new URL('../server/utils/historical-student-audit.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
-const js=ts.transpile(source,{target:ts.ScriptTarget.ES2022})+'\nglobalThis.api={queryLoki,parseMessage,loadHistoricalActions,allowedLokiUrl};'
+const js=ts.transpile(source,{target:ts.ScriptTarget.ES2022})+'\nglobalThis.api={queryLoki,parseMessage,parseConsoleBlock,loadHistoricalActions,allowedLokiUrl};'
 const at='2026-09-30T01:03:35.120Z'
 const ns=String(BigInt(new Date(at).getTime())*1000000n)
 const hash=v=>createHash('sha256').update(String(v)).digest('hex').slice(0,12)
@@ -112,4 +112,38 @@ test('a collector-wrapped single-line audit JSON retains exact group differences
  const data={...school,auditEventId:42,changes:[{field:'grupo',before:'AMÉRICA',after:'ANTÁRTIDA'}]}
  const parsed=s.parseMessage(JSON.stringify({log:JSON.stringify(data),stream:'stdout'}),ns,{})
  assert.equal(parsed.auditEventId,42);assert.equal(parsed.changes[0].before,'AMÉRICA');assert.equal(parsed.changes[0].after,'ANTÁRTIDA')
+})
+
+test('automatically retains explicit Husky Pass changes for every recorded field',async()=>{
+ const event={...family,matricula:'PT123',changes:[{field:'grupo',before:'A',after:'B'},{field:'grado',before:'1',after:'2'}]}
+ const s=setup(()=>payload([event]))
+ const result=await s.loadHistoricalActions({from,to,planteles:['PT']})
+ assert.deepEqual(Array.from(result.events,e=>e.field).sort(),['grado','grupo'])
+ assert.ok(result.events.every(e=>e.quality==='verified'&&e.source==='Husky Pass'))
+})
+test('console decoder preserves literal values and refuses interleaved student identities or executable text',()=>{
+ const s=setup(()=>payload([]))
+ const lines=["[Control Escolar] matricula audited write {","matricula: 'PT123',","changes: [ { field: 'grupo', before: 'A,}', after: 'B' } ],","}"]
+ const event=s.parseConsoleBlock(lines,ns,{container:'immutable'})
+ assert.equal(event.matricula,'PT123');assert.equal(event.changes[0].before,'A,}')
+ assert.equal(s.parseConsoleBlock([...lines.slice(0,-1),"matricula: 'PM0637',","}"],ns,{}),null)
+ assert.equal(s.parseConsoleBlock([lines[0],"matricula: process.exit(),","}"],ns,{}),null)
+})
+test('student query automatically fetches stable-stream context and reconstructs unambiguous split changes',async()=>{
+ const lines=["[Control Escolar] matricula audited write {","matricula: 'PT123',","actor: 'erika@casitaiedis.edu.mx',","changes: [ { field: 'grupo', before: 'A', after: 'B' } ],","}"]
+ const calls=[]
+ let tied=false
+ const ctx=createContext({createHash,URL,URLSearchParams,AbortSignal,Buffer,Date,Intl,process:{env:{}},console:{info(){},warn(){}},controlEscolarCentralQuery:async()=>[],fetch:async url=>{
+  const q=url.searchParams.get('query');calls.push(q)
+  const values=q.includes('(?i)')?[[String(BigInt(ns)+1n),lines[1]]]:lines.map((line,i)=>[String(BigInt(ns)+BigInt(tied?0:i)),line])
+  return {ok:true,json:async()=>({status:'success',data:{result:[{stream:{container:'immutable',container_name:'app-aurora',detected_level:'unknown',node:'casita01'},values}]}})}
+ }})
+ runInContext(js,ctx)
+ const r=await ctx.api.queryLoki(from,to,['PT123'])
+ assert.equal(r.records.length,1);assert.equal(r.records[0].changes[0].after,'B')
+ const context=calls.find(q=>q.startsWith('{container="immutable"'))
+ assert.ok(context);assert.equal(context.includes('detected_level'),false)
+ tied=true
+ const ambiguous=await ctx.api.queryLoki(from,to,['PT123'])
+ assert.equal(ambiguous.records.length,0);assert.equal(ambiguous.partial,true)
 })

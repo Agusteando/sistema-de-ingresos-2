@@ -89,6 +89,29 @@ export const parseMessage = (line: string, ns: string, labels: Record<string, st
     rawHash: digest(JSON.stringify({ns, labels, line}))
   }
 }
+// Decode console objects without evaluating source text. Ambiguous/interleaved
+// blocks are deliberately excluded rather than attributed by nearby timestamps.
+export const parseConsoleBlock=(lines:string[],ns:string,labels:Record<string,string>):LokiRecord|null=>{
+  if(lines.length>100||lines.join('\n').length>32000)return null
+  const text=lines.join('\n'),start=text.indexOf('{')
+  if(start<0||!text.trimEnd().endsWith('}')||lines.filter(line=>/centralized matricula overlay updated|matricula audited write|credentialization.submission.database-committed|personas-autorizadas.student.save/.test(line)).length!==1)return null
+  try{
+    const raw=text.slice(start)
+    const tokens=raw.match(/'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|[A-Za-z_$][\w$]*|[^\s]/g)||[]
+    const converted=tokens.filter((token,i)=>!(token===','&&['}',']'].includes(tokens[i+1]))).map((token,i,filtered)=>{
+      if(token.startsWith("'")){
+        const value=token.slice(1,-1).replace(/\\'/g,"'").replace(/\\\\/g,'\\')
+        if(/\\/.test(value))throw Error('Unsupported console escape')
+        return JSON.stringify(value)
+      }
+      return /^[A-Za-z_$][\w$]*$/.test(token)&&filtered[i+1]===':'?JSON.stringify(token):token
+    }).join('')
+    if((converted.match(/"matricula":/g)||[]).length!==1)return null
+    const obj=JSON.parse(converted)
+    obj.message=text.slice(0,start).trim()
+    return parseMessage(JSON.stringify(obj),ns,labels)
+  }catch{return null}
+}
 const parseSelections = (value: string) => {
   const s = compact(value)
   if (!s) return [
@@ -128,12 +151,13 @@ export const queryLoki = async (from: Date, to: Date, identityTokens: string[] =
   const seen = new Set<string>()
   let anyTruncated = false
   let failed = 0
+  const contexts=new Map<string,{labels:Record<string,string>;ns:string}>()
   for (const selector of selectors) {
     let ceiling = endNs
     let truncated = false
     try {
       for (let page = 0; page < 8 && ceiling >= startNs; page++) {
-        url.searchParams.set('query', selector + filter + (identityTokens.length?' |~ '+JSON.stringify('(?i)'+identityTokens.join('|')):''))
+        url.searchParams.set('query', selector + (identityTokens.length?' |~ '+JSON.stringify('(?i)'+identityTokens.join('|')):filter))
         url.searchParams.set('start', String(startNs))
         url.searchParams.set('end', String(ceiling))
         url.searchParams.set('direction', 'BACKWARD')
@@ -151,7 +175,13 @@ export const queryLoki = async (from: Date, to: Date, identityTokens: string[] =
             if (oldest === null || ns < oldest) oldest = ns
             const entry = parseMessage(String(pair[1]), String(pair[0]), stream.stream || {})
             count++
-            if (!entry || seen.has(entry.rawHash)) continue
+            const labels=stream.stream||{}
+            const identity=['container','container_name','service_name'].find(key=>labels[key])
+            if(identity&&(!entry||!entry.matricula)){
+              const stable={ [identity]:labels[identity],...(labels.node?{node:labels.node}:{}) }
+              contexts.set(JSON.stringify(stable)+'|'+String(ns/1000000000n),{labels:stable,ns:String(ns)})
+            }
+            if (!entry || !entry.matricula || seen.has(entry.rawHash)) continue
             seen.add(entry.rawHash)
             records.push(entry)
           }
@@ -169,6 +199,40 @@ export const queryLoki = async (from: Date, to: Date, identityTokens: string[] =
       console.warn('[historical-student-audit] source query failed', { selector, endpoint:url.host, code:String((error as any)?.cause?.code||(error as any)?.code||''), message: String((error as Error)?.message || error) })
       // Other label families may still contain reachable streams; preserve partial results.
     }
+  }
+  if(contexts.size>40)anyTruncated=true
+  for(const context of [...contexts.values()].slice(0,40)){
+    try{
+      const request=new URL(url),anchor=BigInt(context.ns)
+      request.search=new URLSearchParams({query:'{'+Object.entries(context.labels).map(([key,value])=>key+'='+JSON.stringify(value)).join(',')+'}',start:String(anchor-2000000000n),end:String(anchor+2000000000n),direction:'FORWARD',limit:'1500'}).toString()
+      const response=await fetch(request,{headers,signal:AbortSignal.timeout(7500)})
+      if(!response.ok)throw Error('Historical context status '+response.status)
+      const body:any=await response.json()
+      if(body.status!=='success'||!Array.isArray(body.data?.result))throw Error('Invalid historical context')
+      let count=0
+      for(const stream of body.data.result){
+        const values=(stream.values||[]).slice().sort((a:any,b:any)=>BigInt(a[0])<BigInt(b[0])?-1:BigInt(a[0])>BigInt(b[0])?1:0)
+        count+=values.length
+        let block:string[]=[],blockNs='',ambiguous=false
+        const timestamps=new Map<string,number>()
+        for(const pair of values)timestamps.set(String(pair[0]),(timestamps.get(String(pair[0]))||0)+1)
+        for(const [ns,line] of values){
+          if(/centralized matricula overlay updated|matricula audited write|credentialization.submission.database-committed|personas-autorizadas.student.save/.test(line)){
+            block=[String(line)];blockNs=String(ns);ambiguous=(timestamps.get(String(ns))||0)>1
+          }else if(block.length){
+            block.push(String(line));ambiguous||=(timestamps.get(String(ns))||0)>1
+            if(String(line).trim()==='}'){
+              const entry=ambiguous?null:parseConsoleBlock(block,blockNs,stream.stream||{})
+              if(!entry){failed++;console.warn('[historical-student-audit] unresolved console block',{code:'AUDIT_LOKI_AMBIGUOUS_BLOCK',at:safeDate(blockNs)})}
+              if(entry&&!seen.has(entry.rawHash)){seen.add(entry.rawHash);records.push(entry)}
+              block=[]
+            }
+            if(block.length>100)block=[]
+          }
+        }
+      }
+      if(count>=1500)anyTruncated=true
+    }catch(error){failed++;console.warn('[historical-student-audit] context failed',{code:'AUDIT_LOKI_CONTEXT_FAILED',message:String((error as Error)?.message||error)})}
   }
   if (!anySuccess) throw lastError || new Error('No history selectors configured')
   return { records, available: true, truncated: anyTruncated, partial: failed > 0 }
@@ -303,7 +367,7 @@ export const loadHistoricalActions = async (input: {
     if (!matricula) { unmatched++; continue }
     const plantel = allCampuses(matricula)
     if (!input.planteles.includes(plantel)||input.matricula&&matricula!==input.matricula) continue
-    const fields = item.source === 'Husky Pass'
+    const fields = item.changes?.length ? item.changes.map(change=>change.field) : item.source === 'Husky Pass'
       ? (item.message.includes('credentialization.submission.database-committed') ? ['nombres'] : ['perfil_familiar'])
       : (item.fields?.length ? item.fields : ['perfil_escolar'])
     for (const field of Array.from(new Set(fields))) {

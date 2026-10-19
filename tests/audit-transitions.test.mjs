@@ -12,3 +12,12 @@ test('only an exact event-id/field/student/value mirror is suppressed; time alon
  assert.equal(reconcileAuditMirrors([original,{...mirror,after:'ÁFRICA'}]).length,2)
  assert.equal(reconcileAuditMirrors([original,{...mirror,relatedEventId:undefined}]).length,2)
 })
+
+test('explicit Loki event link fills missing values automatically without changing original account or payload',()=>{
+ const stored=event(12,null,null,'09:15:47',{quality:'historical'})
+ const source=event(0,'A','B','09:15:47',{id:'log-hash',relatedEventId:12,actor:'Source account'})
+ const r=reconcileAuditMirrors([stored,source])
+ assert.equal(r.length,1);assert.equal(r[0].before,'A');assert.equal(r[0].after,'B');assert.equal(r[0].actor,stored.actor);assert.equal(stored.before,null)
+ for(const override of [{matricula:'PT0001'},{plantel:'PT'},{field:'grado'},{source:'Husky Pass'},{relatedEventId:13}])assert.equal(reconcileAuditMirrors([stored,{...source,...override}])[0].before,null)
+ assert.equal(reconcileAuditMirrors([stored,source,{...source,id:'conflict',after:'C'}])[0].before,null)
+})
