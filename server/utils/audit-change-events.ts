@@ -101,7 +101,7 @@ export const buildAuditChanges=async(selected:any[],preserveAllRecords=false)=>{
         id: String(row.id) + ':' + i,
         eventId: Number(row.id),
         date: String(row.recorded_at || '').slice(0, 10),
-        recordedAt: String(row.recorded_at || ''),
+        recordedAt: /^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d{6}$/.test(String(payload.recordedAt || '')) ? String(payload.recordedAt) : String(row.recorded_at || ''),
         matricula,
         student: nameByMatricula.get(matricula) || matricula,
         field,

@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => {
   const placeholders = planteles.map(() => '?').join(',')
   const rows = await controlEscolarCentralQuery<any[]>(
     "SELECT id, event_type, plantel, ciclo, matricula, actor_email, actor_name, actor_role, source_flow, payload, " +
-      "DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s') AS recorded_at " +
+      "DATE_FORMAT(created_at, '%Y-%m-%d %H:%i:%s.%f') AS recorded_at " +
       "FROM control_escolar_audit_events WHERE event_type = 'student_update' " +
       "AND plantel IN (" + placeholders + ") AND created_at >= ? AND created_at < ? " +
       "ORDER BY created_at DESC, id DESC LIMIT ?",

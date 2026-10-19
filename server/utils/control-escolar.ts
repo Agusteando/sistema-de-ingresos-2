@@ -3416,7 +3416,7 @@ const upsertMatriculaOverlay = async (
       );
     }
     const [afterRows] = await connection.query<any[]>(
-      `SELECT ${selection} FROM \`matricula\` WHERE ${identityWhere} LIMIT 1`,
+      `SELECT ${selection}, DATE_FORMAT(CURRENT_TIMESTAMP(6), '%Y-%m-%d %H:%i:%s.%f') AS audit_recorded_at FROM \`matricula\` WHERE ${identityWhere} LIMIT 1`,
       [key],
     );
     const after = afterRows[0] || {};
@@ -3431,6 +3431,7 @@ const upsertMatriculaOverlay = async (
       const payload = JSON.stringify({
         version: 2,
         evidence: "transactional",
+        recordedAt: after.audit_recorded_at,
         changes,
         fields: changes.map((change) => change.field),
         operation: auditFlow,
