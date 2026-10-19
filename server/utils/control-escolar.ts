@@ -3467,15 +3467,17 @@ const upsertMatriculaOverlay = async (
       auditEventId = Number(auditResult.insertId);
     }
     await connection.commit();
-    if (auditEventId) console.info("[Control Escolar] matricula audited write", {
+    if (auditEventId) console.info(JSON.stringify({
+      message: "[Control Escolar] matricula audited write",
       auditEventId,
       requestId: String(auditContext.auditRequestId || ""),
       matricula: normalizedMatricula,
       agentId,
       actor: user.email,
       changedFields: changes.map((item) => item.field),
+      changes: changes.filter(item=>item.field==="grupo"),
       source: auditFlow,
-    });
+    }));
   } catch (error) {
     await connection.rollback().catch(() => undefined);
     console.error("[Control Escolar] atomic change audit failed; write rolled back", {

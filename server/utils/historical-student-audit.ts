@@ -1,13 +1,14 @@
 import { createHash } from 'node:crypto'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 
-export type LokiRecord = { auditEventId?:number; at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
+export type LoggedChange={field:string;before:string|null;after:string|null}
+export type LokiRecord = { changes?:LoggedChange[]; auditEventId?:number; at: string; message: string; userId?: unknown; matricula?: unknown; actor?: string; actorEmail?: string; fields?: string[]; source: 'Aurora' | 'Husky Pass'; requestId?: string; rawHash: string }
 export type HistoricalStudentAction = {
   id: string; eventId: number; date: string; recordedAt: string; matricula: string
   student: string; field: string; fieldLabel: string; category: string
-  before: null; after: null; source: 'Aurora' | 'Husky Pass'
+  before: string|null; after: string|null; source: 'Aurora' | 'Husky Pass'
   actor: string; actorEmail: string; avatar: string; flow: string
-  quality: 'historical'; plantel: string; ciclo: string
+  quality: 'historical'|'verified'; plantel: string; ciclo: string
   relatedEventId?: number; evidenceHash: string
 }
 
@@ -33,11 +34,35 @@ const getHash = (item: any) => {
   if (item && typeof item === 'object') return String(item.hash || item.redacted?.hash || '')
   return String(item || '')
 }
+const loggedValue=(value:unknown,field:string):string|null|undefined=>{
+  if(value===null)return null
+  if(!['string','number','boolean'].includes(typeof value))return undefined
+  const text=String(value).trim().slice(0,500)
+  return /foto|adjunt|ine|curp|password|token/i.test(field)?(text?'[Registrado]':null):text
+}
+export const extractLoggedChanges=(obj:any):LoggedChange[]=>{
+  const input=Array.isArray(obj?.changes)?obj.changes:[]
+  const result:LoggedChange[]=[]
+  for(const item of input){
+    if(!item||typeof item!=='object'||!Object.prototype.hasOwnProperty.call(item,'before')||!Object.prototype.hasOwnProperty.call(item,'after'))continue
+    const field=String(item.field||'')
+    if(!/^[a-zA-Z_][a-zA-Z0-9_]{0,89}$/.test(field))continue
+    const before=loggedValue(item.before,field),after=loggedValue(item.after,field)
+    if(before===undefined||after===undefined)continue
+    result.push({field,before,after})
+  }
+  return result
+}
 export const parseMessage = (line: string, ns: string, labels: Record<string, string>): LokiRecord | null => {
   let obj: any = {}
   const jsonAt = line.indexOf('{')
   if (jsonAt >= 0) {
     try { obj = JSON.parse(line.slice(jsonAt)) } catch { /* preserve original line */ }
+  }
+  for(let depth=0;depth<2;depth++){
+    const nested=typeof obj.log==='string'?obj.log:typeof obj.message==='string'?obj.message:''
+    if(!nested.trim().startsWith('{'))break
+    try{const parsed=JSON.parse(nested);if(!parsed||Array.isArray(parsed)||typeof parsed!=='object')break;obj={...obj,...parsed};delete obj.log}catch{break}
   }
   const message = compact(obj.message || line)
   // Failed attempts must never be counted as successful writes in a forensic view.
@@ -52,12 +77,13 @@ export const parseMessage = (line: string, ns: string, labels: Record<string, st
     line.match(/\b(?:actorEmail|actor|user|email):\s*['"]([^'"]+@[^'"]+)['"]/)?.[1]]
     .find(value => typeof value === 'string' && /^[^\s@]+@[^\s@]+$/.test(value.trim()))?.trim() || ''
   const matricula = obj.matricula || line.match(/\bmatricula:\s*['"]([A-Z]+\d+)['"]/)?.[1]
-  const fields = Array.isArray(obj.fields) ? obj.fields.map(String) : Array.isArray(obj.changedFields) ? obj.changedFields.map(String)
+  const changes=extractLoggedChanges(obj)
+  const fields = changes.length?changes.map(change=>change.field):Array.isArray(obj.fields) ? obj.fields.map(String) : Array.isArray(obj.changedFields) ? obj.changedFields.map(String)
     : Array.from(line.matchAll(/['"]((?:grupo|grado|nivel|ciclo|nombres|apellidoPaterno|apellidoMaterno|lugarTrabajoPadre|lugarTrabajoMadre|emailPadre|emailMadre|telefonoPadre|telefonoMadre))['"]/g)).map(match => match[1])
   return {
     at: safeDate(ns), message,
     auditEventId: Number(obj.auditEventId || line.match(/\bauditEventId:\s*(\d+)/)?.[1]) || undefined,
-    userId: obj.userId, matricula, fields,
+    userId: obj.userId, matricula, fields, changes,
     source, actor: compact(obj.actorName || obj.userName || obj.actor?.name || actorEmail), actorEmail,
     requestId: compact(obj.requestId),
     rawHash: digest(JSON.stringify({ns, labels, line}))
@@ -284,15 +310,16 @@ export const loadHistoricalActions = async (input: {
       const fingerprint = [item.rawHash, field].join('|')
       if (dedupe.has(fingerprint)) continue
       dedupe.add(fingerprint)
+      const diff=item.changes?.find(change=>change.field===field)
       result.push({
         id: 'history:' + item.rawHash.slice(0, 20) + ':' + field,
         eventId: 0, relatedEventId:item.auditEventId, date: item.at.slice(0,10), recordedAt: item.at,
         matricula, student: matricula, field, fieldLabel: field === 'nombres' && item.source === 'Husky Pass' ? 'Identidad · credencialización' : labelFor(field),
-        category: classify(field), before: null, after: null,
+        category: classify(field), before: diff?diff.before:null, after:diff?diff.after:null,
         source: item.source, actor: item.source === 'Husky Pass' ? 'Husky Pass · Familia' : (item.actor || item.actorEmail || 'Aurora'),
         actorEmail: item.source === 'Aurora' ? item.actorEmail : '',
         avatar: '', flow: item.source === 'Husky Pass' ? 'credencialización' : 'control_escolar',
-        quality: 'historical', plantel, ciclo: '', evidenceHash: item.rawHash
+        quality: diff?'verified':'historical', plantel, ciclo: '', evidenceHash: item.rawHash
       })
     }
   }

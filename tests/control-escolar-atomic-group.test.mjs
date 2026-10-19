@@ -9,7 +9,7 @@ function setup({before='OCEANÍA',after='ÁFRICA',failAudit=false}={}){
  if(sql.includes('INSERT INTO control_escolar_audit_events')){calls.push('audit');payload=JSON.parse(params.at(-1));if(failAudit)throw Error('audit failed');return [{insertId:42}]}
  throw Error(sql);
  }};
- const ctx=vm.createContext({getControlEscolarCentralDb:()=>({getConnection:async()=>connection}),canonicalMatriculaKey:v=>v,escapeColumn:v=>'`'+v+'`',normalizePlantel:v=>v,normalizeUpper:v=>String(v??'').trim().toUpperCase(),createError:v=>Object.assign(Error(v.message),v),console:{info:(message,data)=>calls.push(data),error(){}}});
+ const ctx=vm.createContext({getControlEscolarCentralDb:()=>({getConnection:async()=>connection}),canonicalMatriculaKey:v=>v,escapeColumn:v=>'`'+v+'`',normalizePlantel:v=>v,normalizeUpper:v=>String(v??'').trim().toUpperCase(),createError:v=>Object.assign(Error(v.message),v),console:{info:(message,data)=>calls.push(data||JSON.parse(message)),error(){}}});
  vm.runInContext(ts.transpile(code+'\nglobalThis.run=upsertMatriculaOverlay',{target:ts.ScriptTarget.ES2022}),ctx);
  return {calls,get payload(){return payload},run:(expected=before,action='select')=>ctx.run('PM','PM0961',[{column:'grupo',field:'grupo',value:after}],{email:'actor@example.invalid'},'PM',{matricula:new Set(['grupo','updated_by'])},'aurora_control_escolar_write',{groupMutation:{action,expectedGroup:expected},auditRequestId:'request-test'})};
 }
