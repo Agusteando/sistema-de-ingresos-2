@@ -1014,9 +1014,9 @@
                             @keydown.escape.prevent="groupPickerOpen = false"
                           />
                           <button
-                            v-if="editForm.grupo"
+                            v-if="groupPickerInput"
                             type="button"
-                            aria-label="Limpiar grupo"
+                            aria-label="Limpiar búsqueda"
                             @mousedown.prevent
                             @click="clearGroupPicker"
                           >
@@ -1057,6 +1057,7 @@
                               <small>Grupo personalizado</small>
                             </span>
                           </button>
+                          <button v-if="editForm.grupo" type="button" class="ce-group-option" @mousedown.prevent @click="commitSelectedGroupChange('')">Quitar grupo</button>
                           <div v-if="!filteredGroupOptions.length && !customGroupOption" class="ce-group-empty">
                             Escribe un grupo para guardarlo como personalizado.
                           </div>
@@ -1764,7 +1765,7 @@
             <button
               v-if="groupModalDraft"
               type="button"
-              aria-label="Limpiar grupo"
+              aria-label="Limpiar búsqueda"
               @click="clearGroupModalPicker"
             >
               <LucideX :size="15" />
@@ -1815,7 +1816,8 @@
 
         <footer class="ce-group-modal__footer">
           <button type="button" class="ce-group-modal__secondary" @click="closeGroupModal">Cerrar</button>
-          <button type="button" class="ce-group-modal__primary" @click="confirmGroupModal">
+          <button v-if="editForm.grupo" type="button" class="ce-group-modal__secondary" @click="commitSelectedGroupChange('', { closeModal: true })">Quitar grupo</button>
+          <button type="button" class="ce-group-modal__primary" :disabled="!groupModalDraft.trim()" @click="confirmGroupModal">
             <LucideSave :size="16" />
             Guardar grupo
           </button>
@@ -2974,6 +2976,7 @@ const closeGroupModal = () => {
   groupPickerOpen.value = false;
 };
 const confirmGroupModal = () => {
+  if (!normalizeGroupPickerText(groupModalDraft.value)) return;
   commitSelectedGroupChange(groupModalDraft.value, { closeModal: true });
 };
 const groupLabelForUi = (value) => {
@@ -2981,10 +2984,11 @@ const groupLabelForUi = (value) => {
   if (!normalized) return "Sin grupo asignado";
   return studentGroupIconLabel(normalized) || normalized;
 };
+const groupPickerSearch = ref("");
 const groupPickerInput = computed({
-  get: () => String(editForm.grupo || ""),
+  get: () => groupPickerSearch.value,
   set: (value) => {
-    editForm.grupo = normalizeGroupPickerText(value).slice(0, 40);
+    groupPickerSearch.value = normalizeGroupPickerText(value).slice(0, 40);
     groupPickerOpen.value = true;
   },
 });
@@ -3029,7 +3033,6 @@ const selectGroupModalOption = (value) => {
 };
 const clearGroupModalPicker = () => {
   groupModalDraft.value = "";
-  commitSelectedGroupChange("", { closeModal: true });
 };
 const filteredGroupOptions = computed(() => {
   const query = normalizedGroupPickerSearch.value;
@@ -3069,6 +3072,7 @@ const autosaveSelectedGroupIfDirty = () => {
 };
 const commitSelectedGroupChange = (value, options = {}) => {
   editForm.grupo = normalizeGroupPickerText(value);
+  groupPickerSearch.value = "";
   if (options.closeModal) closeGroupModal();
   if (options.closePicker !== false) groupPickerOpen.value = false;
   autosaveSelectedGroupIfDirty();
@@ -3078,9 +3082,8 @@ const closeGroupPickerSoon = (event) => {
   const nextTarget = event?.relatedTarget;
   if (nextTarget && event?.currentTarget?.contains?.(nextTarget)) return;
 
-  // Start the write before a fast click can move the detail panel to another
-  // student. This is the core sequential-editing path for operators.
-  autosaveSelectedGroupIfDirty();
+  // Search text is never a persisted group selection.
+  groupPickerSearch.value = "";
   window.setTimeout(() => {
     groupPickerOpen.value = false;
   }, 120);
@@ -3089,10 +3092,11 @@ const selectGroupOption = (value) => {
   commitSelectedGroupChange(value);
 };
 const commitGroupPickerInput = () => {
+  if (!normalizeGroupPickerText(groupPickerInput.value)) return;
   commitSelectedGroupChange(groupPickerInput.value);
 };
 const clearGroupPicker = () => {
-  commitSelectedGroupChange("", { closePicker: false });
+  groupPickerSearch.value = "";
   groupPickerOpen.value = true;
 };
 
@@ -6324,6 +6328,8 @@ const runControlHuskyBulk = async () => {
 };
 
 const selectStudent = (student, copy = true) => {
+  groupPickerSearch.value = "";
+  groupPickerOpen.value = false;
   selectedStudent.value = student;
   activeDetailTab.value = "summary";
   closeManualHuskyPassForm();

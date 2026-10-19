@@ -4,7 +4,7 @@
     <div class="student"><strong>{{ namedStudent(record)?record.student:'Nombre no disponible' }}</strong><span v-if="namedStudent(record)">{{ record.matricula }} · {{ record.plantel }}</span></div>
     <div class="field">{{ record.fieldLabel }}</div>
     <div v-if="record.quality==='verified'" class="diff"><div><span>Antes</span><strong>{{ value(record.before) }}</strong></div><LucideArrowRight :size="18"/><div><span>Después</span><strong>{{ value(record.after) }}</strong></div></div>
-    <div v-else class="historical"><LucideHistory :size="17"/>{{ record.source==='Husky Pass'?'Envío registrado':'Actualización registrada' }}</div>
+    <div v-else class="historical"><LucideHistory :size="17"/>{{ record.source==='Husky Pass'?'Envío registrado':'Sin detalle del cambio' }}</div>
 
     <button v-if="showHistory!==false" type="button" class="field-history-link" @click="$emit('history')"><LucideHistory :size="14"/>Ver historial del campo</button>
   </article>
