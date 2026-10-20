@@ -15,7 +15,7 @@ const fail=code=>{throw Object.assign(Error(code),{code})}
 // Linux PSI 'full avg10' measures system-wide I/O stalls, not CPU utilization.
 // Fail open where this procfs interface is unavailable.
 export const diskPressureRequiresYield=(text,limit=12)=>{
- const match=String(text||'').match(/^full\\s+avg10=([0-9]+(?:\\.[0-9]+)?)/m)
+ const match=String(text||'').match(/^full\s+avg10=([0-9]+(?:\.[0-9]+)?)/m)
  return match?Number(match[1])>=limit:false
 }
 const shouldYieldToForegroundIo=()=>{
