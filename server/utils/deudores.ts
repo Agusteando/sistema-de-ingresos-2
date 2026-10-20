@@ -254,6 +254,7 @@ export const getDeudoresGlobal = async ({
   userEmail,
   includeDesglose = true,
   matricula,
+  matriculas,
   conceptoIds
 }: {
   ciclo: string,
@@ -261,10 +262,12 @@ export const getDeudoresGlobal = async ({
   userEmail?: string,
   includeDesglose?: boolean,
   matricula?: string,
+  matriculas?: string[],
   conceptoIds?: Array<number | string>
 }) => {
   let documentos: any[] = []
   const matriculaFiltro = String(matricula || '').trim()
+  const matriculasFiltro = matriculaFiltro ? [] : [...new Set((matriculas || []).map(value => String(value || '').trim()).filter(Boolean))]
   const selectedConceptIds = new Set((conceptoIds || [])
     .map(value => Number(value || 0))
     .filter(value => Number.isInteger(value) && value > 0))
@@ -289,6 +292,24 @@ export const getDeudoresGlobal = async ({
     `, [ciclo, matriculaFiltro])
 
     documentos = docs.map(doc => ({ ...doc, ...alumno }))
+  } else if (matriculasFiltro.length) {
+    // Selected-student read, preserving active-status and projected-plantel rules.
+    const alumnosActivos = await query<any[]>(`
+      SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre
+      FROM base
+      WHERE estatus = 'Activo' AND matricula IN (${matriculasFiltro.map(() => '?').join(',')}) ${plantelWhere}
+    `, [...matriculasFiltro, ...plantelCandidates])
+    if (!alumnosActivos.length) return []
+
+    const alumnosByMatricula = new Map<string, any>(alumnosActivos.map(alumno => [String(alumno.matricula), alumno]))
+    const matriculasActivas = [...alumnosByMatricula.keys()]
+    const docs = await query<any[]>(`
+      SELECT documento, matricula, costo, montoFinal, meses, plazo, beca, concepto, conceptoNombre, eventual
+      FROM documentos
+      WHERE ciclo = ? AND estatus = 'Activo' AND matricula IN (${matriculasActivas.map(() => '?').join(',')})
+    `, [ciclo, ...matriculasActivas])
+    documentos = docs.map(doc => ({ ...doc, ...alumnosByMatricula.get(String(doc.matricula)) }))
+      .filter(doc => doc.nombreCompleto)
   } else if (plantel) {
     const alumnosActivos = await query<any[]>(`
       SELECT matricula, nombreCompleto, nivel, grado, grupo, plantel, ciclo, correo, telefono, \`Nombre del padre o tutor\` as padre

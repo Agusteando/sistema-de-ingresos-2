@@ -22,16 +22,7 @@ const getScopedPlantel = (user: any) => {
     : undefined
 }
 
-const getDeudorContext = async (matricula: string, ciclo: string, mes: number, user: any) => {
-  const rows = await getDeudoresGlobal({
-    ciclo,
-    plantel: getScopedPlantel(user),
-    userEmail: user?.email,
-    matricula
-  })
-
-  return rows.find(row => row.matricula === matricula && Number(row.mes) === mes)
-}
+const deudorKey = (matricula: string, mes: number) => `${matricula}:${Number(mes)}`
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -51,18 +42,21 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     includeDesglose: body?.includeDesglose ?? body?.include_desglose ?? saved.includeDesglose
   })
 
+  const matriculas = [...new Set(items.map(item => item.matricula).filter(Boolean))]
+  const deudores = matriculas.length ? await getDeudoresGlobal({
+    ciclo,
+    plantel: getScopedPlantel(user),
+    userEmail: user?.email,
+    matriculas
+  }) : []
+  const byKey = new Map<string, any>(deudores.map(row => [deudorKey(row.matricula, Number(row.mes)), row]))
   const previews = []
 
   for (const item of items) {
     try {
-      const [student] = await query<any[]>(
-        `SELECT nombreCompleto, correo, telefono, nivel, grado, grupo, plantel, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`,
-        [item.matricula]
-      )
-      if (!student) throw new Error('Alumno no encontrado.')
-
-      const deudor = await getDeudorContext(item.matricula, ciclo, item.mes, user)
-      const contactStudent = { ...student, ...(deudor || {}) }
+      const deudor = byKey.get(deudorKey(item.matricula, item.mes))
+      if (!deudor?.isDeudor) throw new Error('El alumno ya no tiene adeudo exigible para este periodo.')
+      const contactStudent = deudor
       if (!contactStudent.correo) throw new Error('El alumno no tiene correo registrado.')
 
       const rendered = renderCobranzaEmail({

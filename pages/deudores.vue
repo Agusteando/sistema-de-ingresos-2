@@ -439,6 +439,7 @@
                   <strong>{{ emailComposer.targets.length }} destinatarios seleccionados</strong>
                   <span>{{ emailPreviewReadyCount }} listos · {{ emailPreviewFailedCount }} con observación</span>
                 </div>
+                <div v-if="emailComposer.error" class="email-preview-error" role="alert">{{ emailComposer.error }}</div>
 
                 <label class="form-row">
                   <span>Asunto</span>
@@ -1227,6 +1228,15 @@ const markEmailPreviewDirty = () => {
   emailComposer.value.previewDirty = true
 }
 
+const describeEmailError = (error) => {
+  const diagnostic = error?.data?.data?.diagnostic || error?.data?.diagnostic
+  const status = Number(error?.statusCode || error?.status || error?.response?.status || 0)
+  if (String(diagnostic?.code || '').startsWith('DB_BRIDGE_') || [502, 503, 504].includes(status)) {
+    return 'No se pudo consultar la información actual del plantel. Reintenta actualizar la vista; si persiste, solicita revisar la conexión del plantel.'
+  }
+  return error?.data?.message || error?.statusMessage || error?.message || 'No se pudo completar la operación de correo.'
+}
+
 const refreshEmailPreview = async () => {
   if (!emailComposer.value.targets.length) return
   emailComposer.value.loading = true
@@ -1251,7 +1261,7 @@ const refreshEmailPreview = async () => {
     }
   } catch (e) {
     emailComposer.value.previews = []
-    emailComposer.value.error = e?.statusMessage || 'No se pudo generar la vista previa del correo.'
+    emailComposer.value.error = describeEmailError(e)
     show(emailComposer.value.error, 'danger')
   } finally {
     emailComposer.value.loading = false
@@ -1281,7 +1291,7 @@ const openEmailComposer = async (targets, options = {}) => {
     await loadEmailTemplate()
     await refreshEmailPreview()
   } catch (e) {
-    emailComposer.value.error = e?.statusMessage || 'No se pudo cargar la plantilla de correo.'
+    emailComposer.value.error = describeEmailError(e)
     show(emailComposer.value.error, 'danger')
   } finally {
     emailComposer.value.loading = false
@@ -1376,20 +1386,24 @@ const executeManualAction = async (targets, action, options = {}) => {
     const completed = Number(response?.completed || 0)
     const duplicated = Number(response?.duplicated || 0)
     const failed = Number(response?.failed || 0)
-    const parts = [`${completed} registrados`]
-    if (duplicated) parts.push(`${duplicated} ya existian`)
+    const parts = [`${completed} ${action === 'correo_recordatorio' ? 'enviados' : 'registrados'}`]
+    if (duplicated) parts.push(`${duplicated} ya registrados anteriormente`)
     if (failed) parts.push(`${failed} fallidos`)
-    show(parts.join(', ') + '.')
+    show(parts.join(', ') + '.', failed ? 'danger' : undefined)
+    if (action === 'correo_recordatorio' && failed) {
+      const firstError = (response?.results || []).find(item => !item.success)?.message
+      emailComposer.value.error = `${failed} correos no se completaron o no pudieron confirmarse. ${firstError || 'Verifica los envíos antes de volver a intentar.'}`
+    }
 
     const whatsappBlocked = action === 'whatsapp_contacto' && failed > 0 && (response?.results || [])
       .some(item => /whatsapp|cliente|vinculad/i.test(String(item?.message || '')))
     if (whatsappBlocked) openWhatsappSetup()
 
-    if (options.clearSelection) selectedKeys.value = []
-    if (action === 'correo_recordatorio' && options.confirmed) closeEmailComposer(true)
+    if (options.clearSelection && !(action === 'correo_recordatorio' && failed)) selectedKeys.value = []
+    if (action === 'correo_recordatorio' && options.confirmed && !failed) closeEmailComposer(true)
     await loadData()
   } catch (e) {
-    show(e?.statusMessage || 'No se pudo ejecutar la accion.', 'danger')
+    show(action === 'correo_recordatorio' ? describeEmailError(e) : (e?.statusMessage || 'No se pudo ejecutar la accion.'), 'danger')
     if (action === 'whatsapp_contacto' && /whatsapp|cliente|vinculad/i.test(String(e?.statusMessage || e?.message || ''))) {
       openWhatsappSetup()
     }
