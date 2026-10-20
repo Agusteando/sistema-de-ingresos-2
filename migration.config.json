@@ -9,7 +9,8 @@
       "DB_TRANSPORT": "bridge",
       "AURORA_TALLERES_SNAPSHOT_REFRESH_ENABLED": "true",
       "AURORA_TALLERES_SNAPSHOT_REFRESH_MINUTES": "10",
-      "AUDIT_LOKI_URL": "http://observability_loki:3100"
+      "AUDIT_LOKI_URL": "http://observability_loki:3100",
+      "AUDIT_RECOVERY_DATA_DIR": "/app/audit-data"
     },
     "aliases": {
       "NUXT_PUBLIC_GOOGLE_CLIENT_ID": "GOOGLE_CLIENT_ID",
@@ -62,7 +63,14 @@
     "labels": {
       "com.casita.service": "aurora"
     },
-    "containerfile": "Containerfile"
+    "containerfile": "Containerfile",
+    "volumes": [
+      {
+        "source": "aurora-audit-recovery",
+        "target": "/app/audit-data",
+        "readOnly": false
+      }
+    ]
   },
   "health": {
     "path": "/",

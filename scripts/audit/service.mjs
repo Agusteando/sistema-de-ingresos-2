@@ -1,10 +1,8 @@
-// Trusted control-plane CLI only. No HTTP mutation surface or root DB credentials.
-import {createRequire} from 'node:module'
-import {pathToFileURL} from 'node:url'
+// Internal Aurora audit service. No external controller CLI or root credentials.
 import {createHash} from 'node:crypto'
-import {recoverableAuditColumns} from '../shared/utils/auditSourceFields.mjs'
-import {captureRecovery,retryRecoveryQueue} from '../shared/utils/auditRecoveryQueue.mjs'
-import {importAuditRecovery} from './import-audit-recovery.mjs'
+import {recoverableAuditColumns} from '../../shared/utils/auditSourceFields.mjs'
+import {captureRecovery,retryRecoveryQueue} from '../../shared/utils/auditRecoveryQueue.mjs'
+import {importAuditRecovery} from '../import-audit-recovery.mjs'
 export const describeRecoverySource=async db=>{
  const [[source]]=await db.query('SELECT DATABASE() AS schemaName,@@server_uuid AS serverUuid,VERSION() AS version')
  const [columns]=await db.query("SELECT COLUMN_NAME AS name,ORDINAL_POSITION AS ordinal,COLUMN_TYPE AS type FROM information_schema.COLUMNS WHERE TABLE_SCHEMA=DATABASE() AND TABLE_NAME='matricula' ORDER BY ORDINAL_POSITION")
@@ -31,11 +29,3 @@ export const runRecoveryService=async(db,args,input)=>{
  if(args.includes('--apply'))return importAuditRecovery(db,input,{apply:true})
  throw Error('RECOVERY_MODE_REQUIRED')
 }
-const main=async()=>{
- const args=process.argv.slice(2);let raw=''
- if(!args.includes('--describe'))for await(const chunk of process.stdin){raw+=chunk;if(raw.length>2000000)throw Error('RECOVERY_INPUT_LIMIT')}
- const require=createRequire(process.env.AUDIT_APP_ENTRY||'/app/.output/server/index.mjs'),mysql=require('mysql2/promise'),e=process.env
- const db=await mysql.createConnection({host:e.CONTROL_ESCOLAR_MYSQL_HOST,port:Number(e.CONTROL_ESCOLAR_MYSQL_PORT||3306),user:e.CONTROL_ESCOLAR_MYSQL_USER,password:e.CONTROL_ESCOLAR_MYSQL_PASSWORD,database:e.CONTROL_ESCOLAR_MYSQL_DATABASE,connectTimeout:10000})
- try{console.log(JSON.stringify(await runRecoveryService(db,args,raw?JSON.parse(raw):null)))}finally{await db.end()}
-}
-if(process.argv[1]&&import.meta.url===pathToFileURL(process.argv[1]).href)main().catch(error=>{console.error(JSON.stringify({code:error.code||'AUDIT_RECOVERY_SERVICE_FAILED',message:error.message}));process.exitCode=1})

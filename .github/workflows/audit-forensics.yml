@@ -8,6 +8,12 @@ on:
       - 'shared/utils/audit*.mjs'
       - 'scripts/import-audit-recovery.mjs'
       - 'scripts/audit-recovery-service.mjs'
+      - 'scripts/audit-recovery-worker.mjs'
+      - 'scripts/audit-source-access.mjs'
+      - 'scripts/prepare-audit-reader.mjs'
+      - 'scripts/audit/**'
+      - 'server/plugins/08.audit-recovery.ts'
+      - 'migration.config.json'
       - 'scripts/read-audit-binlog.py'
       - 'tests/audit-binlog-reader.test.py'
       - 'server/utils/audit-change-events.ts'
@@ -40,7 +46,9 @@ jobs:
           --health-timeout=5s
           --health-retries=12
     env:
+      AUDIT_TEST_ISOLATED_SOURCE: '1'
       AUDIT_TEST_MYSQL_URL: mysql://root:audit-ci@127.0.0.1:3306
+      AUDIT_READER_TEST_BIN: ${{ runner.temp }}/audit-reader/mysqlbinlog
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -48,6 +56,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci --no-audit --no-fund
+      - run: node scripts/prepare-audit-reader.mjs "${{ runner.temp }}/audit-reader"
       - run: node --experimental-vm-modules --test tests/audit-*.test.mjs tests/historical-student-audit.test.mjs tests/student-loki-forensics.test.mjs
       - run: python3 tests/audit-binlog-reader.test.py
       - run: npm run build

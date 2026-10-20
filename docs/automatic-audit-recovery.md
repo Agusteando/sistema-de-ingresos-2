@@ -1,29 +1,42 @@
-# Automatic historical recovery
+# Aurora-owned historical recovery
 
-Aurora already queries Loki automatically when field history opens. Exact structured changes and event identifiers can enrich the ledger; interleaved console lines without values cannot reconstruct a before/after pair safely. The MM collector complements that source with committed MySQL row images, across all students and approved editable columns.
+The collector is owned, packaged and started by Aurora. It has no runtime dependency on migration-monitor, its APIs, credentials, filesystem, host commands or Podman socket. MySQL and Loki remain data sources. The deployment controller may be retired without stopping audit recovery.
 
-## Contract and deployment order
+## Runtime
 
-Deploy Aurora first, then migration-monitor. Aurora advertises protocol 1 through `/app/scripts/audit-recovery-service.mjs --describe`. An older Aurora generation causes MM to wait. Aurora receives neither root credentials nor the Podman socket. No server setting, grant or original student/audit row is changed.
+`server/plugins/08.audit-recovery.ts` starts the worker after production startup and closes it with Nitro. Failures are recorded independently and never block ordinary application startup or student writes. A MySQL named lease serializes Aurora generations during blue/green overlap. Every minute the worker discovers retained binlogs through its own direct MySQL connection, reads them remotely with the official pinned MySQL reader, and processes four files per pass.
 
-MM discovers Aurora's managed running container and actual central schema/column ordinals. Every minute it reads the retained binlog inventory through its existing administrative read channel and streams fixed source files through the checksum-verified, pinned MySQL reader. Each file must finish successfully, retain its source identity, and pass the raw DDL guard before any extracted record is captured. The collector traverses newest to oldest, four files per tick, with durable checkpoints and private verified spools in MM's existing persistent `/data` volume.
+Aurora's own named volume `aurora-audit-recovery`, mounted at `/app/audit-data`, holds durable checkpoints and verified spools. These files do not live in MM's volume. Files are checksum-verified, fsynced and atomically marked verified before capture; failed captures preserve evidence for replay after source expiration. Source identity, full images, transaction commits and column ordinals are validated. Raw Query events are inspected before database filtering; historical schema boundaries stop ordinal-dependent recovery.
 
-Aurora first captures verified records in a durable operational inbox (`audit_recovery_pending`). After the inventory is captured, it retries projection in batches of 1,000. This prevents an early, incomplete scan from falsely treating two same-second writes as one. Applied inbox records retain their provenance. A failed student does not block other queued students; retries survive source-log expiration. Source UUID, normalized file preamble, position, primary key and field identify a record. Repeated sweeps do not append duplicate changes.
+Verified source records enter the durable operational inbox in Aurora's existing audit table. After inventory capture, records are projected independently in batches of 1,000. Original student rows and original audit records remain untouched. Repeated reads are idempotent. Multiple same-second source writes cannot borrow a single account observation. Binlogs establish committed database values, not a physical person's identity.
 
-Original audit events remain immutable. Separate recovery rows supply the exact before/after images to the existing projection. A unique student/field/second observation may retain its recorded account. Multiple source writes in that second remain unattributed unless a detailed original already verifies the specific transition. Binlogs establish a committed database mutation; they do not independently establish a physical person's identity. Null and empty remain distinct.
+Loki recovery remains automatic when historical field details open. Missing values in interleaved console messages are never inferred from neighboring lines. The field drawer continues refreshing stored results without resetting its student/field scope, date focus, scroll or loaded history. No UI layout, font or copy changes are introduced here.
 
-The open field drawer refreshes stored changes every 20 seconds while visible, preserving its field/student scope, selected date, loaded history and scroll. No new explanatory UI copy or font/layout change is introduced.
+## Source permissions
 
-## Coverage and operation
+Reading binlogs remotely requires `REPLICATION CLIENT` and `REPLICATION SLAVE`. The previously observed application account cannot list binlogs. This is a one-time MySQL access requirement, not a control-plane dependency. The app cannot grant itself privileges and never receives root credentials.
 
-Both audit read endpoints return `recovery` coverage. MM exposes its authenticated `GET /api/audit-recovery/status`. `caught-up` means the inventory snapshot was captured and the queue drained, not that all historical time exists. `retention-gap`, pending count, timestamps and error codes preserve uncertainty. These are operational metadata, not student-facing implementation labels.
+By default the reader uses Aurora's existing central connection. Optional `AUDIT_SOURCE_MYSQL_USER` and `AUDIT_SOURCE_MYSQL_PASSWORD` select a separately provisioned reader on that same database server. That reader needs SELECT on the central schema and the two replication read privileges. MySQL's binlog protocol exposes server-wide source logs; those grants cannot be restricted to one schema. Provision this identity through the existing database administration procedure.
 
-Required source: MySQL 8.4.11, ROW/FULL, CRC32, unencrypted retained logs; MM's existing database container and persistent volume. DDL affecting `matricula` stops recovery at that boundary (`AUDIT_SCHEMA_HISTORY_REQUIRED`) rather than applying today's ordinals to an older schema. Expired logs, missing images and ambiguous actors cannot be invented. Files already captured in the durable inbox remain retryable after expiration.
+The packaged Aurora CLI prints the exact grant for its authenticated reader account without displaying passwords or executing it:
 
-Set `AUDIT_RECOVERY_ENABLED=false` in MM to pause the collector. Original writes and history reads continue. Removing the collector leaves recovery evidence and the inbox intact. Do not truncate audit rows or import a selected student bundle as a deployment step.
+```sh
+node /app/scripts/audit-source-access.mjs --print-grant-sql
+node /app/scripts/audit-source-access.mjs --check
+```
 
-## Verification
+Until access is granted, coverage reports `AUDIT_SOURCE_READ_PERMISSION_REQUIRED`, the worker retries, and ordinary Aurora functionality continues. `--check` verifies access after setup. No manual evidence bundle or selected student import is required.
 
-Aurora's audit workflow runs the service/queue/importer tests against a real MySQL 8.4 service, including original-row immutability, idempotent replay, two same-second writes, projection and status isolation. MM tests exercise the official reader with executable binary fixtures, CRC corruption, actual subprocess cancellation, raw qualified DDL, checkpoint failure, verified-spool replay and tampering. Fixtures are synthetic or explicitly preserved regression evidence; runtime has no student/date/value special cases.
+## Packaging and operation
 
-Production acceptance still requires observing the deployed worker and the authenticated API backed by casita01. A local test, successful build or merge alone is not proof that retained production evidence was recovered.
+The official reader needs glibc. Aurora's build and runtime use Node 22 on Debian trixie, with upgraded OS packages and the existing JS security overlay preserved. Prisma is generated on the matching platform and checked in the runtime image. No MySQL server, Git, container engine or administrative daemon is installed. The reader package is downloaded only at build, verified against its pinned SHA-256, and extracted without installing server packages.
+
+Set `AUDIT_RECOVERY_ENABLED=false` to pause. The persistent volume, durable inbox and original audits remain intact. Rollback preserves ordinary reads/writes and previously recovered evidence. A deployment must preserve `/app/audit-data` when moving away from the current deployment tool.
+
+Both authenticated audit read APIs return coverage. `caught-up` applies to retained inventory, not all historical time. Expired logs, unsupported schema history and unknown actors remain explicit gaps. Existing evidence already captured through the former MM collector remains valid; no original audit or MM data directory is deleted during the ownership change.
+
+## Verification and limits
+
+Tests cover ownership/lifecycle, source permission failure, credential-file isolation, native CRC rejection, all-student decoding, raw qualified DDL, checkpoints, retries, source epochs, real MySQL inbox/projection and direct remote MySQL read through the packaged reader. The direct-source test creates an isolated schema, generates a real row update and verifies the resulting before/after values through Aurora's projection without a control plane.
+
+The running casita01 image and its source privileges still require production verification. A merge or local build alone does not establish successful production recovery.

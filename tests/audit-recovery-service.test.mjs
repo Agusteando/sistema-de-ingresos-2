@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
-import {describeRecoverySource,recordRecoveryStatus,runRecoveryService} from '../scripts/audit-recovery-service.mjs'
+import {describeRecoverySource,recordRecoveryStatus,runRecoveryService} from '../scripts/audit/service.mjs'
 import {auditSourceFields,recoverableAuditColumns} from '../shared/utils/auditSourceFields.mjs'
 import {validateBinlogRecovery,recoverySourceKey} from '../shared/utils/auditRecovery.mjs'
 test('automatic source policy has exact production write-contract parity',()=>{
