@@ -1,3 +1,4 @@
+import {affectsAuditTable} from './audit-ddl-target.mjs'
 // Inspect Query events before mysqlbinlog's database filter. A qualified DDL
 // statement may target the student schema while its default database differs.
 // Row payloads are skipped without buffering or decoding unrelated databases.
@@ -8,9 +9,8 @@ export function createAuditSchemaGuard(schema){
   if(raw.length<17)throw Error('AUDIT_SOURCE_QUERY_INVALID')
   const dbLength=raw[8],statusLength=raw.readUInt16LE(11),at=13+statusLength
   if(at+dbLength+1>raw.length-4)throw Error('AUDIT_SOURCE_QUERY_INVALID')
-  const database=raw.subarray(at,at+dbLength).toString('latin1'),sql=raw.subarray(at+dbLength+1,raw.length-4).toString('latin1').replace(/`/g,'').replace(/\/\*!\d*\s*/g,' ')
-  const relevant=database===schema||new RegExp('\\b'+schema+'\\s*\\.\\s*matricula\\b','i').test(sql)
-  if(relevant&&/\b(?:ALTER|CREATE|DROP|RENAME|TRUNCATE)\b/i.test(sql)&&/\bmatricula\b/i.test(sql))ddl=true
+  const database=raw.subarray(at,at+dbLength).toString('latin1'),sql=raw.subarray(at+dbLength+1,raw.length-4).toString('utf8')
+  if(affectsAuditTable(sql,database,schema))ddl=true
  }
  return {write(chunk){
   buffer=Buffer.concat([buffer,chunk])

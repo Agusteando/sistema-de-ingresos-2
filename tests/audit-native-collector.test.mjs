@@ -3,6 +3,7 @@ import assert from 'node:assert/strict'
 import {decodeAuditBinlog,utf8Lines} from '../scripts/audit/audit-binlog-decoder.mjs'
 import {recoverAuditSweep,recoveryFileKey,canonicalBinlogPreamble} from '../scripts/audit/audit-recovery-engine.mjs'
 import {Readable} from 'node:stream'
+import {readFileSync} from 'node:fs'
 const descriptor={protocolVersion:1,schema:'central',serverUuid:'00000000-0000-0000-0000-000000000001',version:'8.4.11',schemaFingerprint:'map1',identityOrdinal:2,columnCount:3,fields:[{name:'grupo',ordinal:3}],oldestAudit:'2026-10-01 00:00:00'}
 const file={name:'mysql-bin.000335',size:'1000',headerSha256:'a'.repeat(64)}
 const header='#261014 19:59:53 server id 1 end_log_pos 200 CRC32 0x18a63e07 Update_rows: table id 2 flags: STMT_END_F'
@@ -99,4 +100,46 @@ test('an unreadable source file cannot suppress committed evidence from another 
 test('expired failed files leave a retention gap but do not permanently poison the retained inventory',async()=>{
  const result=await recoverAuditSweep({descriptor,inventory,state:{sourceUuid:descriptor.serverUuid,errors:{'mysql-bin.000333':'AUDIT_SOURCE_READ_FAILED'}},scan,apply,save:async()=>{}})
  assert.equal(Object.keys(result.errors).length,0);assert.equal(result.retentionGap,true);assert.deepEqual(result.expiredFiles,['mysql-bin.000333'])
+})
+
+
+test('legacy false schema boundary is revalidated automatically and older retained files recover without deleting checkpoints',async()=>{
+ const older={...file,name:'mysql-bin.000334'},newer={...file,name:'mysql-bin.000374'}
+ const previous={version:1,sourceUuid:descriptor.serverUuid,schemaFingerprint:descriptor.schemaFingerprint,schemaBoundary:file.name,files:{[recoveryFileKey(newer,descriptor)]:{complete:true,size:newer.size}},errors:{[file.name]:'AUDIT_SCHEMA_HISTORY_REQUIRED',[older.name]:'AUDIT_SCHEMA_HISTORY_REQUIRED'}}
+ const scanned=[]
+ const result=await recoverAuditSweep({descriptor,inventory:{...inventory,files:[older,file,newer]},state:previous,scan:async f=>{scanned.push(f.name);return scan()},apply,save:async()=>{}})
+ assert.deepEqual(scanned,[file.name,older.name]);assert.equal(result.schemaBoundary,null)
+ assert.equal(result.schemaGuardVersion,2);assert.equal(result.completeFiles,3);assert.equal(Object.keys(result.errors).length,0)
+ assert.ok(result.files[recoveryFileKey(newer,descriptor)])
+})
+
+test('a real boundary from a legacy checkpoint is checked again and still blocks older row decoding',async()=>{
+ const older={...file,name:'mysql-bin.000334'},scanned=[],imports=[]
+ const result=await recoverAuditSweep({descriptor,inventory:{...inventory,files:[older,file]},state:{sourceUuid:descriptor.serverUuid,schemaFingerprint:descriptor.schemaFingerprint,schemaBoundary:file.name,files:{}},scan:async f=>{scanned.push(f.name);return {...await scan(),summary:{...(await scan()).summary,ddl:true}}},apply:async b=>{imports.push(b);return apply(b)},save:async()=>{}})
+ assert.deepEqual(scanned,[file.name]);assert.equal(imports.length,0);assert.equal(result.schemaBoundary,file.name)
+ assert.equal(result.schemaGuardVersion,2)
+})
+
+test('the raw and decoded readers accept the exact production unrelated DDL and retain source changes',async()=>{
+ const {createAuditSchemaGuard}=await import('../scripts/audit/audit-binlog-guard.mjs')
+ const {makeAuditBinlog}=await import('./fixtures/audit-binlog-synthetic.mjs')
+ const sql=readFileSync(new URL('./fixtures/audit-unrelated-ddl.sql',import.meta.url),'utf8')
+ const guard=createAuditSchemaGuard('central');guard.write(makeAuditBinlog({ddl:{database:'central',sql}}))
+ assert.equal(guard.finish().ddl,false)
+ const decoded=await decode([...sql.split('\n'),'/*!*/;',...row(),...commit])
+ assert.equal(decoded.summary.ddl,false);assert.equal(decoded.records.length,1)
+})
+
+test('source failures preserve internal diagnostic codes instead of collapsing every Error into SOURCE_FAILED',async()=>{
+ const result=await recoverAuditSweep({descriptor,inventory,state:{},scan:async()=>{throw Error('AUDIT_SOURCE_TRUNCATED_EVENT')},apply,save:async()=>{}})
+ assert.equal(result.errors[file.name],'AUDIT_SOURCE_TRUNCATED_EVENT')
+})
+
+
+test('an unreadable newer file cannot certify the column map for unverified older files',async()=>{
+ const newer={...file,name:'mysql-bin.000336',sourceError:'AUDIT_SOURCE_READ_FAILED'}
+ let scans=0
+ const result=await recoverAuditSweep({descriptor,inventory:{...inventory,files:[file,newer]},state:{sourceUuid:descriptor.serverUuid,schemaBoundary:newer.name},scan:async()=>{scans++;return scan()},apply,save:async()=>{}})
+ assert.equal(scans,0);assert.equal(result.completeFiles,0)
+ assert.equal(result.errors[file.name],'AUDIT_SCHEMA_CONTEXT_UNVERIFIED')
 })

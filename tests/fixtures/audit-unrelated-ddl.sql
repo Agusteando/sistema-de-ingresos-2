@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS talleres_student_evaluations (
+  id CHAR(36) NOT NULL,
+  matricula VARCHAR(64) NOT NULL,
+  group_id CHAR(36) NULL,
+  group_name VARCHAR(180) NOT NULL,
+  catalog_key VARCHAR(120) NOT NULL,
+  catalog_name VARCHAR(180) NOT NULL,
+  plantel_code VARCHAR(10) NOT NULL,
+  evaluation_date DATE NOT NULL,
+  ratings_json JSON NOT NULL,
+  observation VARCHAR(1200) NULL,
+  author_user_id BIGINT UNSIGNED NULL,
+  author_name VARCHAR(255) NOT NULL,
+  created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id),
+  KEY idx_talleres_evaluations_student_date (matricula, evaluation_date, created_at),
+  KEY idx_talleres_evaluations_group_student (group_id, matricula, evaluation_date),
+  KEY idx_talleres_evaluations_teacher_date (author_user_id, evaluation_date),
+  CONSTRAINT fk_talleres_evaluations_group FOREIGN KEY (group_id) REFERENCES talleres_groups(id) ON DELETE SET NULL,
+  CONSTRAINT fk_talleres_evaluations_author FOREIGN KEY (author_user_id) REFERENCES talleres_users(id) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci

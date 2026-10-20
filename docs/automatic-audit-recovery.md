@@ -48,3 +48,12 @@ Production `--check` returned `ER_SPECIFIC_ACCESS_DENIED_ERROR`; source access m
 Every source pass retains inventory and completed-file counts instead of replacing them with zero at startup. Each completed source file checkpoints and publishes its verified values independently. Status reports the active phase and file; `--diagnose` counts pending records directly from the inbox, including projected records awaiting attribution. These counters describe source processing, not proof of full historical coverage.
 
 The audit matrix separates CURP and Foto, retains Estatus and removes Grado (including its existing level/cycle category). Original audit records, student records, source capture policy and sensitive-value redaction remain unchanged. Existing photo/CURP observations are classified consistently across ledger and Loki sources; unavailable historical values are not fabricated.
+
+
+## False schema-boundary remediation (2026-10-20)
+
+Production `mysql-bin.000373` contained `CREATE TABLE IF NOT EXISTS talleres_student_evaluations (...)` with a column named `matricula`. Both old guards searched for the word anywhere in DDL, incorrectly treating that unrelated table as a student schema change. The raw and decoded readers now share a DDL target parser that resolves the modified object, schema qualification, table lists, renames, comments and identifier quoting. Columns, foreign-key references and strings do not become table targets. A genuine DDL operation on the student table still blocks ordinal-dependent imports.
+
+Checkpoint `schemaGuardVersion: 2` automatically revalidates boundaries created by the old word detector. Successfully verified file checkpoints are retained; blocked files are rescanned in descending order, and their old errors are removed only through the corrected policy and verified processing. No operator deletion, evidence import or database setting change is required. Internal source error messages that carry an AUDIT_* code now retain that code rather than collapsing to a generic source failure. Diagnosis includes the guard revision and any genuine remaining boundary.
+
+Regression uses the exact operator-supplied talleres DDL, real MySQL 8.4.11 native CRC-checked binlogs, committed row values, a persisted legacy boundary and automatic worker replay. Production acceptance remains the actual historical chain through the authenticated read API; local tests are not that proof.
