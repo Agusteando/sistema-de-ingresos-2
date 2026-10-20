@@ -27,6 +27,8 @@ const getScopedPlantel = (user: any) => {
     : undefined
 }
 
+const deudorKey = (matricula: string, mes: number) => `${matricula}:${Number(mes)}`
+
 const getDeudorContext = async (matricula: string, ciclo: string, mes: number, user: any) => {
   const rows = await getDeudoresGlobal({
     ciclo,
@@ -72,14 +74,18 @@ const processAction = async ({
   mes,
   accion,
   user,
-  emailOptions
+  emailOptions,
+  deudorContext,
+  emailTemplate
 }: {
   matricula: string,
   ciclo: string,
   mes: number,
   accion: string,
   user: any,
-  emailOptions?: EmailOptions | null
+  emailOptions?: EmailOptions | null,
+  deudorContext?: any,
+  emailTemplate?: Awaited<ReturnType<typeof getCobranzaTemplate>>
 }) => {
   if (!matricula || !mes) {
     throw createError({ statusCode: 400, statusMessage: 'Alumno o periodo inválido.' })
@@ -94,7 +100,7 @@ const processAction = async ({
     return { matricula, mes, success: true, duplicated: true, message: 'Acción ya registrada para este alumno y periodo.' }
   }
 
-  const deudor = await getDeudorContext(matricula, ciclo, mes, user)
+  const deudor = deudorContext !== undefined ? deudorContext : await getDeudorContext(matricula, ciclo, mes, user)
   if (!deudor?.isDeudor) {
     throw createError({
       statusCode: 409,
@@ -107,14 +113,10 @@ const processAction = async ({
   let emailMetadata: Record<string, any> | null = null
 
   if (accion === 'correo_recordatorio') {
-    const [student] = await query<any[]>(
-      `SELECT nombreCompleto, correo, telefono, nivel, grado, grupo, plantel, \`Nombre del padre o tutor\` AS padre FROM base WHERE matricula = ? LIMIT 1`,
-      [matricula]
-    )
-    const contactStudent = { ...(student || {}), ...(deudor || {}) }
+    const contactStudent = deudor
     if (!contactStudent?.correo) throw createError({ statusCode: 400, statusMessage: 'El alumno no tiene correo registrado.' })
 
-    const template = await getCobranzaTemplate(emailOptions)
+    const template = emailTemplate || await getCobranzaTemplate(emailOptions)
     const rendered = renderCobranzaEmail({
       student: contactStudent,
       deudor,
@@ -126,9 +128,14 @@ const processAction = async ({
       includeDesglose: template.includeDesglose
     })
 
-    await sendEmail(contactStudent.correo, rendered.subject, rendered.html, user?.email)
+    const delivery = await sendEmail(contactStudent.correo, rendered.subject, rendered.html, user?.email)
+    // A successful Gmail API response is evidence of acceptance even when
+    // the subsequent audit insert cannot be confirmed by the DB Bridge.
+    console.info('[CobranzaEmail]', { stage: 'gmail_accepted', messageId: delivery.messageId || '' })
     emailMetadata = {
       destinatario: contactStudent.correo,
+      messageId: delivery.messageId,
+      sender: delivery.sender,
       subject: rendered.subject,
       includeDesglose: template.includeDesglose,
       conceptosEnviados: rendered.desglose.length
@@ -175,7 +182,7 @@ const processAction = async ({
     ]
   )
 
-  return { matricula, mes, success: true, duplicated: false, saldo, totalRecargos, desglose }
+  return { matricula, mes, success: true, duplicated: false, saldo, totalRecargos, desglose, ...(emailMetadata ? { messageId: emailMetadata.messageId } : {}) }
 }
 
 export default defineEventHandler(async (event) => runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
@@ -192,6 +199,19 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     throw createError({ statusCode: 400, statusMessage: 'Parámetros inválidos para registrar acción de cobranza.' })
   }
 
+  // One fresh source-of-truth query per selected group, not one per recipient.
+  const matriculas = [...new Set(items.map(item => item.matricula).filter(Boolean))]
+  const emailDeudores = accion === 'correo_recordatorio' && matriculas.length
+    ? await getDeudoresGlobal({
+        ciclo,
+        plantel: getScopedPlantel(user),
+        userEmail: user?.email,
+        matriculas
+      })
+    : []
+  const byKey = new Map<string, any>(emailDeudores.map(row => [deudorKey(row.matricula, Number(row.mes)), row]))
+  const emailTemplate = accion === 'correo_recordatorio' ? await getCobranzaTemplate(emailOptions) : undefined
+
   const results = []
   let completed = 0
   let duplicated = 0
@@ -205,13 +225,32 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         mes: item.mes,
         accion,
         user,
-        emailOptions
+        emailOptions,
+        deudorContext: accion === 'correo_recordatorio' ? (byKey.get(deudorKey(item.matricula, item.mes)) || null) : undefined,
+        emailTemplate
       })
       results.push(result)
       if (result.duplicated) duplicated++
       else completed++
+      if (accion === 'correo_recordatorio' && !result.duplicated) {
+        console.info('[CobranzaEmail]', {
+          stage: 'accepted_and_recorded',
+          requestId: event.context.auroraRequestId || '',
+          agentId: event.context.dbBridgeAgentId || '',
+          messageId: result.messageId || ''
+        })
+      }
     } catch (error: any) {
       failed++
+      if (accion === 'correo_recordatorio') {
+        console.warn('[CobranzaEmail]', {
+          stage: 'send_or_record_failed',
+          requestId: event.context.auroraRequestId || '',
+          agentId: event.context.dbBridgeAgentId || '',
+          code: error?.code || error?.data?.diagnostic?.code || 'UNKNOWN',
+          message: String(error?.message || '').slice(0, 220)
+        })
+      }
       results.push({
         matricula: item.matricula,
         mes: item.mes,
