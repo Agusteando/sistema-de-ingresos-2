@@ -42,10 +42,10 @@ try {
   let unavailable=false
   let fieldHistoryFailure=false
   const fieldRequests=[]
-  const categories=[['grupo','Grupo'],['nombre','Nombre'],['grado','Grado'],['estatus','Estatus'],['contacto','Contacto'],['trabajo','Lugares de trabajo'],['otros','Otros campos']].map(([key,label])=>({key,label}))
+  const categories=[['grupo','Grupo'],['nombre','Nombre'],['curp','CURP'],['foto','Foto'],['estatus','Estatus'],['contacto','Contacto'],['trabajo','Lugares de trabajo'],['otros','Otros campos']].map(([key,label])=>({key,label}))
   const day=new Intl.DateTimeFormat('en-CA',{timeZone:'America/Mexico_City',year:'numeric',month:'2-digit',day:'2-digit'}).format(new Date())
   const make=(id,actor,source='Aurora',category='nombre')=>({id,eventId:1,date:day,recordedAt:day+' 09:42:18',matricula:'PT0123',student:'Alumno de prueba visual',field:category,fieldLabel:categories.find(c=>c.key===category).label,category,before:'Valor anterior',after:'Valor nuevo',source,actor,actorEmail:source==='Aurora'?'visual'+id+'@casitaiedis.edu.mx':'',avatar:source==='Aurora'?'https://lh3.googleusercontent.com/a/'+(id==='2'?'expired-fixture':'audit-fixture'):'',flow:'test',quality:source==='Aurora'?'verified':'historical',plantel:'PT',ciclo:'2026'})
-  const stored=[make('1','Erika Ramos'),make('2','Mónica Pérez'),make('3','Ismael García'),make('5','Erika Ramos','Aurora','trabajo')]
+  const stored=[make('1','Erika Ramos'),make('2','Mónica Pérez'),make('3','Ismael García'),make('5','Erika Ramos','Aurora','trabajo'),make('6','Erika Ramos','Aurora','curp'),make('7','Erika Ramos','Aurora','foto'),make('8','Erika Ramos','Aurora','estatus')]
   const external=[{...make('4','Husky Pass · Familia','Husky Pass'),fieldLabel:'Identidad · credencialización'}]
   await page.route('**/api/**',async route=>{
    const url=new URL(route.request().url())
@@ -122,9 +122,12 @@ try {
   assert.equal(await inspector.locator('.timeline-change').first().locator('header .student').count(),0)
   const after=await page.evaluate(()=>({window:window.scrollY,matrix:document.querySelector('.matrix-scroll').scrollTop}))
   if(width>760)assert.deepEqual(after,before)
-  assert.equal(await page.locator('.field-heading').count(),7)
+  assert.equal(await page.locator('.field-heading').count(),8)
+  const fieldLabels=await page.locator('.field-heading span').allTextContents()
+  assert.ok(['CURP','Foto','Estatus'].every(label=>fieldLabels.includes(label)))
+  assert.equal(fieldLabels.includes('Grado'),false)
   await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
-  if(width===1920){const last=await page.locator('.field-heading').last().boundingBox(),matrix=await page.locator('.matrix-scroll').boundingBox();assert.ok(last.y+last.height<=matrix.y+matrix.height+1,'all seven field rows visible at desktop size '+JSON.stringify({last,matrix}));const lastDay=await page.locator('.day-heading').last().boundingBox();assert.ok(lastDay.x+lastDay.width<=matrix.x+matrix.width+1,'all seven dates visible at desktop size')}
+  if(width===1920){const last=await page.locator('.field-heading').last().boundingBox(),matrix=await page.locator('.matrix-scroll').boundingBox();assert.ok(last.y+last.height<=matrix.y+matrix.height+1,'all eight field rows visible at desktop size '+JSON.stringify({last,matrix}));const lastDay=await page.locator('.day-heading').last().boundingBox();assert.ok(lastDay.x+lastDay.width<=matrix.x+matrix.width+1,'all seven dates visible at desktop size')}
   assert.ok(await page.locator('.change-workspace').evaluate(el=>getComputedStyle(el).fontFamily.includes('Montserrat')))
   await page.screenshot({path:output+`/audit-details-${width}x${height}.png`})
   await inspector.locator('.timeline-change').first().getByRole('button',{name:/^Historial de /}).scrollIntoViewIfNeeded()
@@ -163,7 +166,7 @@ try {
   await page.getByPlaceholder('Buscar plantel…').fill('toluca')
   await page.getByRole('option',{name:'Primaria Toluca'}).click()
   await page.locator('.source-legend>.husky').click()
-  assert.match(await page.locator('.source-legend>.aurora b').innerText(),/4/)
+  assert.match(await page.locator('.source-legend>.aurora b').innerText(),/7/)
   assert.equal(await page.locator('.matrix-cell .mini-name').filter({hasText:'Erika'}).count(),0)
   await page.getByRole('button',{name:'Limpiar filtros',exact:true}).click()
   unavailable=true

@@ -316,6 +316,8 @@ const resolveHistoricalAccounts = async () => {
 }
 const classify = (field: string) => {
   const f = field.toLowerCase().replace(/[_\s-]/g, '')
+  if (['curp','curpalumno','curppadre','curpmadre'].includes(f)) return 'curp'
+  if (['foto','photo','photourl','fotourl'].includes(f)) return 'foto'
   if (f === 'grupo') return 'grupo'
   if (/apellido|nombre/.test(f)) return 'nombre'
   if (/grado|nivel|ciclo/.test(f)) return 'grado'
@@ -325,6 +327,7 @@ const classify = (field: string) => {
   return 'otros'
 }
 const labelFor = (field: string) => ({
+  curp: 'CURP', curpPadre: 'CURP del padre', curpMadre: 'CURP de la madre', curp_padre: 'CURP del padre', curp_madre: 'CURP de la madre', foto: 'Foto',
   nombres: 'Nombre', grupo: 'Grupo', grado: 'Grado', apellidoPaterno: 'Apellido paterno',
   apellidoMaterno: 'Apellido materno', lugarTrabajoPadre: 'Trabajo del padre',
   lugarTrabajoMadre: 'Trabajo de la madre'

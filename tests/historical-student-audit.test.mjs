@@ -147,3 +147,11 @@ test('student query automatically fetches stable-stream context and reconstructs
  const ambiguous=await ctx.api.queryLoki(from,to,['PT123'])
  assert.equal(ambiguous.records.length,0);assert.equal(ambiguous.partial,true)
 })
+
+
+test('historical CURP/photo edits have their own matrix categories while status remains visible',async()=>{
+ const event={...family,matricula:'PT123',changes:[{field:'curp',before:'old-private-value',after:'new-private-value'},{field:'foto',before:'old-photo',after:'new-photo'},{field:'status',before:'Activo',after:'Baja'}]}
+ const result=await setup(()=>payload([event])).loadHistoricalActions({from,to,planteles:['PT']})
+ assert.deepEqual(Array.from(result.events,e=>[e.field,e.category,e.fieldLabel]),[['curp','curp','CURP'],['foto','foto','Foto'],['status','estatus','status']])
+ assert.ok(result.events.filter(e=>['curp','foto'].includes(e.field)).every(e=>e.before==='[Registrado]'&&e.after==='[Registrado]'))
+})

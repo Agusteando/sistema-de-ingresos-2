@@ -6,7 +6,8 @@ import { cleanAuditAvatar, loadAuditStaffProfiles } from './audit-actor-profile'
 export const CATEGORIES = [
   { key: 'grupo', label: 'Grupo' },
   { key: 'nombre', label: 'Nombre' },
-  { key: 'grado', label: 'Grado' },
+  { key: 'curp', label: 'CURP' },
+  { key: 'foto', label: 'Foto' },
   { key: 'estatus', label: 'Estatus' },
   { key: 'contacto', label: 'Contacto' },
   { key: 'trabajo', label: 'Lugares de trabajo' },
@@ -15,6 +16,8 @@ export const CATEGORIES = [
 
 const fieldCategory = (raw: string) => {
   const field = raw.replace(/[_\s-]/g, '').toLowerCase()
+  if (['curp','curpalumno','curppadre','curpmadre'].includes(field)) return 'curp'
+  if (['foto','photo','photourl','fotourl'].includes(field)) return 'foto'
   if (field.includes('lugartrabajo')) return 'trabajo'
   if (field === 'grupo' || field === 'group') return 'grupo'
   if (['nombres', 'nombre', 'apellidopaterno', 'apellidomaterno', 'nombrecompletoalumno', 'nombreverificado'].includes(field)) return 'nombre'
@@ -25,7 +28,7 @@ const fieldCategory = (raw: string) => {
 }
 
 const FIELD_NAMES: Record<string, string> = {
-  foto: 'Foto', grupo: 'Grupo', grado: 'Grado', nivel: 'Nivel', ciclo: 'Ciclo',
+  curp: 'CURP', curpPadre: 'CURP del padre', curpMadre: 'CURP de la madre', curp_padre: 'CURP del padre', curp_madre: 'CURP de la madre', foto: 'Foto', grupo: 'Grupo', grado: 'Grado', nivel: 'Nivel', ciclo: 'Ciclo',
   nombres: 'Nombre(s)', apellido_paterno: 'Apellido paterno',
   apellido_materno: 'Apellido materno', apellidoPaterno: 'Apellido paterno',
   apellidoMaterno: 'Apellido materno', nombreVerificado: 'Nombre verificado',
@@ -99,7 +102,7 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
     for (let i = 0; i < fields.length; i++) {
       const change = fields[i] || {}
       const field = String(change.field || '').slice(0, 90)
-      if (!field) continue
+      if (!field || fieldCategory(field)==='grado') continue
       const recovery=recovered.get(String(row.id)+'|'+canonicalRecoveryField(field))||(standalone&&canonicalRecoveryField(standalone.field)===canonicalRecoveryField(field)?{...standalone,originalEventId:null,recoveryEventId:String(row.id),fingerprint:payload.fingerprint,actorEvidence:'unresolved'}:null)
       changes.push({
         id: String(row.id) + ':' + i,

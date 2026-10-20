@@ -41,3 +41,10 @@ Both authenticated audit read APIs return coverage. `caught-up` applies to retai
 Tests cover ownership/lifecycle, source permission failure, credential-file isolation, native CRC rejection, all-student decoding, raw qualified DDL, checkpoints, retries, source epochs, real MySQL inbox/projection and direct remote MySQL read through the packaged reader. The direct-source test creates an isolated schema, generates a real row update and verifies the resulting before/after values through Aurora's projection without a control plane.
 
 Production `--check` returned `ER_SPECIFIC_ACCESS_DENIED_ERROR`; source access must be granted and checked again. The running casita01 recovery still requires production verification. A merge or local build alone does not establish successful production recovery.
+
+
+## Live progress and audit fields
+
+Every source pass retains inventory and completed-file counts instead of replacing them with zero at startup. Each completed source file checkpoints and publishes its verified values independently. Status reports the active phase and file; `--diagnose` counts pending records directly from the inbox, including projected records awaiting attribution. These counters describe source processing, not proof of full historical coverage.
+
+The audit matrix separates CURP and Foto, retains Estatus and removes Grado (including its existing level/cycle category). Original audit records, student records, source capture policy and sensitive-value redaction remain unchanged. Existing photo/CURP observations are classified consistently across ledger and Loki sources; unavailable historical values are not fabricated.

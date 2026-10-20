@@ -41,7 +41,7 @@ export default defineEventHandler(async (event) => {
   try {
     const history = await loadHistoricalActions({from:fromDate,to:toDate,planteles})
     if(history.partial||history.truncated)console.warn('[audit-history-incomplete]',{requestId:String(event.context.auroraRequestId||''),code:history.truncated?'AUDIT_HISTORY_QUERY_LIMIT':'AUDIT_HISTORY_SOURCE_PARTIAL',from,to,planteles,checked:history.checked,unmatched:history.unmatched})
-    const events = history.events
+    const events = history.events.filter(record=>record.category!=='grado')
     const keys = Array.from(new Set(events.map(x=>x.matricula))).slice(0,5000)
     const names = new Map<string,string>()
     for (let i=0;i<keys.length;i+=200){
