@@ -3,7 +3,18 @@ import assert from 'node:assert/strict'
 import {decodeAuditBinlog,utf8Lines} from '../scripts/audit/audit-binlog-decoder.mjs'
 import {recoverAuditSweep,recoveryFileKey,canonicalBinlogPreamble} from '../scripts/audit/audit-recovery-engine.mjs'
 import {Readable} from 'node:stream'
+import {diskPressureRequiresYield} from '../scripts/audit-recovery-worker.mjs'
 import {readFileSync} from 'node:fs'
+test('historical recovery yields only under severe kernel I/O pressure',()=>{
+ const heavy='some avg10=34.14 avg60=32.00 avg300=30.00 total=10\\nfull avg10=30.77 avg60=32.60 avg300=32.85 total=9'
+ const light='some avg10=4.00 avg60=5.00 avg300=6.00 total=10\\nfull avg10=1.77 avg60=2.60 avg300=2.85 total=9'
+ assert.equal(diskPressureRequiresYield(heavy),true)
+ assert.equal(diskPressureRequiresYield(light),false)
+ assert.equal(diskPressureRequiresYield(''),false)
+ assert.equal(diskPressureRequiresYield('full avg10=12.00 avg60=0 avg300=0 total=1'),true)
+ assert.equal(diskPressureRequiresYield('full avg10=11.99 avg60=40 avg300=40 total=1'),false)
+})
+
 const descriptor={protocolVersion:1,schema:'central',serverUuid:'00000000-0000-0000-0000-000000000001',version:'8.4.11',schemaFingerprint:'map1',identityOrdinal:2,columnCount:3,fields:[{name:'grupo',ordinal:3}],oldestAudit:'2026-10-01 00:00:00'}
 const file={name:'mysql-bin.000335',size:'1000',headerSha256:'a'.repeat(64)}
 const header='#261014 19:59:53 server id 1 end_log_pos 200 CRC32 0x18a63e07 Update_rows: table id 2 flags: STMT_END_F'
