@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {mkdtemp,rm,readFile} from 'node:fs/promises'
+import {mkdtemp,rm,readFile,mkdir,writeFile} from 'node:fs/promises'
 import {tmpdir} from 'node:os'
 import {join} from 'node:path'
 import {readSourceInventory,startAuditRecovery} from '../scripts/audit-recovery-worker.mjs'
@@ -28,9 +28,13 @@ test('direct MySQL source: remote read, verified values, durable replay and orig
    await db.query("GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO '"+reader+"'@'%'")
    connection.user=reader;connection.password='isolated-test-secret'
   }
+  await db.query('CREATE TABLE talleres_groups(id CHAR(36) PRIMARY KEY) DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci')
+  await db.query('CREATE TABLE talleres_users(id BIGINT UNSIGNED PRIMARY KEY)')
   await db.query('FLUSH BINARY LOGS')
   const [[active]]=await db.query('SHOW BINARY LOG STATUS')
   await db.query("UPDATE matricula SET grupo='AMÉRICA' WHERE id=42")
+  // Actual production false-positive: an unrelated table has a matricula column.
+  await db.query(await readFile(new URL('./fixtures/audit-unrelated-ddl.sql',import.meta.url),'utf8'))
   await db.query('FLUSH BINARY LOGS')
   const descriptor=await describeRecoverySource(db),inventory=await readSourceInventory(db),file=inventory.files.find(f=>f.name===active.File)
   const tool=process.env.AUDIT_READER_TEST_BIN
@@ -80,6 +84,8 @@ test('direct MySQL source: remote read, verified values, durable replay and orig
     await db.query("PURGE BINARY LOGS TO '"+file.name+"'")
     await db.query("UPDATE matricula SET grupo='ÁFRICA' WHERE id=42")
     await db.query('FLUSH BINARY LOGS')
+    await mkdir(join(root,'owned'),{recursive:true})
+    await writeFile(join(root,'owned/checkpoint.json'),JSON.stringify({version:1,sourceUuid:descriptor.serverUuid,schemaFingerprint:descriptor.schemaFingerprint,schemaBoundary:file.name,files:{},errors:{[file.name]:'AUDIT_SCHEMA_HISTORY_REQUIRED'}}))
     const statuses=[]
     const tracedMysql={...mysql,createConnection:async config=>{
      const connection=await mysql.createConnection(config),execute=connection.execute.bind(connection)
@@ -93,6 +99,9 @@ test('direct MySQL source: remote read, verified values, durable replay and orig
      const state=typeof status.payload==='string'?JSON.parse(status.payload):status.payload
      assert.ok(statuses.some(s=>s.phase==='scanning'&&s.files>0&&s.completeFiles>0),JSON.stringify(statuses))
      assert.ok(statuses.some(s=>s.phase==='scanning'&&/^mysql-bin/.test(s.currentFile)))
+     assert.equal(JSON.parse(await readFile(join(root,'owned/checkpoint.json'),'utf8')).schemaBoundary,null)
+     assert.equal(JSON.parse(await readFile(join(root,'owned/checkpoint.json'),'utf8')).schemaGuardVersion,2)
+     assert.equal(state.schemaGuardVersion,2);assert.equal(state.schemaBoundary,null)
      assert.equal(state.state,'caught-up',JSON.stringify({status:state,checkpoint:JSON.parse(await readFile(join(root,'owned/checkpoint.json'),'utf8'))}));assert.equal(state.pendingRecords,0)
      const [newValues]=await db.query("SELECT payload FROM control_escolar_audit_events WHERE event_type='student_update' AND source_flow='mysql_binlog_recovered'")
      assert.ok(newValues.some(row=>{const p=typeof row.payload==='string'?JSON.parse(row.payload):row.payload;return p.changes.some(c=>c.before==='AMÉRICA'&&c.after==='ÁFRICA')}))

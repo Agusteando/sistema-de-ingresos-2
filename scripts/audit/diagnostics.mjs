@@ -7,5 +7,5 @@ export async function diagnoseRecovery(db,readInventory){
  let source
  try{const inventory=await readInventory();source={ready:true,version:inventory.version,files:inventory.files.length}}
  catch(error){source={ready:false,code:String(error.code||'AUDIT_SOURCE_CHECK_FAILED')}}
- return {source,recovery:{state:status.state||'not-started',code:status.code||'',updatedAt:status.updatedAt||null,pendingRecords:inbox.reduce((total,row)=>total+(row.state==='applied'?0:Number(row.count||0)),0),completeFiles:Number(status.completeFiles||0),files:Number(source.ready?source.files:status.files||0),phase:String(status.phase||''),currentFile:String(status.currentFile||'')},inbox}
+ return {source,recovery:{state:status.state||'not-started',code:status.code||'',updatedAt:status.updatedAt||null,pendingRecords:inbox.reduce((total,row)=>total+(row.state==='applied'?0:Number(row.count||0)),0),completeFiles:Number(status.completeFiles||0),files:Number(source.ready?source.files:status.files||0),schemaGuardVersion:Number(status.schemaGuardVersion||0),schemaBoundary:status.schemaBoundary||null,phase:String(status.phase||''),currentFile:String(status.currentFile||'')},inbox}
 }

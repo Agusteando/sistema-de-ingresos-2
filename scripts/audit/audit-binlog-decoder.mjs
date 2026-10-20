@@ -1,3 +1,4 @@
+import {affectsAuditTable} from './audit-ddl-target.mjs'
 import {createHash} from 'node:crypto'
 const fault=code=>Object.assign(new Error(code),{code})
 const mexico=utc=>{
@@ -50,9 +51,8 @@ export async function decodeAuditBinlog(lines,{descriptor,file,onCommit}){
   if(!line.startsWith('#')){
    if(/^\s*(ALTER|CREATE|DROP|RENAME|TRUNCATE)\b/i.test(line))ddlText=line
    else if(ddlText)ddlText+=' '+line
-   if(ddlText&&/\bmatricula\b/i.test(ddlText))ddl=true
    if(ddlText.length>64000)throw fault('AUDIT_SOURCE_DDL_LIMIT')
-   if(line.includes('/*!*/;'))ddlText=''
+   if(line.includes('/*!*/;')&&ddlText){ddl ||= affectsAuditTable(ddlText,schema,schema);ddlText=''}
   }
   const match=line.match(/^### (UPDATE|INSERT INTO|DELETE FROM) `([^`]+)`\.`([^`]+)`/)
   if(match){

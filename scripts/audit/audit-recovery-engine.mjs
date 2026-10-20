@@ -1,3 +1,4 @@
+import {AUDIT_SCHEMA_GUARD_VERSION} from './audit-ddl-target.mjs'
 // Pure orchestration. All platform I/O is injected so replay/failure semantics
 // can be exercised without granting tests access to production containers.
 import {createHash} from 'node:crypto'
@@ -13,12 +14,16 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  // Newest-to-oldest is mandatory: a DDL boundary discovered in a newer file
  // invalidates the current ordinal map for all older files.
  const newest=[...files].sort((a,b)=>b.name.localeCompare(a.name))
- let schemaBoundary=state.sourceUuid===inventory.serverUuid&&state.schemaFingerprint===descriptor.schemaFingerprint?state.schemaBoundary||null:null
- let worked=0,complete=0
+ const trustedBoundary=state.schemaGuardVersion===AUDIT_SCHEMA_GUARD_VERSION
+ let schemaBoundary=trustedBoundary&&state.sourceUuid===inventory.serverUuid&&state.schemaFingerprint===descriptor.schemaFingerprint?state.schemaBoundary||null:null
+ next.schemaGuardVersion=AUDIT_SCHEMA_GUARD_VERSION
+ if(!trustedBoundary)next.errors=Object.fromEntries(Object.entries(next.errors).filter(([,code])=>code!=='AUDIT_SCHEMA_HISTORY_REQUIRED'))
+ let worked=0,complete=0,unverifiedSchemaAt=null
  const ready=[]
  for(const file of newest){
   if(signal?.aborted||paused()){next.state='paused';break}
-  if(file.sourceError){next.errors[file.name]=file.sourceError;continue}
+  if(file.sourceError){next.errors[file.name]=file.sourceError;unverifiedSchemaAt||=file.name;continue}
+  if(unverifiedSchemaAt&&file.name<unverifiedSchemaAt){next.errors[file.name]='AUDIT_SCHEMA_CONTEXT_UNVERIFIED';continue}
   if(!/^mysql-bin\.\d{6,}$/.test(file.name)||!/^\d+$/.test(String(file.size))||!/^([a-f0-9]{64})$/.test(file.headerSha256))fail('AUDIT_SOURCE_FILE_INVALID')
   const key=recoveryFileKey(file,descriptor),checkpoint=entries[key]
   if(schemaBoundary&&file.name<=schemaBoundary){next.errors[file.name]='AUDIT_SCHEMA_HISTORY_REQUIRED';continue}
@@ -27,6 +32,8 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  }
  // Prioritization affects scheduling only, never source/identity linkage.
  for(const file of ready.slice(0,budget)){
+  if(unverifiedSchemaAt&&file.name<unverifiedSchemaAt){next.errors[file.name]='AUDIT_SCHEMA_CONTEXT_UNVERIFIED';continue}
+  if(schemaBoundary&&file.name<=schemaBoundary){next.errors[file.name]='AUDIT_SCHEMA_HISTORY_REQUIRED';continue}
   if(signal?.aborted||paused()){next.state='paused';break}
   const key=recoveryFileKey(file,descriptor);worked++
   try{
@@ -50,7 +57,7 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
     delete next.errors[file.name]
     complete++
    }finally{if(captured||result.summary.ddl)await result.cleanup()}
-  }catch(error){next.errors[file.name]=String(error.code||'AUDIT_RECOVERY_SOURCE_FAILED');if(error.code==='AUDIT_RECOVERY_PAUSED')next.state='paused'}
+  }catch(error){unverifiedSchemaAt=!unverifiedSchemaAt||file.name>unverifiedSchemaAt?file.name:unverifiedSchemaAt;next.errors[file.name]=String(error.code||(/^AUDIT_[A-Z_]+$/.test(error.message||'')?error.message:'AUDIT_RECOVERY_SOURCE_FAILED'));if(error.code==='AUDIT_RECOVERY_PAUSED')next.state='paused'}
   next.schemaBoundary=schemaBoundary;next.schemaFingerprint=descriptor.schemaFingerprint
   await save(next) // Only after a complete source scan and confirmed audit transaction.
  }
