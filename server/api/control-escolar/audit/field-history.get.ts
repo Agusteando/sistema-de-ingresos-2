@@ -3,7 +3,7 @@ import { getQuery, setResponseHeader } from 'h3'
 import { PLANTELES_LIST } from '../../../../utils/constants'
 import { getTrustedAuthUser, normalizePlantel } from '../../../utils/auth-session'
 import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
-import { buildAuditChanges, canonicalAuditField } from '../../../utils/audit-change-events'
+import { buildAuditChanges, canonicalAuditField, readAuditRecoveryCoverage } from '../../../utils/audit-change-events'
 import { loadHistoricalActions } from '../../../utils/historical-student-audit'
 import { loadAuditStaffProfiles } from '../../../utils/audit-actor-profile'
 
@@ -62,7 +62,7 @@ export default defineEventHandler(async event=>{
     for(const e of historical){e.student=student;const profile=profiles.get(String(e.actorEmail||'').toLowerCase());if(profile){e.actor=profile.name||e.actor;e.avatar=profile.avatar||''}}
     const events=[...ledger,...historical]
     events.sort(compareAuditNewest)
-    return {events,nextCursor,partial,historyUnavailable,requestId,student,field,plantel,matricula,currentValueAvailable,currentValue}
+    return {recovery:await readAuditRecoveryCoverage(),events,nextCursor,partial,historyUnavailable,requestId,student,field,plantel,matricula,currentValueAvailable,currentValue}
   }catch(error:any){
     console.warn('[audit-field-history] query failed',{requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
     throw createError({statusCode:503,message:'No se pudo cargar el historial del campo.',data:{requestId,code:'AUDIT_FIELD_HISTORY_UNAVAILABLE',retryable:true}})

@@ -18,6 +18,9 @@ WORKDIR /app
 ENV NODE_ENV=production HOST=0.0.0.0 PORT=3000
 COPY --from=build /app/.output ./.output
 COPY --from=build /app/scripts/import-audit-recovery.mjs ./scripts/import-audit-recovery.mjs
+COPY --from=build /app/scripts/audit-recovery-service.mjs ./scripts/audit-recovery-service.mjs
+COPY --from=build /app/shared/utils/auditRecoveryQueue.mjs ./shared/utils/auditRecoveryQueue.mjs
+COPY --from=build /app/shared/utils/auditSourceFields.mjs ./shared/utils/auditSourceFields.mjs
 COPY --from=build /app/shared/utils/auditRecovery.mjs ./shared/utils/auditRecovery.mjs
 COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma

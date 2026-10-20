@@ -66,8 +66,25 @@ const load=async(reset:boolean)=>{
   finally{if(current===generation)busy.value=false}
 }
 
+// Merge background results by event id: preserve the selected day, scroll and
+// loaded pages while the collector fills historical values.
+let backgroundBusy=false
+const refreshStored=async()=>{
+  if(backgroundBusy||busy.value||!controller||controller.signal.aborted)return
+  backgroundBusy=true
+  const current=generation
+  try{
+    const result=await $fetch<any>('/api/control-escolar/audit/field-history',{query:{matricula:props.record.matricula,plantel:props.record.plantel,field:props.record.field,phase:'stored'},signal:controller.signal})
+    if(current!==generation)return
+    mergeEvents(result.events)
+    currentValueAvailable.value=Boolean(result.currentValueAvailable);currentValue.value=result.currentValue??null
+  }catch{/* Foreground errors keep their own retry/reference; a poll never clears data. */}
+  finally{backgroundBusy=false}
+}
+const poll=typeof window==='undefined'?null:setInterval(()=>{if(document.visibilityState==='visible')void refreshStored()},20000)
+
 watch(()=>[props.record.matricula,props.record.plantel,props.record.field],()=>{events.value=[];currentValueAvailable.value=false;nextCursor.value=null;partial.value=false;void load(true)},{immediate:true})
-onBeforeUnmount(()=>{generation++;controller?.abort()})
+onBeforeUnmount(()=>{generation++;controller?.abort();if(poll)clearInterval(poll)})
 </script>
 <style scoped>
 .history-timeline{list-style:none;margin:0;padding:0 0 0 16px}.history-timeline>li{position:relative;padding:0 0 16px 16px;border-left:2px solid #dae5dd}.history-timeline>li:last-child{padding-bottom:0;border-color:transparent}.history-timeline>li:before{content:"";position:absolute;left:-6px;top:20px;width:10px;height:10px;border-radius:50%;background:#bdcdc1;border:2px solid #f5f8f6}.history-timeline>li.is-latest:before{background:#00692f}.current-value{display:flex;align-items:center;justify-content:space-between;gap:12px;margin-top:7px;padding:10px 12px;border-radius:8px;background:#e7f3eb;color:#00692f}.current-value>span{font-size:12px}.current-value>strong{font-size:17px;font-weight:600;overflow-wrap:anywhere}.history-observations{font-size:12px;color:#748579}.history-observations>summary{cursor:pointer;padding:10px 0}.history-observations .audit-change-card{margin-top:10px}.field-history{display:flex;flex-direction:column;min-height:0;height:100%;font-family:var(--font-body)}.field-history-header{display:grid;gap:5px;padding:14px 16px;border-bottom:1px solid #dfe7e1;background:#fff}.history-back{display:flex;align-items:center;gap:4px;justify-self:start;min-height:36px;padding:0;margin-bottom:7px;border:0;background:transparent;color:#00692f;font:500 13px var(--font-body);cursor:pointer}.field-history-header>span,.field-history-header small{font-size:12px;color:#748579}.field-history-header h2{font:600 23px var(--font-display);margin:0;color:#223d2e}.field-history-header>strong{font-size:14px;font-weight:500;overflow-wrap:anywhere}.field-history-records{display:flex;flex-direction:column;gap:12px;overflow:auto;padding:14px;min-height:0;flex:1;overscroll-behavior:contain}.field-history-records>*{flex-shrink:0}.history-count{font-size:12px;color:#748579}.history-notice{padding:10px;border:1px solid #e9d5b2;border-radius:8px;background:#fff9ed;color:#7a592d;font-size:13px;display:flex;flex-wrap:wrap;align-items:center;gap:6px}.history-notice small{font-size:11px;width:100%;overflow-wrap:anywhere}.history-notice button{border:0;background:transparent;color:#00692f;text-decoration:underline;min-height:36px;cursor:pointer;font:inherit}.history-more{background:#fff;border:1px solid #d5e1d8;border-radius:8px;min-height:44px;color:#00692f;font:500 14px var(--font-body);cursor:pointer}.history-loading,.history-empty{display:flex;align-items:center;gap:8px;color:#748579;padding:18px 0;font-size:14px}.spinning{animation:spin .9s linear infinite}button:focus-visible{outline:3px solid #62a88b;outline-offset:2px}button:disabled{opacity:.5;cursor:wait}@keyframes spin{to{transform:rotate(360deg)}}

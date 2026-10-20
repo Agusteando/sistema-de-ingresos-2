@@ -79,3 +79,11 @@ test('a reused source cannot change its identity and a second source cannot corr
  await assert.rejects(importAuditRecovery(db,{version:1,records:[next]},{apply:true}),e=>e.code==='RECOVERY_TARGET_ALREADY_LINKED')
  assert.equal(state.saved.length,1)
 })
+
+
+test('multiple source writes within one second cannot borrow the single account observation',async()=>{
+ const {db,state}=database(),result=await importAuditRecovery(db,bundle,{apply:true,sourceAmbiguous:true})
+ assert.equal(result.results[0].attribution,'unresolved');assert.equal(result.results[0].originalEventId,null)
+ assert.equal(state.saved[0].actor_name,'Sin identificar')
+ assert.ok(state.sql.some(sql=>sql.includes("COALESCE(source_flow,'') <> 'mysql_binlog_recovered'")))
+})

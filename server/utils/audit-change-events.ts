@@ -129,3 +129,12 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
   }
   return changes
 }
+
+export const readAuditRecoveryCoverage=async()=>{
+  try{
+    const rows=await controlEscolarCentralQuery<any[]>("SELECT payload FROM control_escolar_audit_events WHERE event_type='audit_recovery_status' AND source_flow='audit_recovery_service' ORDER BY id DESC LIMIT 1",[])
+    const status=safePayload(rows[0]?.payload)
+    if(status.version!==1||!['running','caught-up','error','paused','retention-gap'].includes(status.state))return {state:'not-started'}
+    return {state:status.state,pendingRecords:Number(status.pendingRecords||0),completeFiles:Number(status.completeFiles||0),files:Number(status.files||0),retentionGap:status.retentionGap===true,updatedAt:String(status.updatedAt||''),code:String(status.code||'')}
+  }catch{return {state:'unavailable',code:'AUDIT_RECOVERY_STATUS_UNAVAILABLE'}}
+}
