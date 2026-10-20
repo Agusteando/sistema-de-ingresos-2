@@ -11,6 +11,9 @@ for(const rule of [
   /FIELD\(view_version/,
   /AND plantel=\? AND ciclo_key=\?/,
   /SELECT nombres,apellido_paterno,apellido_materno,baja/,
+  /calculatePromotedGrado\(base\.grado,base\.plantel,base\.ciclo,ciclo,base\.nivel\)/,
+  /SELECT grado,ciclo,nivel,plantel FROM base/,
+  /gradeSource:useProjectedGrade\?'aurora-base-canonical-cycle-projection'/,
   /academicHistorical:true,academicWithdrawn:withdrawn,credentialEligible:false/,
   /placementCurrent:false,credentialEligible:false/
 ])assert.match(code,rule)
