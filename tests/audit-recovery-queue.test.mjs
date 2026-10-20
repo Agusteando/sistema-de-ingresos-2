@@ -16,7 +16,7 @@ function setup(){
   if(sql.includes('INSERT INTO')){const payload=JSON.parse(params[2]);rows.set(payload.fingerprint,{id:rows.size+1,payload});writes.push(sql);return [{insertId:rows.size}]}
   if(sql.includes('SELECT COUNT'))return [[{count:[...rows.values()].filter(row=>row.payload.sourceRecord.matricula===params[0]&&row.payload.sourceRecord.field===params[1]&&row.payload.sourceRecord.recordedAt===params[2]).length}]]
   writes.push(sql)
-  if(sql.includes("'$.state','applied'")){rows.get(params[0]).payload.state='applied'}
+  if(sql.includes("'$.state',?")){rows.get(params[1]).payload.state=params[0]}
   else{const row=rows.get(params[2]);row.payload.lastError=params[0]}
   return [{affectedRows:1}]
  }}
@@ -52,4 +52,15 @@ test('source identity, approved field policy and conflicting source reuse are en
  await assert.rejects(captureRecovery(db,{version:1,records:[{...source,field:'password'}]}),/SOURCE_INVALID/)
  await assert.rejects(captureRecovery(db,{version:1,records:[{...source,evidence:{...source.evidence,sourceServerUuid:'00000000-0000-0000-0000-000000000002'}}]}),/SERVER_MISMATCH/)
  assert.equal(db.rows.size,1)
+})
+
+
+test('published values remain retryable for account linking without needing the source again',async()=>{
+ const db=setup();await captureRecovery(db,{version:1,records:[source]})
+ const modes=[]
+ const importer=async(_,bundle,options)=>{modes.push(options.deferAttribution);return {applied:true,results:[{status:'imported',attributionPending:options.deferAttribution}]}}
+ await retryRecoveryQueue(db,importer,{deferAttribution:true})
+ assert.equal([...db.rows.values()][0].payload.state,'projected')
+ await retryRecoveryQueue(db,importer,{deferAttribution:false})
+ assert.equal([...db.rows.values()][0].payload.state,'applied');assert.deepEqual(modes,[true,false])
 })

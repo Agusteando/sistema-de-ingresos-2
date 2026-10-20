@@ -8,9 +8,9 @@ The collector is owned, packaged and started by Aurora. It has no runtime depend
 
 Aurora's own named volume `aurora-audit-recovery`, mounted at `/app/audit-data`, holds durable checkpoints and verified spools. These files do not live in MM's volume. Files are checksum-verified, fsynced and atomically marked verified before capture; failed captures preserve evidence for replay after source expiration. Source identity, full images, transaction commits and column ordinals are validated. Raw Query events are inspected before database filtering; historical schema boundaries stop ordinal-dependent recovery.
 
-Verified source records enter the durable operational inbox in Aurora's existing audit table. After inventory capture, records are projected independently in batches of 1,000. Original student rows and original audit records remain untouched. Repeated reads are idempotent. Multiple same-second source writes cannot borrow a single account observation. Binlogs establish committed database values, not a physical person's identity.
+Verified source records enter the durable operational inbox in Aurora's existing audit table. Verified records are projected independently in batches of 1,000, including while other source files fail or the source is temporarily unavailable. Incomplete coverage publishes proven values without assigning an account. Once coverage is complete, the same derived projection may be linked to its original audit observation; source facts and original audit rows are not modified. Original student rows and original audit records remain untouched. Repeated reads are idempotent. Multiple same-second source writes cannot borrow a single account observation. Binlogs establish committed database values, not a physical person's identity.
 
-Loki recovery remains automatic when historical field details open. Missing values in interleaved console messages are never inferred from neighboring lines. The field drawer continues refreshing stored results without resetting its student/field scope, date focus, scroll or loaded history. No UI layout, font or copy changes are introduced here.
+Loki recovery remains automatic when historical field details open. Missing values in interleaved console messages are never inferred from neighboring lines. The field drawer continues refreshing stored results without resetting its student/field scope, date focus, scroll or loaded history. The main grid also refreshes stored recovery results. Partial historical queries expose a request reference for diagnosis.
 
 ## Source permissions
 
@@ -23,9 +23,10 @@ The packaged Aurora CLI prints the exact grant for its authenticated reader acco
 ```sh
 node /app/scripts/audit-source-access.mjs --print-grant-sql
 node /app/scripts/audit-source-access.mjs --check
+node /app/scripts/audit-source-access.mjs --diagnose
 ```
 
-Until access is granted, coverage reports `AUDIT_SOURCE_READ_PERMISSION_REQUIRED`, the worker retries, and ordinary Aurora functionality continues. `--check` verifies access after setup. No manual evidence bundle or selected student import is required.
+Until access is granted, coverage reports `AUDIT_SOURCE_READ_PERMISSION_REQUIRED`, the worker retries, and ordinary Aurora functionality continues. `--print-grant-sql` only prints SQL: a database administrator must execute it. `--check` verifies access after setup. `--diagnose` reports source access, worker state and pending inbox counts without student values or credentials. No manual evidence bundle or selected student import is required.
 
 ## Packaging and operation
 
@@ -39,4 +40,4 @@ Both authenticated audit read APIs return coverage. `caught-up` applies to retai
 
 Tests cover ownership/lifecycle, source permission failure, credential-file isolation, native CRC rejection, all-student decoding, raw qualified DDL, checkpoints, retries, source epochs, real MySQL inbox/projection and direct remote MySQL read through the packaged reader. The direct-source test creates an isolated schema, generates a real row update and verifies the resulting before/after values through Aurora's projection without a control plane.
 
-The running casita01 image and its source privileges still require production verification. A merge or local build alone does not establish successful production recovery.
+Production `--check` returned `ER_SPECIFIC_ACCESS_DENIED_ERROR`; source access must be granted and checked again. The running casita01 recovery still requires production verification. A merge or local build alone does not establish successful production recovery.

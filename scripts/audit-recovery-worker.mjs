@@ -55,24 +55,29 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
    const [[lock]]=await db.query({sql:"SELECT GET_LOCK('aurora-audit-owner-v2',0) AS acquired",timeout:10000})
    lease=Number(lock.acquired)===1;if(!lease)return
    descriptor=await describeRecoverySource(db)
+   // Already verified evidence must remain usable even while source access or
+   // another source file is unavailable. Account linking waits for coverage.
+   await replayVerifiedSpools(spools,descriptor.serverUuid,bundle=>captureRecovery(db,bundle))
+   await retryRecoveryQueue(db,importAuditRecovery,{deferAttribution:true})
    source=await mysql.createConnection(connection)
    const inventory=await readSourceInventory(source)
    if(inventory.serverUuid!==descriptor.serverUuid)fail('AUDIT_SOURCE_SERVER_MISMATCH')
    if(!/^8\.4\.11(?:-|$)/.test(inventory.version))fail('AUDIT_SOURCE_READER_VERSION_MISMATCH')
    await recordRecoveryStatus(db,{version:1,state:'running',sourceUuid:inventory.serverUuid})
-   await replayVerifiedSpools(spools,descriptor.serverUuid,bundle=>captureRecovery(db,bundle))
    await withSourceOptions(spools,connection,async optionsFile=>{
     // Source preambles distinguish log-name reuse; no host file/socket access.
     for(const file of inventory.files){
-     const prefix=await downloadRaw({tool,optionsFile,file,root:spools,signal,preambleOnly:true})
-     try{file.headerSha256=prefix.headerSha256}finally{await prefix.cleanup()}
+     try{
+      const prefix=await downloadRaw({tool,optionsFile,file,root:spools,signal,preambleOnly:true})
+      try{file.headerSha256=prefix.headerSha256}finally{await prefix.cleanup()}
+     }catch(error){if(signal.aborted)throw error;file.sourceError=String(error.code||'AUDIT_SOURCE_READ_FAILED')}
     }
     const state=await readState()
     const result=await recoverAuditSweep({descriptor,inventory,state,signal,budget:4,
      scan:(file,shape,s)=>scanSourceFile(file,shape,s,{tool,optionsFile,root:spools,readDescriptor:()=>describeRecoverySource(db)}),
      apply:bundle=>captureRecovery(db,bundle),save:saveState})
     const ready=result.completeFiles===result.totalFiles&&!Object.keys(result.errors).length
-    if(ready)await retryRecoveryQueue(db,importAuditRecovery)
+    await retryRecoveryQueue(db,importAuditRecovery,{deferAttribution:!ready})
     result.pendingRecords=(await describeRecoverySource(db)).pendingRecords
     if(ready&&result.pendingRecords){result.state='error';result.code='AUDIT_RECOVERY_PENDING'}
     await saveState(result)
@@ -81,7 +86,7 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
   }catch(error){
    const denied=['ER_SPECIFIC_ACCESS_DENIED_ERROR','ER_ACCESS_DENIED_ERROR'].includes(error.code)
    const code=denied?'AUDIT_SOURCE_READ_PERMISSION_REQUIRED':String(error.code||'AUDIT_RECOVERY_FAILED')
-   if(lease&&!signal.aborted)await recordRecoveryStatus(db,{version:1,state:'error',sourceUuid:descriptor?.serverUuid,code}).catch(()=>{})
+   if(lease&&!signal.aborted)await recordRecoveryStatus(db,{version:1,state:'error',sourceUuid:descriptor?.serverUuid,pendingRecords:await describeRecoverySource(db).then(s=>s.pendingRecords).catch(()=>0),code}).catch(()=>{})
    console.warn('[audit-recovery]',{code})
   }finally{
    signal.removeEventListener('abort',abort)

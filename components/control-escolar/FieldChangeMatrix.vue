@@ -23,7 +23,7 @@
       <div v-if="showDatePicker" class="custom-dates"><label>Desde<input v-model="customFrom" type="date" :max="customTo"/></label><label>Hasta<input v-model="customTo" type="date" :min="customFrom" :max="today"/></label></div>
       <div v-if="!validDates" class="status-notice" role="alert">Selecciona un periodo de hasta 90 días.</div>
       <div v-if="queryError || historyUnavailable" class="status-notice" role="alert" :data-request-id="historyRequestId"><span>{{ queryError?'No se pudo cargar el historial.':'No se pudo cargar parte del historial.' }}</span><button type="button" class="text-button" :disabled="busy" @click="refreshAll">Reintentar</button><small v-if="historyRequestId">Ref. {{ historyRequestId }}</small></div>
-      <div v-if="history?.partial || data?.truncated || history?.truncated" class="status-notice" role="status">Faltan cambios por mostrar.<button type="button" class="text-button" @click="refreshAll">Reintentar</button></div>
+      <div v-if="history?.partial || data?.truncated || history?.truncated" class="status-notice" role="status">Faltan cambios por mostrar.<small v-if="historyRequestId">Ref. {{ historyRequestId }}</small><button type="button" class="text-button" @click="refreshAll">Reintentar</button></div>
       <div class="chart-toolbar"><span>Más recientes primero</span><nav class="chart-nav" aria-label="Recorrer fechas"><button type="button" :disabled="!canSeeNewer" @click="moveChart(-1)"><LucideChevronLeft :size="16"/><span>Más recientes</span></button><button type="button" :disabled="!canSeeOlder" @click="moveChart(1)"><span>Más antiguas</span><LucideChevronRight :size="16"/></button></nav></div>
       <div v-if="!busy && !queryError && !historyUnavailable && !filteredEvents.length" class="empty-result" role="status"><LucideInbox :size="22"/><strong>{{ hasFilters?'Sin cambios con estos filtros':'Sin cambios en este periodo' }}</strong><button v-if="hasFilters" type="button" class="text-button" @click="resetFilters">Limpiar filtros</button></div>
       <div ref="matrixScroller" class="matrix-scroll" @scroll="updateScrollBounds" tabindex="0" aria-label="Cambios por campo y fecha" :aria-busy="busy">
@@ -117,6 +117,24 @@ const fetchQuery=computed(()=>({
 const {data,status,error,refresh}=useFetch<MainResponse>('/api/control-escolar/audit/changes',{
   query:fetchQuery,server:false,cache:'no-store',default:()=>({categories:[],allowedPlanteles:[],events:[],truncated:false})
 })
+// Stored evidence can arrive while this view is open. Refresh it without
+// rerunning the log search or resetting filters, selection, focus or scroll.
+let storedPoll:ReturnType<typeof setInterval>|null=null
+let storedController:AbortController|null=null
+let storedBusy=false
+const refreshStored=async()=>{
+  if(storedBusy||status.value==='pending'||document.visibilityState!=='visible')return
+  storedBusy=true;storedController=new AbortController()
+  const query={...fetchQuery.value},scope=JSON.stringify(query)
+  try{
+    const result=await $fetch<MainResponse>('/api/control-escolar/audit/changes',{query,signal:storedController.signal})
+    if(scope===JSON.stringify(fetchQuery.value))data.value=result
+  }catch{/* Keep visible evidence; explicit refresh retains its error handling. */}
+  finally{storedBusy=false}
+}
+onMounted(()=>{storedPoll=setInterval(()=>void refreshStored(),20000)})
+onBeforeUnmount(()=>{if(storedPoll)clearInterval(storedPoll);storedController?.abort()})
+watch(fetchQuery,()=>storedController?.abort())
 const {data:history,status:historyStatus,error:historyError,refresh:refreshHistory}=useFetch<HistoryResponse>('/api/control-escolar/audit/history',{
   query:fetchQuery,server:false,cache:'no-store',default:()=>({events:[],available:true,truncated:false})
 })

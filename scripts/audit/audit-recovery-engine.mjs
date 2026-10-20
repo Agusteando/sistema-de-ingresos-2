@@ -18,6 +18,7 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  const ready=[]
  for(const file of newest){
   if(signal?.aborted||paused()){next.state='paused';break}
+  if(file.sourceError){next.errors[file.name]=file.sourceError;continue}
   if(!/^mysql-bin\.\d{6,}$/.test(file.name)||!/^\d+$/.test(String(file.size))||!/^([a-f0-9]{64})$/.test(file.headerSha256))fail('AUDIT_SOURCE_FILE_INVALID')
   const key=recoveryFileKey(file,descriptor),checkpoint=entries[key]
   if(schemaBoundary&&file.name<=schemaBoundary){next.errors[file.name]='AUDIT_SCHEMA_HISTORY_REQUIRED';continue}
@@ -57,10 +58,13 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  // after older files had been queued; no ordinal-dependent import is permitted.
  const currentKeys=new Set(files.map(file=>recoveryFileKey(file,descriptor)))
  next.files=Object.fromEntries(Object.entries(next.files).filter(([key])=>currentKeys.has(key)))
+ const names=new Set(files.map(file=>file.name))
+ next.expiredFiles=[...new Set([...(state.expiredFiles||[]),...Object.keys(next.errors).filter(name=>!names.has(name))])]
+ next.errors=Object.fromEntries(Object.entries(next.errors).filter(([name])=>names.has(name)))
  next.schemaBoundary=schemaBoundary;next.schemaFingerprint=descriptor.schemaFingerprint
  next.completeFiles=files.filter(file=>{const checkpoint=next.files[recoveryFileKey(file,descriptor)];return checkpoint?.complete&&checkpoint.size===String(file.size)}).length
  next.totalFiles=files.length
- next.retentionGap=Boolean(descriptor.oldestAudit&&next.oldestAvailableAt&&descriptor.oldestAudit<next.oldestAvailableAt)
+ next.retentionGap=next.expiredFiles.length>0||Boolean(descriptor.oldestAudit&&next.oldestAvailableAt&&descriptor.oldestAudit<next.oldestAvailableAt)
  if(next.state!=='paused')next.state=Object.keys(next.errors).length?'error':next.completeFiles===files.length?(next.retentionGap?'retention-gap':'caught-up'):'running'
  next.updatedAt=new Date().toISOString();next.worked=worked
  await save(next)

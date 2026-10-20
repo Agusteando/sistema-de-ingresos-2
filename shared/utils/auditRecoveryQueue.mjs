@@ -37,15 +37,17 @@ export async function captureRecovery(db,bundle){
  const rows=await enqueueRecovery(db,bundle)
  return {applied:true,results:rows.map(row=>({matricula:row.item.matricula,field:row.item.field,status:'captured'}))}
 }
-export async function drainRecoveryRows(db,rows,importer){
+export async function drainRecoveryRows(db,rows,importer,{deferAttribution=false}={}){
  const results=[]
  for(const row of rows){
   const payload=parseAuditPayload(row.payload),source=payload.sourceRecord
   try{
    const [[count]]=await db.execute("SELECT COUNT(*) AS count FROM control_escolar_audit_events WHERE event_type='audit_recovery_pending' AND matricula=? AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.sourceRecord.field'))=? AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.sourceRecord.recordedAt'))=?",[source.matricula,source.field,source.recordedAt])
-   const result=await importer(db,{version:1,records:[source]},{apply:true,sourceAmbiguous:Number(count.count)>1})
+   const result=await importer(db,{version:1,records:[source]},{apply:true,sourceAmbiguous:Number(count.count)>1,deferAttribution})
    if(result.applied!==true||result.results?.length!==1||!['imported','already-imported','already-verified'].includes(result.results[0].status))throw Error('AUDIT_QUEUE_IMPORT_UNCONFIRMED')
-   await db.execute("UPDATE control_escolar_audit_events SET payload=JSON_SET(JSON_REMOVE(payload,'$.lastError'),'$.state','applied'),created_at=NOW() WHERE event_type='audit_recovery_pending' AND source_flow='audit_recovery_service' AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.fingerprint'))=?",[payload.fingerprint])
+   const deferred=result.results[0].attributionPending===true
+   const state=deferred?'projected':'applied'
+   await db.execute("UPDATE control_escolar_audit_events SET payload=JSON_SET(JSON_REMOVE(payload,'$.lastError'),'$.state',?),created_at=NOW() WHERE event_type='audit_recovery_pending' AND source_flow='audit_recovery_service' AND JSON_UNQUOTE(JSON_EXTRACT(payload,'$.fingerprint'))=?",[state,payload.fingerprint])
    results.push(result.results[0])
   }catch(error){
    const code=String(error.code||error.message||'AUDIT_RECOVERY_FAILED').slice(0,80)
@@ -57,7 +59,7 @@ export async function drainRecoveryRows(db,rows,importer){
  }
  return {applied:true,results}
 }
-export async function retryRecoveryQueue(db,importer){
+export async function retryRecoveryQueue(db,importer,options={}){
  const [rows]=await db.query("SELECT id,payload FROM control_escolar_audit_events WHERE event_type='audit_recovery_pending' AND source_flow='audit_recovery_service' AND COALESCE(JSON_UNQUOTE(JSON_EXTRACT(payload,'$.state')),'pending') <> 'applied' ORDER BY created_at,id LIMIT 1000")
- return drainRecoveryRows(db,rows,importer)
+ return drainRecoveryRows(db,rows,importer,options)
 }

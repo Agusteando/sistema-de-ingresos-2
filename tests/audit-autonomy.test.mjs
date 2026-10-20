@@ -54,3 +54,14 @@ test('official packaged reader validates source CRC and cancels cleanly',{skip:!
   const abort=new AbortController();abort.abort();await assert.rejects(runReader(process.env.AUDIT_READER_TEST_BIN,[],{signal:abort.signal}),/PAUSED/)
  }finally{await rm(root,{recursive:true,force:true})}
 })
+
+
+test('operational diagnosis distinguishes missing access, queued projection and incomplete coverage without writes or student data',async()=>{
+ const {diagnoseRecovery}=await import('../scripts/audit/diagnostics.mjs')
+ const queries=[]
+ const db={query:async sql=>{queries.push(sql);return sql.includes("event_type='audit_recovery_status'")?[[{payload:{state:'running',pendingRecords:2,completeFiles:1,files:4}}]]:[[{state:'projected',code:null,count:2}]]}}
+ const result=await diagnoseRecovery(db,async()=>{throw Object.assign(Error('denied'),{code:'ER_SPECIFIC_ACCESS_DENIED_ERROR'})})
+ assert.equal(result.source.ready,false);assert.equal(result.source.code,'ER_SPECIFIC_ACCESS_DENIED_ERROR')
+ assert.equal(result.recovery.pendingRecords,2);assert.equal(result.inbox[0].state,'projected')
+ assert.ok(queries.every(sql=>sql.startsWith('SELECT')));assert.doesNotMatch(JSON.stringify(result),/password|matricula|sourceRecord/)
+})
