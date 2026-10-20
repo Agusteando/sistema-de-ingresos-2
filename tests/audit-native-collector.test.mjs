@@ -6,8 +6,8 @@ import {Readable} from 'node:stream'
 import {diskPressureRequiresYield} from '../scripts/audit-recovery-worker.mjs'
 import {readFileSync} from 'node:fs'
 test('historical recovery yields only under severe kernel I/O pressure',()=>{
- const heavy='some avg10=34.14 avg60=32.00 avg300=30.00 total=10\\nfull avg10=30.77 avg60=32.60 avg300=32.85 total=9'
- const light='some avg10=4.00 avg60=5.00 avg300=6.00 total=10\\nfull avg10=1.77 avg60=2.60 avg300=2.85 total=9'
+ const heavy='some avg10=34.14 avg60=32.00 avg300=30.00 total=10\nfull avg10=30.77 avg60=32.60 avg300=32.85 total=9'
+ const light='some avg10=4.00 avg60=5.00 avg300=6.00 total=10\nfull avg10=1.77 avg60=2.60 avg300=2.85 total=9'
  assert.equal(diskPressureRequiresYield(heavy),true)
  assert.equal(diskPressureRequiresYield(light),false)
  assert.equal(diskPressureRequiresYield(''),false)
