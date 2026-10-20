@@ -1,4 +1,3 @@
-import {canonicalRecoveryField,indexAuditRecoveries,validateBinlogRecovery} from '~/shared/utils/auditRecovery.mjs'
 import { controlEscolarCentralQuery } from './control-escolar-central'
 import { buildWorkspacePhotoUrl, isCasitaWorkspaceEmail } from './google-workspace-directory'
 import { cleanAuditAvatar, loadAuditStaffProfiles } from './audit-actor-profile'
@@ -56,14 +55,13 @@ const safeValue = (value: any): string | null => {
   return text.slice(0, 500)
 }
 
-export const canonicalAuditField=(value:unknown)=>canonicalRecoveryField(value)
+export const canonicalAuditField=(value:unknown)=>{
+  const field=String(value||'').replace(/[_\s-]/g,'').toLowerCase()
+  return ({group:'grupo',nombre:'nombres',status:'estatus'} as Record<string,string>)[field]||field
+}
 
 export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>{
   const keys = Array.from(new Set(selected.map((row) => String(row.matricula || '').toUpperCase()).filter(Boolean)))
-  const recoveryRows=keys.length?await controlEscolarCentralQuery<any[]>(
-    "SELECT id,event_type,matricula,plantel,payload FROM control_escolar_audit_events WHERE event_type = 'student_update_recovery' AND matricula IN ("+keys.map(()=>'?').join(',')+") LIMIT 10001",keys):[]
-  if(recoveryRows.length>10000)throw Object.assign(new Error('Recovery evidence query limit reached'),{code:'AUDIT_RECOVERY_LIMIT'})
-  const recovered=indexAuditRecoveries(selected,recoveryRows)
   const nameByMatricula = new Map<string, string>()
   for (let start = 0; start < keys.length; start += 200) {
     const batch = keys.slice(start, start + 200)
@@ -84,8 +82,6 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
   for (const row of selected) {
     const payload = safePayload(row.payload)
     const hasDiff = Array.isArray(payload.changes)
-    const standalone=payload.recoveryVersion===1&&payload.sourceRecord?validateBinlogRecovery(payload.sourceRecord):null
-    if(standalone&&(standalone.matricula!==String(row.matricula||'').toUpperCase()||standalone.recordedAt!==String(row.recorded_at||'').slice(0,19)))throw Object.assign(new Error('Recovered source identity/time mismatch'),{code:'AUDIT_RECOVERY_LINK_CONFLICT'})
     const fields = hasDiff ? payload.changes : (Array.isArray(payload.fields)
       ? payload.fields.map((field: unknown) => ({ field, before: null, after: null }))
       : [])
@@ -103,7 +99,6 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
       const change = fields[i] || {}
       const field = String(change.field || '').slice(0, 90)
       if (!field || fieldCategory(field)==='grado') continue
-      const recovery=recovered.get(String(row.id)+'|'+canonicalRecoveryField(field))||(standalone&&canonicalRecoveryField(standalone.field)===canonicalRecoveryField(field)?{...standalone,originalEventId:null,recoveryEventId:String(row.id),fingerprint:payload.fingerprint,actorEvidence:'unresolved'}:null)
       changes.push({
         id: String(row.id) + ':' + i,
         eventId: Number(row.id),
@@ -114,8 +109,8 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
         field,
         fieldLabel: fieldLabel(field),
         category: fieldCategory(field),
-        before: recovery ? recovery.before : hasDiff ? safeValue(change.before) : null,
-        after: recovery ? recovery.after : hasDiff ? safeValue(change.after) : null,
+        before: hasDiff ? safeValue(change.before) : null,
+        after: hasDiff ? safeValue(change.after) : null,
         source,
         actor,
         actorEmail,
@@ -123,21 +118,11 @@ export const buildAuditChanges=async(selected:any[],_preserveAllRecords=false)=>
           ? staffProfiles.get(actorEmail)?.avatar || buildWorkspacePhotoUrl(actorEmail, actor)
           : cleanAuditAvatar(payload.avatar),
         flow: sourceFlow,
-        quality: hasDiff || recovery ? 'verified' : 'historical',
-        ...(recovery?{recovery:{...recovery.evidence,originalEventId:recovery.originalEventId,recoveryEventId:recovery.recoveryEventId,fingerprint:recovery.fingerprint,actorEvidence:recovery.actorEvidence||'existing-audit-record'}}:{}),
+        quality: hasDiff ? 'verified' : 'historical',
         plantel: String(row.plantel || ''),
         ciclo: String(row.ciclo || '')
       })
     }
   }
   return changes
-}
-
-export const readAuditRecoveryCoverage=async()=>{
-  try{
-    const rows=await controlEscolarCentralQuery<any[]>("SELECT payload FROM control_escolar_audit_events WHERE event_type='audit_recovery_status' AND source_flow='audit_recovery_service' ORDER BY id DESC LIMIT 1",[])
-    const status=safePayload(rows[0]?.payload)
-    if(status.version!==1||!['running','caught-up','error','paused','retention-gap'].includes(status.state))return {state:'not-started'}
-    return {state:status.state,pendingRecords:Number(status.pendingRecords||0),completeFiles:Number(status.completeFiles||0),files:Number(status.files||0),retentionGap:status.retentionGap===true,updatedAt:String(status.updatedAt||''),code:String(status.code||'')}
-  }catch{return {state:'unavailable',code:'AUDIT_RECOVERY_STATUS_UNAVAILABLE'}}
 }

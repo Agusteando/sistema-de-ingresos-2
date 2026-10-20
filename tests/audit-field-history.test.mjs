@@ -4,15 +4,13 @@ import {readFileSync} from 'node:fs'
 import {createContext,runInContext} from 'node:vm'
 import ts from 'typescript'
 const timeline=readFileSync(new URL('../shared/utils/auditTimeline.ts',import.meta.url),'utf8').replace(/export /g,'')
-const recovery=readFileSync(new URL('../shared/utils/auditRecovery.mjs',import.meta.url),'utf8').replace(/export /g,'')
-const caseBundle=JSON.parse(readFileSync(new URL('./fixtures/audit-recovery-pm1626.json',import.meta.url),'utf8'))
 const util=readFileSync(new URL('../server/utils/audit-change-events.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace(/export /g,'')
 const handler=readFileSync(new URL('../server/api/control-escolar/audit/field-history.get.ts',import.meta.url),'utf8').replace(/^import .*$/gm,'').replace('export default defineEventHandler','globalThis.handler=defineEventHandler')
 const row=(id,field='grupo',at='2025-01-02 12:00:00')=>({id,matricula:'PT0123',plantel:'PT',recorded_at:at,cursor_at:at+'.000123',actor_name:'Erika Ramos',actor_email:'erika@casitaiedis.edu.mx',source_flow:'aurora',payload:JSON.stringify({changes:[{field,before:'A',after:'B'}]})})
-function setup({rows=[row(2)],recoveries=[],studentRow=null,query={},history=async()=>({events:[],available:true,partial:false,truncated:false}),user={hasControlEscolarRole:true,plantelesList:['PT']},failDb=false}={}){
+function setup({rows=[row(2)],studentRow=null,query={},history=async()=>({events:[],available:true,partial:false,truncated:false}),user={hasControlEscolarRole:true,plantelesList:['PT']},failDb=false}={}){
  const calls=[],historyCalls=[]
- const ctx=createContext({Intl,Date,Buffer,getCentralTableColumns:async()=>new Set(['grupo']),console:{warn(){}},PLANTELES_LIST:['PT','PM'],getTrustedAuthUser:async()=>user,normalizePlantel:v=>String(v||'').toUpperCase(),getQuery:()=>({matricula:'PT0123',plantel:'PT',field:'grupo',...query}),setResponseHeader(){},defineEventHandler:fn=>fn,createError:v=>Object.assign(new Error(v.message),v),loadAuditStaffProfiles:async()=>new Map(),isCasitaWorkspaceEmail:()=>false,buildWorkspacePhotoUrl:()=>'',cleanAuditAvatar:()=>'',loadHistoricalActions:async args=>{historyCalls.push(args);return history(args)},controlEscolarCentralQuery:async(sql,params)=>{calls.push({sql,params});if(failDb)throw new Error('db down');if(sql.includes("event_type = 'student_update_recovery'"))return recoveries;return sql.includes('FROM matricula')?[studentRow||{matricula:'PT0123',nombres:'Ana María',apellido_paterno:'García',apellido_materno:'López',audit_current_value:'B'}]:rows}})
- runInContext(ts.transpile(timeline+'\n'+recovery+'\n'+util+'\n'+handler,{target:ts.ScriptTarget.ES2022}),ctx)
+ const ctx=createContext({Intl,Date,Buffer,getCentralTableColumns:async()=>new Set(['grupo']),console:{warn(){}},PLANTELES_LIST:['PT','PM'],getTrustedAuthUser:async()=>user,normalizePlantel:v=>String(v||'').toUpperCase(),getQuery:()=>({matricula:'PT0123',plantel:'PT',field:'grupo',...query}),setResponseHeader(){},defineEventHandler:fn=>fn,createError:v=>Object.assign(new Error(v.message),v),loadAuditStaffProfiles:async()=>new Map(),isCasitaWorkspaceEmail:()=>false,buildWorkspacePhotoUrl:()=>'',cleanAuditAvatar:()=>'',loadHistoricalActions:async args=>{historyCalls.push(args);return history(args)},controlEscolarCentralQuery:async(sql,params)=>{calls.push({sql,params});if(failDb)throw new Error('db down');return sql.includes('FROM matricula')?[studentRow||{matricula:'PT0123',nombres:'Ana María',apellido_paterno:'García',apellido_materno:'López',audit_current_value:'B'}]:rows}})
+ runInContext(ts.transpile(timeline+'\n'+util+'\n'+handler,{target:ts.ScriptTarget.ES2022}),ctx)
  return {build:async records=>{ctx.forensicRows=records;return runInContext('buildAuditChanges(forensicRows)',ctx)},invoke:()=>ctx.handler({context:{auroraRequestId:'field-test'}}),calls,historyCalls}
 }
 test('all-time exact-field history contains full names, values and actors; includes older years and ignores grid filters',async()=>{
@@ -77,29 +75,6 @@ test('default ledger projection retains separate same-minute legacy evidence ins
  const events=await setup().build([row(2),legacy])
  assert.equal(events.length,2);assert.equal(events[0].quality,'verified');assert.equal(events[1].quality,'historical')
 })
-
-test('PM1626 real source evidence powers the stored field API while preserving original data and actor',async()=>{
- const original={...row(5629),event_type:'student_update',matricula:'PM1626',plantel:'PM',recorded_at:'2026-10-14 13:59:53.000000',actor_name:'Erika Ramos Escalera',payload:JSON.stringify({fields:['grupo']})}
- const recoveryRow={id:9000,event_type:'student_update_recovery',matricula:'PM1626',plantel:'PM',payload:JSON.stringify({originalEventId:'5629',sourceRecord:caseBundle.records[0],fingerprint:'case-source'})}
- const recent=(id,time,before,after)=>({...row(id),event_type:'student_update',matricula:'PM1626',plantel:'PM',recorded_at:'2026-10-19 '+time,payload:JSON.stringify({changes:[{field:'grupo',before,after}]})})
- const before=original.payload
- const s=setup({rows:[recent(5749,'09:15:54.000000','','ANTÁRTIDA'),recent(5747,'09:15:47.000000','AMÉRICA',''),original],recoveries:[recoveryRow],studentRow:{matricula:'PM1626',nombres:'Josue Emiliano',apellido_paterno:'Garcia',apellido_materno:'Jardon',audit_current_value:'ANTÁRTIDA'},query:{matricula:'PM1626',plantel:'PM',field:'grupo',phase:'stored'},user:{isSuperAdmin:true,plantelesList:['PM']}})
- const result=await s.invoke(),restored=result.events.find(event=>event.eventId===5629)
- assert.equal(restored.before,'ANTÁRTIDA');assert.equal(restored.after,'AMÉRICA')
- assert.equal(restored.actor,'Erika Ramos Escalera');assert.equal(restored.quality,'verified')
- assert.equal(restored.student,'Josue Emiliano Garcia Jardon')
- assert.equal(restored.recovery.file,'mysql-bin.000335');assert.equal(restored.recovery.position,'500848402')
- assert.equal(restored.recovery.actorEvidence,'existing-audit-record')
- assert.equal(result.events.length,3);assert.equal(result.currentValue,'ANTÁRTIDA');assert.equal(original.payload,before)
- assert.equal(s.historyCalls.length,0)
-})
-
-test('unattributed recovered writes retain their source evidence and never borrow an actor',async()=>{
- const entry={...row(9001),event_type:'student_update',matricula:'PM1626',plantel:'PM',recorded_at:'2026-10-14 13:59:53.000000',actor_name:'Sin identificar',actor_email:'',source_flow:'mysql_binlog_recovered',payload:JSON.stringify({recoveryVersion:1,fingerprint:'source-fixture',sourceRecord:caseBundle.records[0],changes:[{field:'grupo',before:'ANTÁRTIDA',after:'AMÉRICA'}]})}
- const result=await setup().build([entry])
- assert.equal(result[0].before,'ANTÁRTIDA');assert.equal(result[0].after,'AMÉRICA');assert.equal(result[0].actor,'Sin identificar');assert.equal(result[0].source,'Otro');assert.equal(result[0].recovery.actorEvidence,'unresolved');assert.equal(result[0].recovery.position,'500848402')
-})
-
 
 test('audit separates CURP/photo/status and excludes grade without moving it to Other',async()=>{
  const excluded=['grado','nivel','ciclo','lastGrade','lastCiclo']
