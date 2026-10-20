@@ -44,6 +44,7 @@ export default defineEventHandler(async (event) => {
   const selected = rows.slice(0, limit)
   const changes = await buildAuditChanges(selected)
   return {
+    recovery:await readAuditRecoveryCoverage(),
     categories: CATEGORIES,
     allowedPlanteles: allowed.filter(item => PLANTELES_LIST.includes(item)),
     events: changes,

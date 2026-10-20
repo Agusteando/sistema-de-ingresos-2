@@ -7,6 +7,7 @@ on:
       - 'shared/utils/audit*.ts'
       - 'shared/utils/audit*.mjs'
       - 'scripts/import-audit-recovery.mjs'
+      - 'scripts/audit-recovery-service.mjs'
       - 'scripts/read-audit-binlog.py'
       - 'tests/audit-binlog-reader.test.py'
       - 'server/utils/audit-change-events.ts'
@@ -25,6 +26,21 @@ jobs:
   source-regression:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: audit-ci
+          MYSQL_ROOT_HOST: '%'
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -paudit-ci"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=12
+    env:
+      AUDIT_TEST_MYSQL_URL: mysql://root:audit-ci@127.0.0.1:3306
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4

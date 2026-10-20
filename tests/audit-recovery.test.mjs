@@ -48,3 +48,11 @@ test('projection binds source values to an original ID, campus, student and fiel
  assert.equal(indexAuditRecoveries([anchor(1)],[evidence()]).size,0)
  assert.throws(()=>indexAuditRecoveries([original],[evidence(),evidence({...input,afterSql:"'ÁFRICA'"})]))
 })
+
+
+test('separate detailed transitions in one second can each be verified exactly',()=>{
+ const one=anchor(1,{payload:{changes:[{field:'grupo',before:item.before,after:item.after}]}})
+ const two=anchor(2,{payload:{changes:[{field:'grupo',before:item.after,after:'ÁFRICA'}]}})
+ assert.equal(selectRecoveryTarget(item,[one,two]).row.id,1)
+ assert.equal(selectRecoveryTarget(item,[one,{...one,id:3}]).kind,'conflict')
+})

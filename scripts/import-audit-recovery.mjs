@@ -5,7 +5,7 @@ import {pathToFileURL} from 'node:url'
 import {validateBinlogRecovery,recoverySourceKey,selectRecoveryTarget,parseAuditPayload,canonicalRecoveryField,recoveryError} from '../shared/utils/auditRecovery.mjs'
 const digest=value=>createHash('sha256').update(value).digest('hex')
 const literal=value=>value===null?'NULL':"'"+String(value).replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/\0/g,'\\0').replace(/\n/g,'\\n').replace(/\r/g,'\\r').replace(/\t/g,'\\t')+"'"
-export const importAuditRecovery=async(connection,bundle,{apply=false}={})=>{
+export const importAuditRecovery=async(connection,bundle,{apply=false,sourceAmbiguous=false}={})=>{
  if(bundle?.version!==1||!Array.isArray(bundle.records)||!bundle.records.length||bundle.records.length>1000)throw recoveryError('INVALID_RECOVERY_BUNDLE','Provide 1 to 1000 source records')
  const records=bundle.records.map(sourceRecord=>({sourceRecord,item:validateBinlogRecovery(sourceRecord)}))
  const [[database]]=await connection.query('SELECT DATABASE() AS name')
@@ -32,8 +32,9 @@ export const importAuditRecovery=async(connection,bundle,{apply=false}={})=>{
    }
    const [students]=await connection.execute('SELECT id FROM matricula WHERE UPPER(matricula) = ?',[item.matricula])
    if(students.length!==1||String(students[0].id)!==item.rowId)throw recoveryError('RECOVERY_STUDENT_MISMATCH','Source primary key does not match the student')
-   const [anchors]=await connection.execute("SELECT id,event_type,matricula,plantel,ciclo,actor_email,actor_name,actor_role,source_flow,payload,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') AS recorded_at FROM control_escolar_audit_events WHERE event_type = 'student_update' AND matricula = ? AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 SECOND) FOR UPDATE",[item.matricula,item.recordedAt,item.recordedAt])
-   const target=selectRecoveryTarget(item,anchors)
+   const [anchors]=await connection.execute("SELECT id,event_type,matricula,plantel,ciclo,actor_email,actor_name,actor_role,source_flow,payload,DATE_FORMAT(created_at,'%Y-%m-%d %H:%i:%s.%f') AS recorded_at FROM control_escolar_audit_events WHERE event_type = 'student_update' AND COALESCE(source_flow,'') <> 'mysql_binlog_recovered' AND matricula = ? AND created_at >= ? AND created_at < DATE_ADD(?, INTERVAL 1 SECOND) FOR UPDATE",[item.matricula,item.recordedAt,item.recordedAt])
+   let target=selectRecoveryTarget(item,anchors)
+   if(sourceAmbiguous&&target.kind==='linked')target={kind:'unattributed',candidates:[String(target.row.id)]}
    if(target.kind==='conflict')throw recoveryError('RECOVERY_LEDGER_CONFLICT','Source values conflict with an existing detailed audit record')
    if(target.kind==='already-verified'){results.push({matricula:item.matricula,field:item.field,status:'already-verified',originalEventId:String(target.row.id)});continue}
    const linked=target.kind==='linked',original=linked?target.row:null

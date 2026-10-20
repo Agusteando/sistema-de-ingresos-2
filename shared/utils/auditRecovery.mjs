@@ -37,12 +37,13 @@ export const validateBinlogRecovery=input=>{
  if(!/^[a-f0-9]{8}$/i.test(evidence.crc32||'')||!/^[a-f0-9]{64}$/i.test(evidence.decodedRowSha256||''))fail('Missing source checksums')
  if(evidence.committed!==true||evidence.fullImages!==true||evidence.checksumVerified!==true)fail('Committed, checked full row images required')
  if(!Number.isInteger(evidence.identityOrdinal)||evidence.identityOrdinal<1||!Number.isInteger(evidence.fieldOrdinal)||evidence.fieldOrdinal<1||evidence.identityOrdinal===evidence.fieldOrdinal)fail('Invalid source column map')
+ if(evidence.sourceServerUuid!==undefined&&(!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(evidence.sourceServerUuid)||!/^[a-f0-9]{64}$/i.test(evidence.sourceFileHeaderSha256||'')))fail('Invalid source server/file identity')
  const before=parseBinlogLiteral(input.beforeSql),after=parseBinlogLiteral(input.afterSql)
  if(before===after)fail('No field change in source')
  return {version:1,matricula:input.matricula,field:input.field,recordedAt:input.recordedAt,rowId:input.rowId,
   before:safeRecoveredValue(input.field,before),after:safeRecoveredValue(input.field,after),evidence:{...evidence}}
 }
-export const recoverySourceKey=item=>JSON.stringify([item.evidence.schema,item.evidence.table,item.evidence.file,item.evidence.position,item.rowId,canonicalRecoveryField(item.field)])
+export const recoverySourceKey=item=>JSON.stringify([item.evidence.schema,item.evidence.table,item.evidence.file,item.evidence.position,item.rowId,canonicalRecoveryField(item.field),...(item.evidence.sourceServerUuid?[item.evidence.sourceServerUuid,item.evidence.sourceFileHeaderSha256||'']:[])])
 export const auditRowFields=row=>{
  const payload=parseAuditPayload(row.payload)
  return Array.isArray(payload.changes)?payload.changes.map(change=>change.field):Array.isArray(payload.fields)?payload.fields:[]
@@ -52,7 +53,7 @@ export const selectRecoveryTarget=(item,rows)=>{
  const matches=rows.filter(row=>row.event_type==='student_update'&&recoveryMatchesRow(item,row))
  const detailed=matches.filter(row=>Array.isArray(parseAuditPayload(row.payload).changes))
  const exact=detailed.filter(row=>parseAuditPayload(row.payload).changes.some(change=>canonicalRecoveryField(change.field)===canonicalRecoveryField(item.field)&&change.before===item.before&&change.after===item.after))
- if(exact.length===1&&detailed.length===1)return {kind:'already-verified',row:exact[0]}
+ if(exact.length===1)return {kind:'already-verified',row:exact[0]}
  if(detailed.length)return {kind:'conflict',candidates:matches.map(row=>String(row.id))}
  return matches.length===1?{kind:'linked',row:matches[0]}:{kind:matches.length?'ambiguous':'unattributed',candidates:matches.map(row=>String(row.id))}
 }
