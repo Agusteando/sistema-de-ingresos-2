@@ -1,5 +1,6 @@
 import {createRequire} from 'node:module'
 import {mkdir,readFile,rename,open} from 'node:fs/promises'
+import {readFileSync} from 'node:fs'
 import {join} from 'node:path'
 import {describeRecoverySource,recordRecoveryStatus} from './audit/service.mjs'
 import {captureRecovery,retryRecoveryQueue} from '../shared/utils/auditRecoveryQueue.mjs'
@@ -8,6 +9,19 @@ import {recoverAuditSweep,recoveryFileKey} from './audit/audit-recovery-engine.m
 import {withSourceOptions,downloadRaw,scanSourceFile,replayVerifiedSpools} from './audit/native-source.mjs'
 
 const fail=code=>{throw Object.assign(Error(code),{code})}
+
+// Aurora historical source recovery is best-effort background I/O, never a
+// reason to stall production image builds sharing the host's disk mirror.
+// Linux PSI 'full avg10' measures system-wide I/O stalls, not CPU utilization.
+// Fail open where this procfs interface is unavailable.
+export const diskPressureRequiresYield=(text,limit=12)=>{
+ const match=String(text||'').match(/^full\\s+avg10=([0-9]+(?:\\.[0-9]+)?)/m)
+ return match?Number(match[1])>=limit:false
+}
+const shouldYieldToForegroundIo=()=>{
+ try{return diskPressureRequiresYield(readFileSync('/proc/pressure/io','utf8'))}
+ catch{return false}
+}
 export const sourceConfiguration=(e=process.env)=>({
  host:e.CONTROL_ESCOLAR_MYSQL_HOST,port:Number(e.CONTROL_ESCOLAR_MYSQL_PORT||3306),
  user:e.AUDIT_SOURCE_MYSQL_USER||e.CONTROL_ESCOLAR_MYSQL_USER,
@@ -68,10 +82,21 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
     statusSnapshot={...snapshot,...extra,version:1,sourceUuid:inventory.serverUuid,files:inventory.files.length,pendingRecords:(await describeRecoverySource(db)).pendingRecords}
     return recordRecoveryStatus(db,statusSnapshot)
    }
+   if(shouldYieldToForegroundIo()){
+     // No checkpoint, pending verified spool or source evidence is discarded.
+     // The normal minute scheduler resumes the same recovery automatically
+     // once the shared disks are responsive again.
+     await publish(state,{state:'paused',phase:'io-backpressure',currentFile:''})
+     return
+   }
    await publish(state,{state:'running',phase:'checking-source',currentFile:''})
    await withSourceOptions(spools,connection,async optionsFile=>{
     // Source preambles distinguish log-name reuse; no host file/socket access.
     for(const file of inventory.files){
+     if(shouldYieldToForegroundIo()){
+       await publish(state,{state:'paused',phase:'io-backpressure',currentFile:''})
+       return
+     }
      try{
       const prefix=await downloadRaw({tool,optionsFile,file,root:spools,signal,preambleOnly:true})
       try{file.headerSha256=prefix.headerSha256}finally{await prefix.cleanup()}
@@ -86,6 +111,7 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
      await publish(snapshot,{state:'running',phase:'scanning',completeFiles,currentFile})
     }
     const result=await recoverAuditSweep({descriptor,inventory,state,signal,budget:4,
+     paused:shouldYieldToForegroundIo,
      scan:async(file,shape,s)=>{
       currentFile=file.name
       await publish(await readState(),{state:'running',phase:'scanning',currentFile:file.name})
