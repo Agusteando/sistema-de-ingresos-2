@@ -2,7 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {readFileSync} from 'node:fs'
 import {captureRecovery,retryRecoveryQueue} from '../shared/utils/auditRecoveryQueue.mjs'
-import {describeRecoverySource,recordRecoveryStatus} from '../scripts/audit-recovery-service.mjs'
+import {describeRecoverySource,recordRecoveryStatus} from '../scripts/audit/service.mjs'
 import {importAuditRecovery} from '../scripts/import-audit-recovery.mjs'
 import {indexAuditRecoveries} from '../shared/utils/auditRecovery.mjs'
 
