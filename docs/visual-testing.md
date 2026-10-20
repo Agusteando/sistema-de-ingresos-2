@@ -271,25 +271,3 @@ Removed minute/time-proximity suppression in both the ledger projection and the 
 Local regression: 78 focused tests and six compiled-Vue browser viewports passed (fixtures, not live source acceptance). The Actions regression and real Loki/runtime evidence remain separate gates before merging this change. Recovery remains unresolved until source records establish the values and attribution; attendance day membership is corroboration, not an invented immediate before/after pair.
 
 The PM1626 live diagnostic exposed a context-query bug: copying `detected_level=unknown` from a matrícula continuation line excludes neighboring info-level headers. Context queries must use stable container identity (plus node when present), without detected-level or other line-derived labels. A successful query alone does not establish complete forensic context.
-
-
-## Binlog recovery evidence and the PM1626 acceptance case
-
-The read API now projects separately stored historical evidence onto the original event/field; it does not rewrite legacy payloads or student records. Recovery entries use the existing audit table with event_type student_update_recovery and remain outside ordinary change counts. The original actor stays the recorded actor; the recovery proves source values, not the physical identity of a person. Evidence records retain the binlog filename, row position, event checksum, Xid/commit position and decoded-row hash.
-
-Operator-only scripts:
-- scripts/read-audit-binlog.py accepts any student, ordinary field, source file/window and verified column ordinals. It downloads and checksum-verifies a temporary Oracle 8.4.11 tool if needed, streams one existing binlog, emits only changed target rows after their commit, and removes temporary files. No SQL is replayed and no database configuration is changed.
-- scripts/import-audit-recovery.mjs reads the resulting JSON bundle on stdin. Preview is the default; --apply appends evidence in one transaction. The existing Aurora DB credentials suffice. It checks the database, current column map, student primary key, committed source anchors and checksums. A lock and source fingerprint make repeated imports idempotent. Conflict rolls back the entire batch.
-- One matching original event in the same student/field/second retains that event's recorded attribution. This is explicitly a correlation to the existing audit record, not a cryptographic request-to-binlog linkage. Multiple candidates or no candidate create an unattributed verified change, rather than picking an actor. Already-detailed exact matches are not duplicated; conflicting detailed values block import.
-- Only the operator CLI can import; there is no new HTTP write endpoint. File references and credential-like values are redacted before persistence. A redacted or truncated pair that no longer expresses a distinguishable change is rejected rather than falsely presented as an exact recovered value.
-- Historic column identity must be checked against source schema changes when applying the tool to a different date/schema. Current ordinals alone cannot prove that a column had the same position before an intervening DDL change.
-
-The real-case regression fixture records the operator-supplied source evidence: PM1626, 2026-10-14 13:59:53 Mexico City, ANTARTIDA (accented) to AMERICA (accented), mysql-bin.000335, position 500848402, Xid 50484068. Its row hash is 7b536d7ffa4c493f6695cc94002a55a60d1f62c0cfeb1eb09b1def73d324986d. Legacy audit event 5629 is the unique existing field operation in that second. The integration regression exercises the real field-history handler, current group, full student name, original actor, exact field scope and untouched original payload.
-
-Runtime gate remains required: import the source bundle on the existing central DB, rerun the same shared API projection against the actual stored evidence, and inspect the authenticated API/drawer. A passing fixture or Actions run alone is not proof that historical production evidence has been imported. August 18 predates the retained binlogs; this case establishes the October 14 change and does not prove it was the first incorrect assignment ever.
-
-Rollback: revert the code commit; original records remain intact. Linked overlays are independent evidence and ignored by the previous API; unattributed recovered writes use the existing student_update shape and remain visible as standard audit entries. No schema migration or student-data rollback is required.
-
-Recovery implementation validation: 91 focused Node tests, four Python reader tests, and six compiled-Vue browser viewports passed with the real-case source fixture flowing through the actual field-history handler into the drawer. The runtime import and authenticated UI acceptance are still pending; these local fixture results are not a claim of production recovery.
-
-Importer safety checks also reject altered identity/commit anchors on repeated source imports and reject a second source binding to an already-linked original field; this prevents conflicting overlays from corrupting read-time history. Ambiguous links require source review rather than silent overwrite.
