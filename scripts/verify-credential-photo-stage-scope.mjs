@@ -27,4 +27,11 @@ assert.match(source,/receipt_url/)
 assert.match(source,/hasReceiptColumn:Boolean\(cRecibo\)/)
 assert.match(source,/if\(cycleMode==='current-photo'/)
 
+
+assert.match(source,/submittedName:clean\(row\.submitted_name,200\)/)
+assert.match(source,/plantel:normalizeExternalControlEscolarPlantel\(row\.campus\)/)
+assert.match(source,/cNombre \?/)
+assert.match(source,/cCampus \?/)
+assert.match(source,/type CredentialStagePhoto = \{/)
+
 console.log('[credential-photo-stage-scope] OK: explicit stage scope reads credenciales directly, carries receipt artifacts, and avoids legacy matricula prerequisites')
