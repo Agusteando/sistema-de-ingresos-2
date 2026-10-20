@@ -3726,6 +3726,7 @@ export const updateControlEscolarStudent = async (
   body: MatriculaPatch,
   user: AuthSessionUser,
   _filters: any = {},
+  auditFlow: 'aurora_control_escolar_write' | 'husky_pass_marketing_parent_update' = 'aurora_control_escolar_write',
 ) => {
   const normalizedMatricula = normalizeText(matricula, 64);
   if (!normalizedMatricula) {
@@ -3770,7 +3771,7 @@ export const updateControlEscolarStudent = async (
     user,
     agentId,
     schema,
-    "aurora_control_escolar_write",
+    auditFlow,
     _filters,
   );
 
