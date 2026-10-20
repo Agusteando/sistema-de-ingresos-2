@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "test:cfdi": "node --experimental-vm-modules --test tests/cfdi-operations.test.mjs",
-    "build": "npm run verify:academic-source && npm run verify:credential-photo-stage && node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
+    "build": "npm run verify:academic-source && npm run verify:credential-photo-stage && npm run verify:credential-applicant-academic && node --max-old-space-size=4096 ./node_modules/nuxt/bin/nuxt.mjs build",
     "dev": "nuxt dev",
     "generate": "nuxt generate",
     "preview": "nuxt preview",
@@ -12,7 +12,8 @@
     "prisma:push": "prisma db push",
     "verify:academic-source": "node scripts/verify-academic-source.mjs",
     "verify:talleres-artwork": "node --experimental-strip-types scripts/verify-talleres-artwork.mjs",
-    "verify:credential-photo-stage": "node scripts/verify-credential-photo-stage-scope.mjs"
+    "verify:credential-photo-stage": "node scripts/verify-credential-photo-stage-scope.mjs",
+    "verify:credential-applicant-academic": "node scripts/verify-credential-applicant-academic.mjs"
   },
   "dependencies": {
     "@prisma/client": "^5.10.2",
