@@ -1,4 +1,5 @@
 import { normalizeCicloKey } from '../../../../../shared/utils/ciclo'
+import { calculatePromotedGrado } from '../../../../../shared/utils/grado'
 import { assertAuroraExternalApiToken, setExternalApiResponseHeaders } from '../../../../utils/external-api-auth'
 import { controlEscolarCentralQuery } from '../../../../utils/control-escolar-central'
 import { readCredentialPhotoStages } from '../../../../utils/control-escolar-credential-photo-stages'
@@ -46,6 +47,10 @@ export default defineEventHandler(async(event)=>{
   const row=rows[0]
   if(!row)throw createError({statusCode:404,statusMessage:'CREDENTIAL_APPLICANT_ACADEMIC_NOT_FOUND'})
 
+  const base=(await controlEscolarCentralQuery<any[]>(`
+    SELECT grado,ciclo,nivel,plantel FROM base
+     WHERE UPPER(TRIM(matricula))=? LIMIT 1
+  `,[matricula]))[0]||{}
   const profile=(await controlEscolarCentralQuery<any[]>(`
     SELECT nombres,apellido_paterno,apellido_materno,baja
       FROM matricula WHERE UPPER(TRIM(matricula))=? LIMIT 1
@@ -58,19 +63,32 @@ export default defineEventHandler(async(event)=>{
   const apellidoMaterno=clean(profile.apellido_materno||snapshot.apellidoMaterno,100)
   const fullName=[nombres,apellidoPaterno,apellidoMaterno].filter(Boolean).join(' ')
     ||clean(snapshot.fullName||row.nombre_completo,255)
+  // Earlier canonical v2 snapshots may contain a double promotion. For
+  // historical applicants use Aurora's SAME current-cycle projection from
+  // base.grado/base.ciclo. This is not an enrollment-status override.
+  const projection=base.grado&&base.ciclo&&
+    normalizeExternalControlEscolarPlantel(base.plantel)===plantel
+    ?calculatePromotedGrado(base.grado,base.plantel,base.ciclo,ciclo,base.nivel)
+    :null
+  const canonicalProjected=Boolean(projection&&!projection.outOfScope&&
+    normalizeExternalControlEscolarPlantel(projection.plantel)===plantel)
+  const currentCanonicalVersion=versions[0]
+  const useProjectedGrade=row.view_version!==currentCanonicalVersion&&canonicalProjected
+  const resolvedGrado=useProjectedGrade?clean(projection?.grado,80):clean(row.grado||snapshot.grado,80)
+  const resolvedNivel=useProjectedGrade?clean(projection?.nivel,80):clean(row.nivel||snapshot.nivel,80)
   const withdrawn=Number(profile.baja||0)===1||
     ['baja','withdrawn'].includes(clean(row.status).toLowerCase())||
     ['baja','baja_inscrita','withdrawn'].includes(clean(row.enrollment_state).toLowerCase())
   console.info('[credential-applicant] historical-academic-lookup',JSON.stringify({
     matricula,plantel,ciclo,stage,version:row.view_version,withdrawn,
-    complete:Boolean(row.grado&&row.grupo)
+    complete:Boolean(resolvedGrado&&row.grupo),gradeProjected:useProjectedGrade
   }))
   return {
     contract:'credential-applicant-academic-v1',
     data:{
       matricula,plantel,ciclo,fullName,nombres,apellidoPaterno,apellidoMaterno,
-      nivel:clean(row.nivel||snapshot.nivel,80),
-      grado:clean(row.grado||snapshot.grado,80),
+      nivel:resolvedNivel,
+      grado:resolvedGrado,
       grupo:clean(row.grupo||snapshot.group||snapshot.grupo,80),
       status:clean(row.status,80),enrollmentState:clean(row.enrollment_state,80),
       academicHistorical:true,academicWithdrawn:withdrawn,credentialEligible:false
@@ -78,7 +96,9 @@ export default defineEventHandler(async(event)=>{
     meta:{
       source:'aurora-canonical-historical-snapshot',
       viewVersion:row.view_version,generatedAt:row.generated_at,
-      placementCurrent:false,credentialEligible:false
+      placementCurrent:false,credentialEligible:false,
+      gradeSource:useProjectedGrade?'aurora-base-canonical-cycle-projection':'aurora-historical-snapshot',
+      groupSource:'aurora-historical-snapshot'
     }
   }
 })
