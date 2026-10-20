@@ -99,3 +99,15 @@ test('unattributed recovered writes retain their source evidence and never borro
  const result=await setup().build([entry])
  assert.equal(result[0].before,'ANTÁRTIDA');assert.equal(result[0].after,'AMÉRICA');assert.equal(result[0].actor,'Sin identificar');assert.equal(result[0].source,'Otro');assert.equal(result[0].recovery.actorEvidence,'unresolved');assert.equal(result[0].recovery.position,'500848402')
 })
+
+
+test('audit separates CURP/photo/status and excludes grade without moving it to Other',async()=>{
+ const excluded=['grado','nivel','ciclo','lastGrade','lastCiclo']
+ const retained=['grupo','nombres','telefono_padre','lugarTrabajoMadre','curp','curp_padre','foto','estatus','baja']
+ const records=[...excluded,...retained].map((field,i)=>row(i+1,field))
+ const original=JSON.stringify(records)
+ const events=await setup().build(records)
+ assert.deepEqual(Array.from(events,e=>e.field),retained)
+ assert.deepEqual(Array.from(events,e=>e.category),['grupo','nombre','contacto','trabajo','curp','curp','foto','estatus','estatus'])
+ assert.equal(JSON.stringify(records),original)
+})

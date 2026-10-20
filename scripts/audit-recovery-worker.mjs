@@ -4,7 +4,7 @@ import {join} from 'node:path'
 import {describeRecoverySource,recordRecoveryStatus} from './audit/service.mjs'
 import {captureRecovery,retryRecoveryQueue} from '../shared/utils/auditRecoveryQueue.mjs'
 import {importAuditRecovery} from './import-audit-recovery.mjs'
-import {recoverAuditSweep} from './audit/audit-recovery-engine.mjs'
+import {recoverAuditSweep,recoveryFileKey} from './audit/audit-recovery-engine.mjs'
 import {withSourceOptions,downloadRaw,scanSourceFile,replayVerifiedSpools} from './audit/native-source.mjs'
 
 const fail=code=>{throw Object.assign(Error(code),{code})}
@@ -44,7 +44,7 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
  const tick=async()=>{
   if(!enabled||stopped)return
   controller=new AbortController();const signal=controller.signal
-  let db,source,lease=false,descriptor
+  let db,source,lease=false,descriptor,statusSnapshot
   const abort=()=>{source?.destroy();db?.destroy()}
   signal.addEventListener('abort',abort,{once:true})
   try{
@@ -63,7 +63,12 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
    const inventory=await readSourceInventory(source)
    if(inventory.serverUuid!==descriptor.serverUuid)fail('AUDIT_SOURCE_SERVER_MISMATCH')
    if(!/^8\.4\.11(?:-|$)/.test(inventory.version))fail('AUDIT_SOURCE_READER_VERSION_MISMATCH')
-   await recordRecoveryStatus(db,{version:1,state:'running',sourceUuid:inventory.serverUuid})
+   const state=await readState()
+   const publish=async(snapshot,extra={})=>{
+    statusSnapshot={...snapshot,...extra,version:1,sourceUuid:inventory.serverUuid,files:inventory.files.length,pendingRecords:(await describeRecoverySource(db)).pendingRecords}
+    return recordRecoveryStatus(db,statusSnapshot)
+   }
+   await publish(state,{state:'running',phase:'checking-source',currentFile:''})
    await withSourceOptions(spools,connection,async optionsFile=>{
     // Source preambles distinguish log-name reuse; no host file/socket access.
     for(const file of inventory.files){
@@ -72,21 +77,32 @@ export function startAuditRecovery({environment=process.env,mysql:providedMysql,
       try{file.headerSha256=prefix.headerSha256}finally{await prefix.cleanup()}
      }catch(error){if(signal.aborted)throw error;file.sourceError=String(error.code||'AUDIT_SOURCE_READ_FAILED')}
     }
-    const state=await readState()
+    let currentFile=''
+    const progress=async snapshot=>{
+     const completeFiles=inventory.files.filter(file=>{const item=snapshot.files?.[recoveryFileKey(file,descriptor)];return item?.complete&&item.size===String(file.size)}).length
+     await saveState({...snapshot,completeFiles,totalFiles:inventory.files.length})
+     // Publish proven values after each committed file, not after a multi-file pass.
+     await retryRecoveryQueue(db,importAuditRecovery,{deferAttribution:true})
+     await publish(snapshot,{state:'running',phase:'scanning',completeFiles,currentFile})
+    }
     const result=await recoverAuditSweep({descriptor,inventory,state,signal,budget:4,
-     scan:(file,shape,s)=>scanSourceFile(file,shape,s,{tool,optionsFile,root:spools,readDescriptor:()=>describeRecoverySource(db)}),
-     apply:bundle=>captureRecovery(db,bundle),save:saveState})
+     scan:async(file,shape,s)=>{
+      currentFile=file.name
+      await publish(await readState(),{state:'running',phase:'scanning',currentFile:file.name})
+      return scanSourceFile(file,shape,s,{tool,optionsFile,root:spools,readDescriptor:()=>describeRecoverySource(db)})
+     },
+     apply:bundle=>captureRecovery(db,bundle),save:progress})
     const ready=result.completeFiles===result.totalFiles&&!Object.keys(result.errors).length
     await retryRecoveryQueue(db,importAuditRecovery,{deferAttribution:!ready})
     result.pendingRecords=(await describeRecoverySource(db)).pendingRecords
     if(ready&&result.pendingRecords){result.state='error';result.code='AUDIT_RECOVERY_PENDING'}
     await saveState(result)
-    await recordRecoveryStatus(db,{...result,version:1,sourceUuid:inventory.serverUuid,files:result.totalFiles,code:result.code||Object.values(result.errors)[0]||''})
+    await recordRecoveryStatus(db,{...result,version:1,sourceUuid:inventory.serverUuid,files:result.totalFiles,phase:'idle',currentFile:'',code:result.code||Object.values(result.errors)[0]||''})
    })
   }catch(error){
    const denied=['ER_SPECIFIC_ACCESS_DENIED_ERROR','ER_ACCESS_DENIED_ERROR'].includes(error.code)
    const code=denied?'AUDIT_SOURCE_READ_PERMISSION_REQUIRED':String(error.code||'AUDIT_RECOVERY_FAILED')
-   if(lease&&!signal.aborted)await recordRecoveryStatus(db,{version:1,state:'error',sourceUuid:descriptor?.serverUuid,pendingRecords:await describeRecoverySource(db).then(s=>s.pendingRecords).catch(()=>0),code}).catch(()=>{})
+   if(lease&&!signal.aborted)await recordRecoveryStatus(db,{...statusSnapshot,version:1,state:'error',phase:'error',sourceUuid:descriptor?.serverUuid,pendingRecords:await describeRecoverySource(db).then(s=>s.pendingRecords).catch(()=>0),code}).catch(()=>{})
    console.warn('[audit-recovery]',{code})
   }finally{
    signal.removeEventListener('abort',abort)

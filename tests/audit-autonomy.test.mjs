@@ -65,3 +65,12 @@ test('operational diagnosis distinguishes missing access, queued projection and 
  assert.equal(result.recovery.pendingRecords,2);assert.equal(result.inbox[0].state,'projected')
  assert.ok(queries.every(sql=>sql.startsWith('SELECT')));assert.doesNotMatch(JSON.stringify(result),/password|matricula|sourceRecord/)
 })
+
+
+test('diagnosis uses live inbox counts and inventory when the running summary was reset',async()=>{
+ const {diagnoseRecovery}=await import('../scripts/audit/diagnostics.mjs')
+ const db={query:async sql=>sql.includes("event_type='audit_recovery_status'")?[[{payload:{state:'running',pendingRecords:0,files:0,completeFiles:0,phase:'scanning',currentFile:'mysql-bin.000377'}}]]:[[{state:'applied',count:'13'},{state:'projected',count:'31'}]]}
+ const result=await diagnoseRecovery(db,async()=>({version:'8.4.11',files:Array(74)}))
+ assert.equal(result.recovery.pendingRecords,31);assert.equal(result.recovery.files,74)
+ assert.equal(result.recovery.phase,'scanning');assert.equal(result.recovery.currentFile,'mysql-bin.000377')
+})

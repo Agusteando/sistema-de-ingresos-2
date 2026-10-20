@@ -80,11 +80,19 @@ test('direct MySQL source: remote read, verified values, durable replay and orig
     await db.query("PURGE BINARY LOGS TO '"+file.name+"'")
     await db.query("UPDATE matricula SET grupo='ÁFRICA' WHERE id=42")
     await db.query('FLUSH BINARY LOGS')
-    const worker=startAuditRecovery({mysql,tool,initialDelay:3600000,environment:{CONTROL_ESCOLAR_MYSQL_HOST:connection.host,CONTROL_ESCOLAR_MYSQL_PORT:String(connection.port),CONTROL_ESCOLAR_MYSQL_USER:decodeURIComponent(url.username),CONTROL_ESCOLAR_MYSQL_PASSWORD:decodeURIComponent(url.password),AUDIT_SOURCE_MYSQL_USER:connection.user,AUDIT_SOURCE_MYSQL_PASSWORD:connection.password,CONTROL_ESCOLAR_MYSQL_DATABASE:schema,AUDIT_RECOVERY_DATA_DIR:join(root,'owned')}})
+    const statuses=[]
+    const tracedMysql={...mysql,createConnection:async config=>{
+     const connection=await mysql.createConnection(config),execute=connection.execute.bind(connection)
+     connection.execute=async(sql,args)=>{if(sql.includes('audit_recovery_status'))statuses.push(JSON.parse(args[0]));return execute(sql,args)}
+     return connection
+    }}
+    const worker=startAuditRecovery({mysql:tracedMysql,tool,initialDelay:3600000,environment:{CONTROL_ESCOLAR_MYSQL_HOST:connection.host,CONTROL_ESCOLAR_MYSQL_PORT:String(connection.port),CONTROL_ESCOLAR_MYSQL_USER:decodeURIComponent(url.username),CONTROL_ESCOLAR_MYSQL_PASSWORD:decodeURIComponent(url.password),AUDIT_SOURCE_MYSQL_USER:connection.user,AUDIT_SOURCE_MYSQL_PASSWORD:connection.password,CONTROL_ESCOLAR_MYSQL_DATABASE:schema,AUDIT_RECOVERY_DATA_DIR:join(root,'owned')}})
     try{
      await worker.run()
      const [[status]]=await db.query("SELECT payload FROM control_escolar_audit_events WHERE event_type='audit_recovery_status' ORDER BY id DESC LIMIT 1")
      const state=typeof status.payload==='string'?JSON.parse(status.payload):status.payload
+     assert.ok(statuses.some(s=>s.phase==='scanning'&&s.files>0&&s.completeFiles>0),JSON.stringify(statuses))
+     assert.ok(statuses.some(s=>s.phase==='scanning'&&/^mysql-bin/.test(s.currentFile)))
      assert.equal(state.state,'caught-up',JSON.stringify({status:state,checkpoint:JSON.parse(await readFile(join(root,'owned/checkpoint.json'),'utf8'))}));assert.equal(state.pendingRecords,0)
      const [newValues]=await db.query("SELECT payload FROM control_escolar_audit_events WHERE event_type='student_update' AND source_flow='mysql_binlog_recovered'")
      assert.ok(newValues.some(row=>{const p=typeof row.payload==='string'?JSON.parse(row.payload):row.payload;return p.changes.some(c=>c.before==='AMÉRICA'&&c.after==='ÁFRICA')}))
