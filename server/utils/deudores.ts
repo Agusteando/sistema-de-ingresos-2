@@ -254,7 +254,7 @@ export const getDeudoresGlobal = async ({
   userEmail,
   includeDesglose = true,
   matricula,
-  matriculas,
+  matriculas: matriculasSeleccionadas,
   conceptoIds
 }: {
   ciclo: string,
@@ -267,7 +267,7 @@ export const getDeudoresGlobal = async ({
 }) => {
   let documentos: any[] = []
   const matriculaFiltro = String(matricula || '').trim()
-  const matriculasFiltro = matriculaFiltro ? [] : [...new Set((matriculas || []).map(value => String(value || '').trim()).filter(Boolean))]
+  const matriculasFiltro = matriculaFiltro ? [] : [...new Set((matriculasSeleccionadas || []).map(value => String(value || '').trim()).filter(Boolean))]
   const selectedConceptIds = new Set((conceptoIds || [])
     .map(value => Number(value || 0))
     .filter(value => Number.isInteger(value) && value > 0))
