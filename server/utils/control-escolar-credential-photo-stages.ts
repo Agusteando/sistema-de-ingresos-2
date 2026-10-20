@@ -5,6 +5,8 @@ type CredentialPhotoStageRow = {
   stage_key: string | number | null
   stage_label?: string | null
   matricula: string | null
+  campus?: string | null
+  submitted_name?: string | null
   photo_url?: string | null
   receipt_url?: string | null
   submitted_at?: string | Date | null
@@ -13,6 +15,8 @@ type CredentialPhotoStageRow = {
 
 type CredentialStagePhoto = {
   matricula:string
+  plantel:string
+  submittedName:string
   photoUrl:string
   receiptUrl:string
   submittedAt:string | null
@@ -31,6 +35,7 @@ const truthy = (value:unknown) => value === true || value === 1 || value === '1'
 
 const CREDENTIAL_ALIASES = {
   matricula:['matricula','matrícula'],
+  nombre:['nombre','nombre_completo','nombre_alumno','full_name','nombreCompleto'],
   foto:['foto','photo','photo_url','foto_url'],
   recibo:['recibo','receipt','receipt_url','comprobante','comprobante_url'],
   campus:['campus','plantel'],
@@ -153,6 +158,7 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
   const cFoto=alias(credentialColumns,CREDENTIAL_ALIASES.foto)
   const cRecibo=alias(credentialColumns,CREDENTIAL_ALIASES.recibo)
   const cCampus=alias(credentialColumns,CREDENTIAL_ALIASES.campus)
+  const cNombre=alias(credentialColumns,CREDENTIAL_ALIASES.nombre)
   const cCiclo=alias(credentialColumns,CREDENTIAL_ALIASES.ciclo)
   const cEtapa=alias(credentialColumns,CREDENTIAL_ALIASES.etapa)
   const cEtapaLabel=alias(credentialColumns,CREDENTIAL_ALIASES.etapaLabel)
@@ -298,6 +304,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
       CAST(c.${quoteIdentifier(cEtapa)} AS CHAR) AS stage_key,
       ${labelSql} AS stage_label,
       UPPER(CAST(c.${quoteIdentifier(cMatricula)} AS CHAR)) AS matricula,
+      ${cCampus ? `CAST(c.${quoteIdentifier(cCampus)} AS CHAR)` : 'NULL'} AS campus,
+      ${cNombre ? `CAST(c.${quoteIdentifier(cNombre)} AS CHAR)` : 'NULL'} AS submitted_name,
       CAST(c.${quoteIdentifier(cFoto)} AS CHAR) AS photo_url,
       ${receiptSql} AS receipt_url,
       ${dateSql} AS submitted_at,
@@ -345,6 +353,8 @@ export async function readCredentialPhotoStages(input:{plantel:unknown;ciclo:unk
     if(!current.photos.has(matricula)){
       current.photos.set(matricula,{
         matricula,
+        plantel:normalizeExternalControlEscolarPlantel(row.campus),
+        submittedName:clean(row.submitted_name,200),
         photoUrl,
         receiptUrl,
         submittedAt:submitted || null,
