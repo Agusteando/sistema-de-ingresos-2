@@ -8,7 +8,7 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  if(descriptor.protocolVersion!==1||descriptor.serverUuid!==inventory.serverUuid)fail('AUDIT_SOURCE_SERVER_MISMATCH')
  if(!/^8\.4\./.test(inventory.version)||inventory.format!=='ROW'||inventory.rowImage!=='FULL'||inventory.checksum!=='CRC32'||Number(inventory.logBin)!==1||inventory.encrypted!==false)fail('AUDIT_SOURCE_FORMAT_UNSUPPORTED')
  if(!/^[A-Za-z0-9_]+$/.test(descriptor.schema)||!Array.isArray(descriptor.fields)||!descriptor.fields.length)fail('AUDIT_SOURCE_DESCRIPTOR_INVALID')
- const entries=state.files||{},next={version:1,sourceUuid:inventory.serverUuid,files:{...entries},oldestAvailableAt:state.sourceUuid===inventory.serverUuid?state.oldestAvailableAt||null:null,lastCommitAt:state.sourceUuid===inventory.serverUuid?state.lastCommitAt||null:null,errors:{...(state.sourceUuid===inventory.serverUuid?state.errors||{}:{})},state:'running'}
+ const entries=state.files||{},next={version:1,sourceUuid:inventory.serverUuid,files:{...entries},oldestAvailableAt:state.sourceUuid===inventory.serverUuid?state.oldestAvailableAt||null:null,lastCommitAt:state.sourceUuid===inventory.serverUuid?state.lastCommitAt||null:null,errors:{...(state.sourceUuid===inventory.serverUuid?state.errors||{}:{})},errorDetails:{...(state.sourceUuid===inventory.serverUuid?state.errorDetails||{}:{})},state:'running'}
  const files=inventory.files
  if(!files.length)fail('AUDIT_SOURCE_LOGS_UNAVAILABLE')
  // Newest-to-oldest is mandatory: a DDL boundary discovered in a newer file
@@ -27,7 +27,7 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
   if(!/^mysql-bin\.\d{6,}$/.test(file.name)||!/^\d+$/.test(String(file.size))||!/^([a-f0-9]{64})$/.test(file.headerSha256))fail('AUDIT_SOURCE_FILE_INVALID')
   const key=recoveryFileKey(file,descriptor),checkpoint=entries[key]
   if(schemaBoundary&&file.name<=schemaBoundary){next.errors[file.name]='AUDIT_SCHEMA_HISTORY_REQUIRED';continue}
-  if(checkpoint?.size===String(file.size)&&checkpoint.complete){complete++;continue}
+  if(checkpoint?.size===String(file.size)&&checkpoint.complete){complete++;delete next.errors[file.name];delete next.errorDetails[file.name];continue}
   ready.push(file)
  }
  // Prioritization affects scheduling only, never source/identity linkage.
@@ -55,9 +55,19 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
     if(result.summary.lastCommitAt&&(!next.lastCommitAt||result.summary.lastCommitAt>next.lastCommitAt))next.lastCommitAt=result.summary.lastCommitAt
     captured=true
     delete next.errors[file.name]
+    delete next.errorDetails[file.name]
     complete++
    }finally{if(captured||result.summary.ddl)await result.cleanup()}
-  }catch(error){unverifiedSchemaAt=!unverifiedSchemaAt||file.name>unverifiedSchemaAt?file.name:unverifiedSchemaAt;next.errors[file.name]=String(error.code||(/^AUDIT_[A-Z_]+$/.test(error.message||'')?error.message:'AUDIT_RECOVERY_SOURCE_FAILED'));if(error.code==='AUDIT_RECOVERY_PAUSED')next.state='paused'}
+  }catch(error){
+   // Only uncertainty about the schema blocks older files. A completed raw
+   // schema scan remains useful if decoding that file subsequently fails.
+   if(error.schemaVerified!==true)unverifiedSchemaAt=!unverifiedSchemaAt||file.name>unverifiedSchemaAt?file.name:unverifiedSchemaAt
+   const code=String(error.code||(/^AUDIT_[A-Z_]+$/.test(error.message||'')?error.message:'AUDIT_RECOVERY_SOURCE_FAILED'))
+   next.errors[file.name]=code
+   next.errorDetails[file.name]={code,phase:['schema','decode'].includes(error.sourcePhase)?error.sourcePhase:'scan',schemaVerified:error.schemaVerified===true,readerExitCode:Number.isInteger(error.readerExitCode)?error.readerExitCode:null,readerSignal:['SIGKILL','SIGTERM','SIGSEGV','SIGABRT'].includes(error.readerSignal)?error.readerSignal:null}
+   console.warn('[audit-recovery-file]',{file:file.name,...next.errorDetails[file.name]})
+   if(error.code==='AUDIT_RECOVERY_PAUSED')next.state='paused'
+  }
   next.schemaBoundary=schemaBoundary;next.schemaFingerprint=descriptor.schemaFingerprint
   await save(next) // Only after a complete source scan and confirmed audit transaction.
  }
@@ -68,6 +78,7 @@ export async function recoverAuditSweep({descriptor,inventory,state,scan,apply,s
  const names=new Set(files.map(file=>file.name))
  next.expiredFiles=[...new Set([...(state.expiredFiles||[]),...Object.keys(next.errors).filter(name=>!names.has(name))])]
  next.errors=Object.fromEntries(Object.entries(next.errors).filter(([name])=>names.has(name)))
+ next.errorDetails=Object.fromEntries(Object.entries(next.errorDetails).filter(([name])=>names.has(name)&&next.errors[name]))
  next.schemaBoundary=schemaBoundary;next.schemaFingerprint=descriptor.schemaFingerprint
  next.completeFiles=files.filter(file=>{const checkpoint=next.files[recoveryFileKey(file,descriptor)];return checkpoint?.complete&&checkpoint.size===String(file.size)}).length
  next.totalFiles=files.length
