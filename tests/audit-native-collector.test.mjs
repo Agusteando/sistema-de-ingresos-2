@@ -87,3 +87,16 @@ test('native space-padded UTC hours retain exact timestamp and row/commit anchor
  const {records}=await decode(lines)
  assert.equal(records.length,1);assert.equal(records[0].recordedAt,'2026-10-13 20:05:57')
 })
+
+
+test('an unreadable source file cannot suppress committed evidence from another file',async()=>{
+ const unavailable={name:'mysql-bin.000334',size:'1000',sourceError:'AUDIT_SOURCE_READ_FAILED'}
+ let applied=0
+ const result=await recoverAuditSweep({descriptor,inventory:{...inventory,files:[unavailable,file]},state:{},scan,apply:async bundle=>{applied+=bundle.records.length;return apply(bundle)},save:async()=>{}})
+ assert.equal(applied,1);assert.equal(result.completeFiles,1);assert.equal(result.errors[unavailable.name],'AUDIT_SOURCE_READ_FAILED')
+})
+
+test('expired failed files leave a retention gap but do not permanently poison the retained inventory',async()=>{
+ const result=await recoverAuditSweep({descriptor,inventory,state:{sourceUuid:descriptor.serverUuid,errors:{'mysql-bin.000333':'AUDIT_SOURCE_READ_FAILED'}},scan,apply,save:async()=>{}})
+ assert.equal(Object.keys(result.errors).length,0);assert.equal(result.retentionGap,true);assert.deepEqual(result.expiredFiles,['mysql-bin.000333'])
+})

@@ -22,6 +22,7 @@ function database({anchors=[original],rowId='8079028',schema='casitaiedis',lock=
    if(sql.startsWith('SELECT id,payload'))return [state.saved.filter(row=>JSON.parse(row.payload).fingerprint===params[0])]
    if(sql.startsWith('SELECT id FROM matricula'))return [[{id:rowId}]]
    if(sql.startsWith('SELECT id,event_type'))return [anchors]
+   if(sql.startsWith("UPDATE control_escolar_audit_events SET event_type=")){const row=state.saved.find(r=>r.id===params[3]);row.event_type='student_update_recovery';row.plantel=params[0];row.payload=params[2];return [{affectedRows:1}]}
    if(sql.startsWith('INSERT INTO control_escolar_audit_events')){
     const id=9000+state.saved.length
     state.saved.push({id,event_type:params[0],plantel:params[1],matricula:params[3],actor_name:params[5],payload:params[10],created_at:params[11]})
@@ -86,4 +87,19 @@ test('multiple source writes within one second cannot borrow the single account 
  assert.equal(result.results[0].attribution,'unresolved');assert.equal(result.results[0].originalEventId,null)
  assert.equal(state.saved[0].actor_name,'Sin identificar')
  assert.ok(state.sql.some(sql=>sql.includes("COALESCE(source_flow,'') <> 'mysql_binlog_recovered'")))
+})
+
+
+test('verified values publish during an incomplete scan and link only after coverage is known',async()=>{
+ const {db,state}=database(),snapshot=JSON.stringify(original)
+ const first=await importAuditRecovery(db,bundle,{apply:true,deferAttribution:true})
+ assert.equal(first.results[0].attributionPending,true)
+ assert.equal(state.saved[0].event_type,'student_update');assert.equal(state.saved[0].actor_name,'Sin identificar')
+ const sourceBefore=JSON.parse(state.saved[0].payload).sourceRecord
+ const next=await importAuditRecovery(db,bundle,{apply:true,deferAttribution:false})
+ assert.equal(state.saved.length,1);assert.equal(next.results[0].originalEventId,'5629')
+ assert.equal(state.saved[0].event_type,'student_update_recovery')
+ assert.deepEqual(JSON.parse(state.saved[0].payload).sourceRecord,sourceBefore)
+ assert.equal(JSON.stringify(original),snapshot)
+ await importAuditRecovery(db,bundle,{apply:true});assert.equal(state.saved.length,1)
 })

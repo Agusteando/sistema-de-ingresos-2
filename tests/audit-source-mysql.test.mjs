@@ -47,6 +47,26 @@ test('direct MySQL source: remote read, verified values, durable replay and orig
    await assert.rejects(replayVerifiedSpools(root,descriptor.serverUuid,async()=>{throw Error('database unavailable')}),/unavailable/)
    await replayVerifiedSpools(root,descriptor.serverUuid,bundle=>captureRecovery(db,bundle))
    assert.equal((await describeRecoverySource(db)).pendingRecords,1)
+   if(process.env.AUDIT_TEST_ISOLATED_SOURCE==='1'){
+    await db.query("REVOKE REPLICATION CLIENT, REPLICATION SLAVE ON *.* FROM '"+reader+"'@'%'")
+    const offline=startAuditRecovery({mysql,tool,initialDelay:3600000,environment:{CONTROL_ESCOLAR_MYSQL_HOST:connection.host,CONTROL_ESCOLAR_MYSQL_PORT:String(connection.port),CONTROL_ESCOLAR_MYSQL_USER:decodeURIComponent(url.username),CONTROL_ESCOLAR_MYSQL_PASSWORD:decodeURIComponent(url.password),AUDIT_SOURCE_MYSQL_USER:connection.user,AUDIT_SOURCE_MYSQL_PASSWORD:connection.password,CONTROL_ESCOLAR_MYSQL_DATABASE:schema,AUDIT_RECOVERY_DATA_DIR:join(root,'source-unavailable')}})
+    try{
+     await offline.run()
+     const [[status]]=await db.query("SELECT payload FROM control_escolar_audit_events WHERE event_type='audit_recovery_status' ORDER BY id DESC LIMIT 1")
+     const proof=typeof status.payload==='string'?JSON.parse(status.payload):status.payload
+     assert.equal(proof.code,'AUDIT_SOURCE_READ_PERMISSION_REQUIRED');assert.equal(proof.pendingRecords,1)
+     const [[published]]=await db.query("SELECT COUNT(*) AS count FROM control_escolar_audit_events WHERE source_flow='mysql_binlog_recovered'")
+     assert.equal(published.count,1)
+    }finally{await offline.stop()}
+    await db.query("GRANT REPLICATION CLIENT, REPLICATION SLAVE ON *.* TO '"+reader+"'@'%'")
+   }
+   const partial=await retryRecoveryQueue(db,importAuditRecovery,{deferAttribution:true})
+   assert.equal(partial.results[0].attributionPending,true)
+   assert.equal((await describeRecoverySource(db)).pendingRecords,1)
+   const [visible]=await db.query("SELECT payload FROM control_escolar_audit_events WHERE source_flow='mysql_binlog_recovered'")
+   assert.equal(visible.length,1)
+   const provisional=typeof visible[0].payload==='string'?JSON.parse(visible[0].payload):visible[0].payload
+   assert.equal(provisional.changes[0].before,'ANTÁRTIDA');assert.equal(provisional.changes[0].after,'AMÉRICA')
    const applied=await retryRecoveryQueue(db,importAuditRecovery)
    assert.equal(applied.results[0].status,'imported');assert.equal(applied.results[0].originalEventId,String(insert.insertId))
    assert.equal((await describeRecoverySource(db)).pendingRecords,0)

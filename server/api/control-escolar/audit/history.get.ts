@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     throw createError({statusCode:400,message:'Selecciona un periodo de hasta 90 días.'})
   try {
     const history = await loadHistoricalActions({from:fromDate,to:toDate,planteles})
+    if(history.partial||history.truncated)console.warn('[audit-history-incomplete]',{requestId:String(event.context.auroraRequestId||''),code:history.truncated?'AUDIT_HISTORY_QUERY_LIMIT':'AUDIT_HISTORY_SOURCE_PARTIAL',from,to,planteles,checked:history.checked,unmatched:history.unmatched})
     const events = history.events
     const keys = Array.from(new Set(events.map(x=>x.matricula))).slice(0,5000)
     const names = new Map<string,string>()
@@ -61,7 +62,7 @@ export default defineEventHandler(async (event) => {
         record.avatar=staffProfiles.get(record.actorEmail.toLowerCase())?.avatar || ''
       }
     }
-    return {events,available:history.available,truncated:history.truncated,partial:history.partial,checked:history.checked,unmatched:history.unmatched}
+    return {requestId:String(event.context.auroraRequestId||''),code:history.truncated?'AUDIT_HISTORY_QUERY_LIMIT':history.partial?'AUDIT_HISTORY_SOURCE_PARTIAL':'',events,available:history.available,truncated:history.truncated,partial:history.partial,checked:history.checked,unmatched:history.unmatched}
   } catch(error:any) {
     const requestId=String(event.context.auroraRequestId||'')
     console.warn('[historical-student-audit] query unavailable', {requestId,code:String(error?.cause?.code||error?.code||''),message:String(error?.message||error)})
