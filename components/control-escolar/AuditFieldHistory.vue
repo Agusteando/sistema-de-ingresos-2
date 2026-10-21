@@ -8,7 +8,7 @@
       <div v-if="historyBusy" class="history-loading" role="status">Cargando anteriores…</div>
       <div v-else-if="partial" class="history-notice" role="status"><span>Historial anterior pendiente</span><button type="button" @click="retryHistory">Reintentar</button><button v-if="requestId" type="button" @click="copyReference" aria-label="Copiar referencia del error">{{ copied?'Copiado':'Copiar referencia' }}</button></div>
       <div v-if="busy" class="history-loading" role="status"><LucideRefreshCw :size="18" class="spinning"/>Cargando historial…</div>
-      <div v-else-if="!events.length&&!failure&&!partial&&!nextCursor&&!historyBusy" class="history-empty">Sin cambios registrados para este campo.</div>
+      <div v-else-if="!visibleRecords.length&&!failure&&!partial&&!nextCursor&&!historyBusy" class="history-empty">Sin cambios registrados para este campo.</div>
       <button v-if="nextCursor" type="button" class="history-more" :disabled="busy" @click="load(false)">Cargar cambios anteriores</button>
     </div>
   </section>
@@ -18,7 +18,7 @@ import {computed,ref,watch,onBeforeUnmount} from 'vue'
 import {LucideChevronLeft,LucideRefreshCw} from 'lucide-vue-next'
 import AuditDateTimeline from './AuditDateTimeline.vue'
 import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
-import {compactAuditTransitions} from '~/shared/utils/auditTransitions'
+import {compactAuditTransitions,hasVisibleAuditDifference} from '~/shared/utils/auditTransitions'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 const props=defineProps<{record:{matricula:string;plantel:string;field:string;fieldLabel:string;student:string}}>()
 defineEmits<{close:[]}>()
@@ -27,7 +27,7 @@ const currentValueAvailable=ref(false),currentValue=ref<string|null>(null)
 const events=ref<any[]>([]),nextCursor=ref<string|null>(null),busy=ref(false),failure=ref(false),partial=ref(false),requestId=ref('')
 const changes=computed(()=>events.value.filter(item=>item.quality==='verified'))
 const observations=computed(()=>events.value.filter(item=>item.quality!=='verified'))
-const visibleRecords=computed(()=>compactAuditTransitions([...changes.value,...observations.value].sort(compareAuditNewest)))
+const visibleRecords=computed(()=>compactAuditTransitions([...changes.value,...observations.value].sort(compareAuditNewest)).filter(hasVisibleAuditDifference))
 const historyBusy=ref(false),copied=ref(false)
 const copyReference=async()=>{try{await navigator.clipboard.writeText(requestId.value);copied.value=true}catch{copied.value=false}}
 let controller:AbortController|null=null

@@ -55,7 +55,7 @@ import SearchableSelect from '~/components/SearchableSelect.vue'
 import AuditActorAvatar from './AuditActorAvatar.vue'
 import AuditDateTimeline from './AuditDateTimeline.vue'
 import {auditRecordNoun} from '~/shared/utils/auditStudentTimeline'
-import {compactAuditTransitions} from '~/shared/utils/auditTransitions'
+import {compactAuditTransitions,hasVisibleAuditDifference} from '~/shared/utils/auditTransitions'
 import { compareAuditNewest } from '~/shared/utils/auditTimeline'
 import AuditFieldHistory from './AuditFieldHistory.vue'
 import {
@@ -164,7 +164,7 @@ const allEvents=computed(()=>{
   const stored=data.value?.events||[]
   const external=history.value?.events||[]
   const result=[...stored,...external]
-  return compactAuditTransitions(result.filter(event=>event.category!=='grado').sort(compareAuditNewest))
+  return compactAuditTransitions(result.filter(event=>event.category!=='grado').sort(compareAuditNewest)).filter(hasVisibleAuditDifference)
 })
 const baseEvents=computed(()=>allEvents.value.filter(e=>{
   if(e.date<from.value||e.date>to.value)return false
