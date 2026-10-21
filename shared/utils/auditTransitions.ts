@@ -1,5 +1,10 @@
 import { compareAuditNewest } from './auditTimeline.ts'
 type Transition={id:string;eventId:number;recordedAt:string;matricula:string;plantel:string;field:string;quality:string;source:string;actor:string;actorEmail?:string;before:string|null;after:string|null;combinedEvents?:Transition[];relatedEventId?:number}
+// Only a recorded difference belongs in the visible audit. Null on one side
+// can represent a genuine first assignment or clearing; two unknown sides
+// cannot establish what changed. Reconcile explicit Loki mirrors before filtering.
+export const hasVisibleAuditDifference=(record:Pick<Transition,'quality'|'before'|'after'>)=>
+  record.quality==='verified'&&(record.before!=null||record.after!=null)
 const person=(record:Transition)=>record.actorEmail?.trim()?record.actorEmail.trim().toLowerCase():record.actor?.trim()&&!/^(Aurora|Sin identificar)$/i.test(record.actor.trim())?'name:'+record.actor.trim():''
 const isGroup=(field:string)=>/^(grupo|group)$/i.test(field)
 const millis=(at:string)=>Date.parse(at.replace(' ','T')+'-06:00')
