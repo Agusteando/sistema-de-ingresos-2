@@ -33,6 +33,7 @@ import {
   resolveControlEscolarCompleteness,
 } from "../../shared/utils/studentPresentation";
 import { buildParentSiblingSignature } from "../../shared/utils/parentSiblingMatch";
+import { summarizeParentWorkplaces } from "../../shared/utils/workplaceProgress";
 import { isControlEscolarNameField, toNameDisplayCase } from "../../shared/utils/nameCase";
 
 export type ControlEscolarStudentRow = {
@@ -2280,6 +2281,10 @@ const fetchAllNormalizedStudents = async (
         overlay: "CONTROL_ESCOLAR_MYSQL.matricula",
         overlayAvailable,
         overlayError: overlayError || "",
+        workplaceColumns: {
+          padre: overlayAvailable && centralSchema.matricula.has("lugar_trabajo_padre"),
+          madre: overlayAvailable && centralSchema.matricula.has("lugar_trabajo_madre"),
+        },
         localRows: Math.min(baseRows.length, MAX_LOCAL_ROWS),
         overlayRows: overlayMap.size,
         enrichedRows: overlayMap.size,
@@ -3004,6 +3009,7 @@ export const fetchControlEscolarProgressReport = async (
         bajas: 0,
         withoutOverlay: evaluatedStudents.filter((student) => !student.overlayExists).length,
       },
+      workplaces: summarizeParentWorkplaces(evaluatedStudents, loaded.source.workplaceColumns),
       basic: summarizeTier("basic", CONTROL_ESCOLAR_BASIC_REQUIRED_FIELDS),
       advanced: summarizeTier(
         "complete",
@@ -3060,6 +3066,7 @@ export const fetchControlEscolarProgressReport = async (
     population,
     basic: allScope.basic,
     advanced: allScope.advanced,
+    workplaces: allScope.workplaces,
     quality: allScope.quality,
     distribution: allScope.distribution,
     scopes: {
