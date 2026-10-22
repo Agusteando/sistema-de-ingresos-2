@@ -42,9 +42,11 @@ export const CONTROL_ESCOLAR_REPORT_FIELDS: ControlEscolarReportField[] = [
   { key: 'fatherName', label: 'Padre / tutor', width: 30, group: 'family' },
   { key: 'telefonoPadre', label: 'Teléfono padre', width: 18, group: 'family' },
   { key: 'emailPadre', label: 'Correo padre', width: 28, group: 'family' },
+  { key: 'lugarTrabajoPadre', label: 'Lugar de trabajo del padre', width: 30, group: 'family' },
   { key: 'motherName', label: 'Madre / tutora', width: 30, group: 'family' },
   { key: 'telefonoMadre', label: 'Teléfono madre', width: 18, group: 'family' },
   { key: 'emailMadre', label: 'Correo madre', width: 28, group: 'family' },
+  { key: 'lugarTrabajoMadre', label: 'Lugar de trabajo de la madre', width: 30, group: 'family' },
   { key: 'address', label: 'Domicilio', width: 36, group: 'family' },
 
   { key: 'tipoSangre', label: 'Tipo de sangre', width: 15, group: 'health' },
