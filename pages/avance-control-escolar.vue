@@ -58,6 +58,10 @@
       </div>
     </header>
 
+    <nav class="report-tabs" aria-label="Sección de avance">
+      <button type="button" :class="{ active: activeTab === 'expediente' }" :aria-pressed="activeTab === 'expediente'" @click="activeTab = 'expediente'">Expediente escolar</button>
+      <button type="button" :class="{ active: activeTab === 'trabajo' }" :aria-pressed="activeTab === 'trabajo'" @click="activeTab = 'trabajo'">Lugares de trabajo</button>
+    </nav>
     <section v-if="queueRows.length" class="load-monitor" aria-live="polite">
       <div class="load-monitor-row">
         <div class="load-state">
@@ -78,7 +82,7 @@
       <strong>{{ pageError }}</strong>
     </div>
 
-    <section class="summary-grid">
+    <section v-if="activeTab === 'expediente'" class="summary-grid">
       <article class="summary-card">
         <span>Planteles</span>
         <strong>{{ successfulReports.length }}</strong>
@@ -97,7 +101,7 @@
       </article>
     </section>
 
-    <section class="chart-section">
+    <section v-if="activeTab === 'expediente'" class="chart-section">
       <header class="section-heading">
         <h2>Básico</h2>
         <span>{{ scopeMode === 'internos' ? 'Internos' : scopeMode === 'externos' ? 'Externos' : 'Todos' }}</span>
@@ -136,7 +140,7 @@
       </div>
     </section>
 
-    <details v-if="advancedChartRows.length" class="advanced-panel">
+    <details v-if="activeTab === 'expediente' && advancedChartRows.length" class="advanced-panel">
       <summary>
         <div class="advanced-panel-title">
           <span>Avanzado</span>
@@ -171,7 +175,7 @@
       </div>
     </details>
 
-    <section v-if="orderedReports.length" class="plantel-section">
+    <section v-if="activeTab === 'expediente' && orderedReports.length" class="plantel-section">
       <header class="section-heading">
         <h2>Detalle</h2>
         <span>{{ orderedReports.length }}</span>
@@ -286,6 +290,48 @@
         </details>
       </div>
     </section>
+
+    <template v-if="activeTab === 'trabajo'">
+      <section class="workplace-intro">
+        <div>
+          <h2>Recopilación de lugares de trabajo</h2>
+          <p>Porcentaje de matrículas inscritas con registro. Mamá y papá se contabilizan por separado para el ciclo y tipo de alumnos seleccionados.</p>
+        </div>
+        <span v-if="workplaceUnavailable" class="workplace-alert"><LucideTriangleAlert :size="16" /> {{ workplaceUnavailable }} plantel(es) con información no disponible</span>
+      </section>
+      <section v-if="successfulReports.length" class="summary-grid">
+        <article class="summary-card"><span>Matrículas evaluadas</span><strong>{{ formatNumber(globalPopulation.evaluated) }}</strong></article>
+        <article v-for="metric in workplaceOverview" :key="metric.key" class="summary-card workplace-kpi">
+          <span>{{ metric.label }}</span>
+          <strong>{{ metric.available ? metric.percent + '%' : '—' }}</strong>
+          <small v-if="metric.available">{{ formatNumber(metric.registered) }}/{{ formatNumber(metric.total) }} registrados · {{ formatNumber(metric.pending) }} pendientes</small>
+          <small v-else>Fuente no disponible</small>
+        </article>
+      </section>
+      <section class="plantel-section workplace-section">
+        <header class="section-heading"><h2>Desglose por plantel</h2><span>{{ workplaceRows.length }} planteles</span></header>
+        <div v-if="workplaceRows.length" class="workplace-board">
+          <article v-for="row in workplaceRows" :key="row.plantel" class="workplace-card">
+            <header><strong>{{ row.plantel }}</strong><span>{{ formatNumber(row.total) }} inscritos</span></header>
+            <div v-for="parent in ['madre', 'padre']" :key="parent" class="workplace-metric">
+              <div class="workplace-metric-head">
+                <strong>{{ parent === 'madre' ? 'Mamá' : 'Papá' }}</strong>
+                <template v-if="row[parent]?.available">
+                  <span>{{ formatNumber(row[parent].registered) }}/{{ formatNumber(row[parent].total) }} · {{ formatNumber(row[parent].pending) }} pendientes</span>
+                  <b>{{ row[parent].percent }}%</b>
+                </template>
+                <span v-else class="workplace-absent">Fuente no disponible</span>
+              </div>
+              <div v-if="row[parent]?.available" class="workplace-bar" :class="parent" role="progressbar" :aria-label="`${row.plantel} - ${parent}`" :aria-valuenow="row[parent].percent" aria-valuemin="0" aria-valuemax="100">
+                <i :style="{ width: row[parent].percent + '%' }"></i>
+              </div>
+            </div>
+            <footer v-if="row.ambos?.available">Mamá y papá registrados: <strong>{{ formatNumber(row.ambos.registered) }}/{{ formatNumber(row.ambos.total) }} ({{ row.ambos.percent }}%)</strong></footer>
+          </article>
+        </div>
+        <div v-else class="empty-state">{{ loading ? 'Consultando planteles…' : 'No hay resultados disponibles.' }}</div>
+      </section>
+    </template>
   </div>
 </template>
 
@@ -311,6 +357,7 @@ import {
 const { activeCicloKey, setActiveCiclo } = useActiveCiclo()
 const selectedCiclo = ref(activeCicloKey.value)
 const scopeMode = ref('all')
+const activeTab = ref('expediente')
 const optionsLoading = ref(false)
 const loading = ref(false)
 const pageError = ref('')
@@ -349,6 +396,7 @@ const emptyScope = () => ({
   },
   basic: emptyTier(),
   advanced: emptyTier(),
+  workplaces: null,
   quality: {},
   distribution: { byNivel: [], byGrupo: [] },
 })
@@ -361,6 +409,7 @@ const scopeForReport = (report, mode = scopeMode.value) => {
     population: report.population || emptyScope().population,
     basic: report.basic || emptyTier(),
     advanced: report.advanced || emptyTier(),
+    workplaces: report.workplaces || null,
     quality: report.quality || {},
     distribution: report.distribution || { byNivel: [], byGrupo: [] },
   }
@@ -412,6 +461,30 @@ const globalPopulation = computed(() => successfulReports.value.reduce((total, r
   return total
 }, emptyScope().population))
 
+
+const workplaceRows = computed(() => successfulReports.value.map((report) => {
+  const scope = scopeForReport(report)
+  return {
+    plantel: report.agentId,
+    total: Number(scope.population?.evaluated || 0),
+    madre: scope.workplaces?.madre,
+    padre: scope.workplaces?.padre,
+    ambos: scope.workplaces?.ambos,
+  }
+}).sort((a, b) => String(a.plantel).localeCompare(String(b.plantel), 'es', { numeric: true, sensitivity: 'base' })))
+const workplaceMetric = (key) => {
+  const available = workplaceRows.value.map((row) => row[key]).filter((metric) => metric?.available)
+  const total = available.reduce((sum, metric) => sum + Number(metric.total || 0), 0)
+  const registered = available.reduce((sum, metric) => sum + Number(metric.registered || 0), 0)
+  return { available: available.length > 0, total, registered, pending: total - registered, percent: total ? Math.round(registered * 100 / total) : 0 }
+}
+const workplaceOverview = computed(() => [
+  { key: 'madre', label: 'Mamá · registrados', ...workplaceMetric('madre') },
+  { key: 'padre', label: 'Papá · registrados', ...workplaceMetric('padre') },
+  { key: 'ambos', label: 'Ambos · registrados', ...workplaceMetric('ambos') },
+])
+const workplaceUnavailable = computed(() => workplaceRows.value.filter((row) => !row.madre?.available || !row.padre?.available).length
+  + queueRows.value.filter((row) => row.status === 'error').length)
 const basicChartRows = computed(() => orderedReports.value.map((report) => {
   const scope = scopeForReport(report)
   return {
@@ -613,6 +686,23 @@ const cancelLoad = () => {
   currentPlantel.value = ''
 }
 const downloadCsv = () => {
+  if (activeTab.value === 'trabajo') {
+    const rows = workplaceRows.value.map((row) => ({
+      Plantel: row.plantel,
+      Ciclo: selectedCiclo.value,
+      Vista: scopeMode.value === 'internos' ? 'Internos' : scopeMode.value === 'externos' ? 'Externos' : 'Todos',
+      Inscritos: row.total,
+      'Mamá registrados': row.madre?.available ? row.madre.registered : 'No disponible',
+      'Mamá pendientes': row.madre?.available ? row.madre.pending : 'No disponible',
+      'Mamá avance (%)': row.madre?.available ? row.madre.percent : 'No disponible',
+      'Papá registrados': row.padre?.available ? row.padre.registered : 'No disponible',
+      'Papá pendientes': row.padre?.available ? row.padre.pending : 'No disponible',
+      'Papá avance (%)': row.padre?.available ? row.padre.percent : 'No disponible',
+      'Ambos registrados': row.ambos?.available ? row.ambos.registered : 'No disponible',
+    }))
+    exportToCSV(`avance-lugares-trabajo-${scopeMode.value}-${selectedCiclo.value}.csv`, rows)
+    return
+  }
   const rows = successfulReports.value.map((report) => {
     const scope = scopeForReport(report)
     const quality = Object.fromEntries(qualityBreakdown(scope).map((item) => [item.key, item.count]))
@@ -1310,4 +1400,32 @@ onBeforeUnmount(() => currentController?.abort())
     gap: .45rem;
   }
 }
+
+.report-tabs { display: flex; align-items: center; gap: .2rem; border-bottom: 1px solid #d7e7da; }
+.report-tabs button { cursor: pointer; border: 0; border-bottom: 3px solid transparent; border-radius: 9px 9px 0 0; background: transparent; color: #5d7063; font: inherit; font-size: .84rem; font-weight: 820; padding: .7rem 1rem; }
+.report-tabs button.active { background: #eff8f1; border-bottom-color: #28723a; color: #206a35; }
+.report-tabs button:focus-visible { outline: 2px solid #28723a; outline-offset: 1px; }
+.workplace-intro { display: flex; gap: 1rem; align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.workplace-intro h2 { margin: 0 0 .3rem; font-size: 1.07rem; }
+.workplace-intro p { margin: 0; color: #68776c; line-height: 1.5; font-size: .78rem; }
+.workplace-alert { display: inline-flex; align-items: center; gap: .35rem; font-size: .76rem; font-weight: 800; color: #a36927; }
+.workplace-kpi { background: linear-gradient(160deg, #fff, #f4f9f6); }
+.workplace-kpi small { font-size: .68rem; font-weight: 700; color: #68796e; line-height: 1.4; }
+.workplace-section { display: grid; gap: .6rem; }
+.workplace-board { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .75rem; }
+.workplace-card { min-width: 0; display: grid; gap: .9rem; border: 1px solid #e1eae4; border-radius: 16px; padding: 1rem; background: linear-gradient(160deg, #fff, #fafdfe); }
+.workplace-card header, .workplace-metric-head { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: .35rem; }
+.workplace-card header strong { color: #233449; font-size: .98rem; }
+.workplace-card header span, .workplace-metric-head span { color: #748077; font-size: .7rem; font-weight: 750; }
+.workplace-metric { display: grid; gap: .4rem; }
+.workplace-metric-head strong { font-size: .78rem; }
+.workplace-metric-head b { font-size: .82rem; }
+.workplace-metric-head .workplace-absent { color: #aa7132; }
+.workplace-bar { height: 11px; border-radius: 999px; background: #e7efe9; overflow: hidden; }
+.workplace-bar i { display: block; height: 100%; background: linear-gradient(90deg, #278143, #83b995); border-radius: inherit; transition: width .25s ease; }
+.workplace-bar.padre i { background: linear-gradient(90deg, #357ab4, #91bee1); }
+.workplace-card footer { border-top: 1px solid #e5eee7; padding-top: .65rem; font-size: .72rem; color: #6b7b70; }
+.workplace-card footer strong { color: #263c31; }
+@media (max-width: 850px) { .workplace-board { grid-template-columns: 1fr; } }
+@media (max-width: 520px) { .report-tabs button { flex: 1; font-size: .75rem; padding: .65rem .3rem; } }
 </style>
