@@ -1,4 +1,5 @@
 import { PLANTELES_LIST } from '../../utils/constants'
+import { dxProbeId } from './dx-usage'
 
 type DxParamType = 'text' | 'number' | 'boolean'
 
@@ -128,7 +129,7 @@ export const getDxApiCatalog = () => ({
   defaults: { plantel: '', ciclo: currentCycleLabel(), limit: '500', fresh: '1', status: 'inscrito', q: '', matricula: '' }
 })
 
-const tokenForHeader = (headerName: 'x-api-key' | 'x-aurora-token') => {
+export const tokenForHeader = (headerName: 'x-api-key' | 'x-aurora-token') => {
   const config = useRuntimeConfig() as any
   const general = [
     process.env.AURORA_API_TOKEN,
@@ -223,7 +224,7 @@ export const runDxApiRequest = async (event: any, body: any = {}) => {
       requests.push(requestPath)
       const payload = await localFetch(requestPath, {
         method: 'GET',
-        headers: { Accept: 'application/json', [headerName]: token },
+        headers: { Accept: 'application/json', [headerName]: token, 'x-aurora-dx-probe': dxProbeId },
         retry: 0
       })
       pages += 1

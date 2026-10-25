@@ -1,8 +1,16 @@
 import { fileURLToPath } from 'node:url'
+import { buildDxRouteManifest } from './scripts/dx-route-manifest.mjs'
 
 const clientAppManifestFallback = fileURLToPath(new URL('./node_modules/mocked-exports/lib/empty.mjs', import.meta.url))
 
 export default defineNuxtConfig({
+  hooks: {
+    'nitro:config'(config) {
+      // Rebuilt from actual handlers/imports on every build; no endpoint catalog to maintain.
+      config.virtual ||= {}
+      config.virtual['#dx-routes'] = 'export default ' + JSON.stringify(buildDxRouteManifest(fileURLToPath(new URL('.', import.meta.url))))
+    }
+  },
   devtools: { enabled: false },
   css: ['~/assets/css/main.css', '~/assets/css/pages/students.css', '~/assets/css/components/student-details.css', '~/assets/css/features/students/workspace.css'],
   modules: ['@nuxtjs/tailwindcss'],

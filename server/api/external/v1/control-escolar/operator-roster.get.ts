@@ -196,6 +196,16 @@ export default defineEventHandler(async (event) => {
           enrolledStatusBajaCount: enrolledStatusBaja.length,
           enrolledStatusBaja,
           latestUiSnapshot,
+          // Expose provenance already computed by Control Escolar. Membership
+          // and academic placement are unchanged, including offline fallback.
+          provenance: {
+            flow: result?.source?.diagnostics?.flow || null,
+            base: result?.source?.base || null,
+            cacheRefreshedAt: result?.source?.cacheRefreshedAt || null,
+            cacheFreshness: result?.source?.cacheFreshness || null,
+            bridgeFallback: result?.source?.bridgeFallback === true,
+            scopeKey: result?.source?.scopeKey || null
+          },
           generatedAt: new Date().toISOString()
         }
       }
