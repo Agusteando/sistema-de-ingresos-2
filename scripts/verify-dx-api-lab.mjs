@@ -1,21 +1,22 @@
 import { readFile } from 'node:fs/promises'
 const files = {
-  page: 'pages/dx/api-lab.vue', util: 'server/utils/dx-api-lab.ts', auto: 'server/api/control-escolar/dx-api-lab/auto.post.ts',
-  proof: 'server/api/control-escolar/dx-api-lab/proof.post.ts', proofPanel: 'components/DxProofPanel.vue'
+  page: 'pages/dx/api-lab.vue',
+  util: 'server/utils/dx-api-lab.ts',
+  explorer: 'server/utils/dx-integration-explorer.ts',
+  overview: 'server/api/control-escolar/dx-api-lab/overview.post.ts',
+  records: 'server/api/control-escolar/dx-api-lab/records.post.ts',
+  proof: 'server/api/control-escolar/dx-api-lab/proof.post.ts'
 }
-const [page, util, auto, proof, proofPanel] = await Promise.all(Object.values(files).map(path => readFile(path, 'utf8')))
-const failures = []; const expect = (condition, message) => { if (!condition) failures.push(message) }
-expect(page.includes('Estado de integraciones') && page.includes('Auto-DX'), 'DX debe seguir matrix-first con Auto-DX.')
-expect(page.includes('list="aurora-planteles"') && page.includes('visiblePlanteles'), 'Plantel debe seguir siendo un selector buscable.')
-expect(page.includes('pageRows') && page.includes('filteredRows') && page.includes('downloadCsv'), 'Datos debe conservar búsqueda, paginación frontend y CSV.')
-expect(page.includes('DxProofPanel') && page.includes("drawerView === 'proof'"), 'El drawer debe incluir la pestaña Proof.')
-expect(util.includes("import { PLANTELES_LIST } from '../../utils/constants'") && util.includes('runDxPlantelAutoDx'), 'El catálogo Auto-DX debe conservar su contrato.')
-for (const appId of ['lista','talleres','scanner','husky']) expect(util.includes(`id: '${appId}'`), `Falta app DX: ${appId}`)
-expect(proof.includes('fetchCanonicalExternalSnapshotScope') && proof.includes('rows: canonical.rows.map'), 'Proof debe devolver filas canónicas sin pre-agregar.')
-expect(proofPanel.includes('endpointRows.value.length') && proofPanel.includes('gradeRows') && proofPanel.includes('proofRows'), 'Proof debe calcular total, grado y grado × grupo en frontend.')
-expect(proofPanel.includes('endpointGradeCounts') && proofPanel.includes('baselineGradeCounts') && proofPanel.includes('distributionDiffs'), 'Proof debe conservar conteos frontend separados por grado y grupo.')
-expect(proofPanel.includes("simulationId === 'lista-roster'") && proofPanel.includes('missingMatriculas') && proofPanel.includes('extraMatriculas'), 'Proof debe validar el padrón exacto de Lista.')
-expect(proofPanel.includes('matches Control Escolar'), 'Proof debe mostrar estado compacto de paridad exacta.')
-expect(auto.includes('runDxPlantelAutoDx'), 'Auto-DX debe seguir delegando al orquestador.')
-if (failures.length) { console.error('DX API Lab inválido:'); failures.forEach(failure => console.error(`- ${failure}`)); process.exit(1) }
-console.log('DX API Lab válido: matriz, datos reales y Proof frontend de total/grado/grupo contra Control Escolar.')
+const f = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([key,path])=>[key,await readFile(path,'utf8')])))
+const failures=[]
+const expect=(pass,message)=>{if(!pass) failures.push(message)}
+for(const token of ['Aplicaciones','APIs','Último uso','Alumnos API','Grupos API','Sin grupo','Comparar con','Buscar matrícula','recordColumns','filteredConsumers','downloadCsv']) expect(f.page.includes(token),'Vista DX: '+token)
+expect(!f.page.includes('Auto-DX'),'No ejecutar todas las pruebas automáticamente ni presentar simulaciones como consumo real')
+expect(f.util.includes("id: 'ce-operator-roster'") && f.util.includes("id: 'lista-roster', appId: 'lista'"),'Inventariar el roster real de Lista')
+expect(f.explorer.includes('DX_CONSUMERS') && f.explorer.includes('DX_DATASETS') && f.explorer.includes('dxRosterStats'),'Mapa de consumo y resúmenes')
+for (const route of ['ce-operator-roster','ce-students','ce-academic','talleres-roster']) expect(f.explorer.includes(route),'Falta trazabilidad para '+route)
+expect(f.overview.includes('resolveControlEscolarAuth') && f.records.includes('resolveControlEscolarAuth'),'DX no debe permitir lecturas de otros planteles sin autorización')
+expect(f.overview.includes('Promise.all(DX_DATASETS.map') && f.records.includes('DX_DATASETS.find'),'Solo una lectura por fuente y consulta de registros por lista autorizada')
+expect(f.proof.includes('fetchCanonicalExternalSnapshotScope'),'Mantener diagnósticos legados de referencia')
+if(failures.length){console.error(failures.join('\n'));process.exit(1)}
+console.log('DX Integraciones: invariantes de solo lectura, fuentes, consumidores, comparación y explorador presentes.')

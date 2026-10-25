@@ -55,6 +55,10 @@ export const DX_API_ENDPOINTS: DxApiEndpoint[] = [
   { id: 'ce-health', group: 'Control Escolar', label: 'Health', method: 'GET', path: '/api/external/v1/control-escolar/health', description: 'Salud de la API pública de Control Escolar.', params: [], runnable: true, autoTest: true },
   { id: 'ce-auth-diagnostics', group: 'Control Escolar', label: 'Auth diagnostics', method: 'GET', path: '/api/external/v1/control-escolar/auth/diagnostics', description: 'Diagnóstico de autenticación sin revelar credenciales.', params: [], runnable: true, autoTest: true },
   { id: 'ce-auth-echo', group: 'Control Escolar', label: 'Auth echo', method: 'GET', path: '/api/external/v1/control-escolar/auth/echo', description: 'Confirma el contrato de autenticación externo.', params: [], runnable: true, autoTest: true },
+  { id: 'ce-operator-roster', group: 'Control Escolar', label: 'Padrón de operadores', method: 'GET', path: '/api/external/v1/control-escolar/operator-roster', description: 'Mismo padrón consultado por Lista de Caritas y Plans 2.', params: [plantel, ciclo], runnable: true },
+  { id: 'ce-credential-photos', group: 'Control Escolar', label: 'Fotos credencial', method: 'GET', path: '/api/external/v1/control-escolar/credential-photos', description: 'Fotos para credencialización.', params: [plantel, ciclo], runnable: true },
+  { id: 'ce-credential-applicant', group: 'Control Escolar', label: 'Solicitantes', method: 'GET', path: '/api/external/v1/control-escolar/credential-applicant', description: 'Datos de credencialización.', params: [plantel, ciclo], runnable: true },
+  { id: 'ce-ui-audit', group: 'Control Escolar', label: 'Auditoría UI', method: 'GET', path: '/api/external/v1/control-escolar/ui-audit-latest', description: 'Última auditoría de interfaz Control Escolar.', params: [plantel, ciclo], runnable: true },
   { id: 'ce-kpis', group: 'Control Escolar', label: 'KPIs', method: 'GET', path: '/api/external/v1/control-escolar/kpis', description: 'KPIs del snapshot público.', params: [plantel, ciclo], runnable: true },
   { id: 'ce-students', group: 'Control Escolar', label: 'Alumnos', method: 'GET', path: '/api/external/v1/control-escolar/students', description: 'Padrón público paginado de Control Escolar.', params: [plantel, ciclo, query, param('status', 'Estado'), param('fresh', 'Fresh', { type: 'boolean' }), limit, param('cursor', 'Cursor')], runnable: true },
   { id: 'ce-student', group: 'Control Escolar', label: 'Alumno por matrícula', method: 'GET', path: '/api/external/v1/control-escolar/students/:matricula', description: 'Alumno puntual por matrícula.', params: [matricula, ciclo, plantel], runnable: true },
@@ -64,6 +68,9 @@ export const DX_API_ENDPOINTS: DxApiEndpoint[] = [
   { id: 'ce-warm-get', group: 'Control Escolar', label: 'Warm status', method: 'GET', path: '/api/external/v1/control-escolar/warm', description: 'Consulta del estado del warm-up.', params: [plantel, ciclo], runnable: false, reason: 'Operación de warm-up bloqueada en DX.' },
   { id: 'ce-student-patch', group: 'Control Escolar', label: 'Actualizar alumno', method: 'PATCH', path: '/api/external/v1/control-escolar/students/:matricula', description: 'Mutación de alumno.', params: [matricula], runnable: false, reason: 'Mutación bloqueada.' },
   { id: 'ce-warm-post', group: 'Control Escolar', label: 'Warm', method: 'POST', path: '/api/external/v1/control-escolar/warm', description: 'Regenera/calienta datos.', params: [plantel, ciclo], runnable: false, reason: 'Mutación operativa bloqueada.' },
+  { id: 'deudores-email-smoke', group: 'Finanzas', label: 'Prueba correo', method: 'POST', path: '/api/external/v1/deudores/email-smoke', description: 'Mutación de correo: bloqueada en DX.', params: [], runnable: false, reason: 'Mutación bloqueada.' },
+  { id: 'incidents-pm1152', group: 'Incidentes', label: 'Caso PM1152', method: 'GET', path: '/api/external/v1/incidents/pm1152', description: 'Ruta puntual de incidentes.', params: [], runnable: false, reason: 'Operación forense excluida de consultas masivas.' },
+  { id: 'incidents-reconcile', group: 'Incidentes', label: 'Conciliación PM1152', method: 'POST', path: '/api/external/v1/incidents/pm1152/reconcile', description: 'Mutación bloqueada.', params: [], runnable: false, reason: 'Mutación bloqueada.' },
   { id: 'deudores', group: 'Finanzas', label: 'Deudores', method: 'GET', path: '/api/external/v1/deudores', description: 'Consulta externa de deudores.', params: [plantel, ciclo, param('matricula', 'Matrícula')], runnable: true },
   { id: 'husky-account', group: 'Husky Pass', label: 'Cuenta Husky Pass', method: 'GET', path: '/api/external/v1/husky-pass/account', description: 'Cuenta financiera/académica por matrícula.', params: [param('matricula', 'Matrícula', { required: true }), ciclo], runnable: true },
   { id: 'summer-health', group: 'Summer', label: 'Health', method: 'GET', path: '/api/external/v1/summer/health', description: 'Salud de Summer.', params: [], runnable: true, autoTest: true },
@@ -71,6 +78,7 @@ export const DX_API_ENDPOINTS: DxApiEndpoint[] = [
   { id: 'summer-students', group: 'Summer', label: 'Alumnos', method: 'GET', path: '/api/external/v1/summer/students', description: 'Padrón de Summer.', params: [plantel, ciclo, query, limit], runnable: true },
   { id: 'summer-photo', group: 'Summer', label: 'Foto', method: 'GET', path: '/api/external/v1/summer/students/:matricula/photo', description: 'Foto de alumno.', params: [matricula], runnable: false, reason: 'Respuesta binaria; no se ejecuta desde el visor JSON.' },
   { id: 'talleres-health', group: 'Talleres', label: 'Health', method: 'GET', path: '/api/external/v1/talleres/health', description: 'Salud del contrato de Talleres.', params: [], runnable: true, autoTest: true },
+  { id: 'talleres-summary', group: 'Talleres', label: 'Resumen talleres', method: 'GET', path: '/api/external/v1/talleres/summary', description: 'Resumen de talleres.', params: [plantel, ciclo], runnable: true },
   { id: 'talleres-meta', group: 'Talleres', label: 'Meta', method: 'GET', path: '/api/external/v1/talleres/meta', description: 'Catálogos y metadatos consumidos por Talleres.', params: [], runnable: true, autoTest: true },
   { id: 'talleres-roster', group: 'Talleres', label: 'Roster', method: 'GET', path: '/api/external/v1/talleres/roster', description: 'Roster real consumido por Talleres.', params: [plantel, ciclo], runnable: true },
   { id: 'talleres-search', group: 'Talleres', label: 'Buscar alumnos', method: 'GET', path: '/api/external/v1/talleres/students/search', description: 'Búsqueda real consumida por Talleres.', params: [param('q', 'Búsqueda', { required: true }), plantel, ciclo], runnable: true },
@@ -83,11 +91,12 @@ export const DX_API_ENDPOINTS: DxApiEndpoint[] = [
 
 export const DX_API_SIMULATIONS: DxApiSimulation[] = [
   { id: 'lista-cycle', appId: 'lista', app: 'Lista de Caritas', label: 'Resolver ciclo', endpointId: 'school-cycle', header: 'x-api-key', verifiedDirect: true, note: 'GET real usado para resolver el ciclo.' },
-  { id: 'lista-roster', appId: 'lista', app: 'Lista de Caritas', label: 'Padrón', endpointId: 'ce-students', header: 'x-api-key', fixedParams: { fresh: '1', status: 'inscrito', limit: '500' }, paginate: true, verifiedDirect: true, note: 'Padrón por plantel con cursor.' },
+  { id: 'lista-roster', appId: 'lista', app: 'Lista de Caritas', label: 'Padrón', endpointId: 'ce-operator-roster', header: 'x-api-key', verifiedDirect: true, note: 'GET real de Lista de Caritas: operator-roster, no snapshot público.' },
   { id: 'talleres-health-sim', appId: 'talleres', app: 'Talleres', label: 'Health', endpointId: 'talleres-health', header: 'x-aurora-token', verifiedDirect: true, note: 'Salud del contrato Talleres.' },
   { id: 'talleres-meta-sim', appId: 'talleres', app: 'Talleres', label: 'Meta', endpointId: 'talleres-meta', header: 'x-aurora-token', verifiedDirect: true, note: 'Catálogos y metadatos Talleres.' },
   { id: 'talleres-roster-sim', appId: 'talleres', app: 'Talleres', label: 'Roster', endpointId: 'talleres-roster', header: 'x-aurora-token', verifiedDirect: true, note: 'Roster por plantel y ciclo.' },
   { id: 'talleres-search-sim', appId: 'talleres', app: 'Talleres', label: 'Buscar alumno', endpointId: 'talleres-search', header: 'x-aurora-token', verifiedDirect: true, note: 'Búsqueda con una matrícula real derivada por Auto-DX.' },
+  { id: 'plans-roster', appId: 'plans', app: 'Plans 2', label: 'Padrón', endpointId: 'ce-operator-roster', header: 'x-api-key', verifiedDirect: true, note: 'Padrón del sincronizador de actividades.' },
   { id: 'scanner-roster', appId: 'scanner', app: 'Escáner Husky Pass', label: 'Snapshot académico', endpointId: 'ce-students', header: 'x-api-key', fixedParams: { fresh: '1', limit: '500' }, paginate: true, verifiedDirect: true, note: 'Bulk académico por plantel y ciclo.' },
   { id: 'scanner-academic', appId: 'scanner', app: 'Escáner Husky Pass', label: 'Alumno puntual', endpointId: 'ce-academic', header: 'x-api-key', verifiedDirect: true, note: 'Fallback puntual usando una matrícula real.' },
   { id: 'husky-account-contract', appId: 'husky', app: 'Husky Pass', label: 'Cuenta Aurora', endpointId: 'husky-account', header: 'x-api-key', verifiedDirect: false, note: 'Contrato dedicado disponible en Aurora.' }
@@ -95,6 +104,7 @@ export const DX_API_SIMULATIONS: DxApiSimulation[] = [
 
 export const DX_APPS: DxApp[] = [
   { id: 'lista', label: 'Lista de Caritas', simulationIds: ['lista-cycle', 'lista-roster'] },
+  { id: 'plans', label: 'Plans 2', simulationIds: ['plans-roster'] },
   { id: 'talleres', label: 'Talleres', simulationIds: ['talleres-health-sim', 'talleres-meta-sim', 'talleres-roster-sim', 'talleres-search-sim'] },
   { id: 'scanner', label: 'Escáner Husky Pass', simulationIds: ['scanner-roster', 'scanner-academic'] },
   { id: 'husky', label: 'Husky Pass', simulationIds: ['husky-account-contract'] }
