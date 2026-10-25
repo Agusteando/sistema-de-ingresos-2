@@ -149,6 +149,9 @@ export const assertAuroraExternalApiToken = (event: any) => {
     })
   }
 
+  // Credential class only. Shared credentials do not identify an application.
+  event.context.auroraExternalCredential = match.source
+
   return {
     authenticated: true,
     source: match.source,
