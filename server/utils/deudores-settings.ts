@@ -76,7 +76,7 @@ export const saveDeudoresSaldoMargin = async ({
   await query(
     `INSERT INTO cobranza_eventos (matricula, ciclo, mes, accion, fecha, usuario, metadata)
      VALUES (?, ?, ?, ?, NOW(), ?, ?)
-     ON DUPLICATE KEY UPDATE fecha = NOW(), usuario = VALUES(usuario), metadata = VALUES(metadata)`,
+     AS mysql97_new ON DUPLICATE KEY UPDATE fecha = NOW(), usuario = mysql97_new.usuario, metadata = mysql97_new.metadata`,
     [
       CONFIG_MATRICULA,
       CONFIG_CICLO,

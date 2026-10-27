@@ -208,7 +208,7 @@ export const updateCentralConceptImage = async (conceptoId: unknown, imageUrlInp
     await controlEscolarCentralQuery(`
       INSERT INTO concepto_media (concepto_id, image_url, activo, updated_by)
       VALUES (?, ?, 1, ?)
-      ON DUPLICATE KEY UPDATE image_url = VALUES(image_url), activo = 1, updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP
+      AS mysql97_new ON DUPLICATE KEY UPDATE image_url = mysql97_new.image_url, activo = 1, updated_by = mysql97_new.updated_by, updated_at = CURRENT_TIMESTAMP
     `, [id, imageUrl || null, user.email || null])
   }
   return { ok: true, concepto_id: id, image_url: imageUrl || null }
@@ -572,13 +572,13 @@ export const syncCentralConceptosCatalogToBridge = async (preloaded?: ConceptRow
   const quotedColumns = mirrorColumns.map((column) => `\`${column}\``).join(', ')
   const placeholders = mirrorColumns.map(() => '?').join(', ')
   const updateSql = updateColumns.length
-    ? ` ON DUPLICATE KEY UPDATE ${updateColumns.map((column) => `\`${column}\` = VALUES(\`${column}\`)`).join(', ')}`
+    ? ` ON DUPLICATE KEY UPDATE ${updateColumns.map((column) => `\`${column}\` = mysql97_new.\`${column}\``).join(', ')}`
     : ''
 
   const statements: SqlStatement[] = centralRows
     .filter((row) => Number(row.id || 0) > 0 && normalizeText(row.concepto))
     .map((row) => ({
-      sql: `INSERT INTO conceptos (${quotedColumns}) VALUES (${placeholders})${updateSql}`,
+      sql: `INSERT INTO conceptos (${quotedColumns}) VALUES (${placeholders}) AS mysql97_new${updateSql}`,
       params: mirrorColumns.map((column) => localConceptMirrorValue(column, row))
     }))
 
@@ -602,7 +602,7 @@ export const syncCentralConceptosCatalogToBridge = async (preloaded?: ConceptRow
       statements.push({
         sql: `INSERT INTO concepto_media (${insertColumns.map((column) => `\`${column}\``).join(', ')})
               VALUES (${insertColumns.map(() => '?').join(', ')})
-              ON DUPLICATE KEY UPDATE image_url = VALUES(image_url)${mediaColumns.has('activo') ? ', activo = 1' : ''}`,
+              AS mysql97_new ON DUPLICATE KEY UPDATE image_url = mysql97_new.image_url${mediaColumns.has('activo') ? ', activo = 1' : ''}`,
         params
       })
       mediaCount += 1

@@ -367,14 +367,14 @@ export const saveStockSettings = async (input: any, user: AuthSessionUser) => {
     INSERT INTO concepto_stock_settings
       (concepto_id, plantel, stock_enabled, unit_label, reorder_point, allow_negative, activo, sync_version, updated_by)
     VALUES (?, ?, ?, ?, ?, ?, 1, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      stock_enabled = VALUES(stock_enabled),
-      unit_label = VALUES(unit_label),
-      reorder_point = VALUES(reorder_point),
-      allow_negative = VALUES(allow_negative),
+    AS mysql97_new ON DUPLICATE KEY UPDATE
+      stock_enabled = mysql97_new.stock_enabled,
+      unit_label = mysql97_new.unit_label,
+      reorder_point = mysql97_new.reorder_point,
+      allow_negative = mysql97_new.allow_negative,
       activo = 1,
-      sync_version = VALUES(sync_version),
-      updated_by = VALUES(updated_by)
+      sync_version = mysql97_new.sync_version,
+      updated_by = mysql97_new.updated_by
   `, [conceptoId, plantel, enabled ? 1 : 0, unitLabel, reorderPoint, allowNegative ? 1 : 0, syncVersion, user.email])
 
   await controlEscolarCentralQuery(`
@@ -415,11 +415,11 @@ const stockMutation = async (input: any, user: AuthSessionUser, type: 'restock' 
         INSERT INTO concepto_stock_settings
           (concepto_id, plantel, stock_enabled, unit_label, reorder_point, allow_negative, activo, sync_version, updated_by)
         VALUES (?, ?, 1, ?, 0, 0, 1, ?, ?)
-        ON DUPLICATE KEY UPDATE
+        AS mysql97_new ON DUPLICATE KEY UPDATE
           stock_enabled = 1,
           activo = 1,
-          sync_version = VALUES(sync_version),
-          updated_by = VALUES(updated_by)
+          sync_version = mysql97_new.sync_version,
+          updated_by = mysql97_new.updated_by
       `, [conceptoId, plantel, DEFAULT_UNIT_LABEL, Date.now(), user.email])
       setting = { stock_enabled: 1 }
     }
@@ -528,7 +528,7 @@ const reserveCentral = async (input: any): Promise<StockReservation> => {
       INSERT INTO concepto_stock_movements
         (concepto_id, plantel, movement_type, quantity_delta, quantity_after, source_type, source_id, documento, matricula, note, idempotency_key, created_by)
       VALUES (?, ?, 'payment_consume', ?, ?, 'payment', ?, ?, ?, ?, ?, ?)
-      ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
+      AS mysql97_new ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)
     `, [conceptoId, plantel, -quantity, next, idempotencyKey, input.documento || null, input.matricula || null, input.note || null, idempotencyKey, input.userEmail || null])
     const movementId = Number(movementResult?.insertId || 0) || null
     await conn.query(`UPDATE concepto_stock_balances SET last_movement_id = ? WHERE concepto_id = ? AND plantel = ?`, [movementId, conceptoId, plantel])
@@ -677,7 +677,7 @@ export const restoreStockForCanceledPayment = async (pago: any, user: AuthSessio
       const [movementResult] = await conn.query<any>(`INSERT INTO concepto_stock_movements
         (concepto_id, plantel, movement_type, quantity_delta, quantity_after, source_type, source_id, documento, folio, matricula, note, idempotency_key, created_by)
         VALUES (?, ?, 'payment_cancel_restore', ?, ?, 'payment_cancel', ?, ?, ?, ?, ?, ?, ?)
-        ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
+        AS mysql97_new ON DUPLICATE KEY UPDATE id = LAST_INSERT_ID(id)`,
         [conceptoId, plantel, quantity, next, String(pago.folio), pago.documento || null, pago.folio || null, pago.matricula || null, 'Cancelación de pago', idempotencyKey, user.email || user.name || 'Sistema'])
       await conn.query(`UPDATE concepto_stock_balances SET last_movement_id = ? WHERE concepto_id = ? AND plantel = ?`, [Number(movementResult?.insertId || 0) || null, conceptoId, plantel])
       await conn.commit()

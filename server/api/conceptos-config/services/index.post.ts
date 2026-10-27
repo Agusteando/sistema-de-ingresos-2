@@ -19,13 +19,13 @@ export default defineEventHandler(async (event) => {
     `INSERT INTO talleres_servicios_catalogo
        (servicio_clave, servicio_nombre, imagen_url, activo, orden, sync_version, updated_by)
      VALUES (?, ?, ?, 1, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       servicio_nombre = VALUES(servicio_nombre),
-       imagen_url = VALUES(imagen_url),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       servicio_nombre = mysql97_new.servicio_nombre,
+       imagen_url = mysql97_new.imagen_url,
        activo = 1,
-       orden = VALUES(orden),
-       sync_version = VALUES(sync_version),
-       updated_by = VALUES(updated_by),
+       orden = mysql97_new.orden,
+       sync_version = mysql97_new.sync_version,
+       updated_by = mysql97_new.updated_by,
        updated_at = CURRENT_TIMESTAMP`,
     [clave, nombre, imagen || `/talleres-servicios/${clave}.svg`, Number.isFinite(orden) ? orden : 9999, Date.now(), user.email]
   )

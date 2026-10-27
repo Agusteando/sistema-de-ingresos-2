@@ -31,7 +31,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   await query(
     `INSERT INTO cobranza_excepciones (matricula, ciclo, mes, fecha_limite_especial, motivo, activa, created_by, created_at)
       VALUES (?, ?, ?, ?, ?, 1, ?, NOW())
-      ON DUPLICATE KEY UPDATE fecha_limite_especial = VALUES(fecha_limite_especial), motivo = VALUES(motivo), activa = 1, created_by = VALUES(created_by)`,
+      AS mysql97_new ON DUPLICATE KEY UPDATE fecha_limite_especial = mysql97_new.fecha_limite_especial, motivo = mysql97_new.motivo, activa = 1, created_by = mysql97_new.created_by`,
     [normalizedMatricula, normalizedCiclo, normalizedMes, normalizedDate, normalizedMotivo, user.email || user.name || 'sistema']
   )
 

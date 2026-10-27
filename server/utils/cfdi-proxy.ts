@@ -437,17 +437,17 @@ const persistCompanyData = async (body: any, matricula: string, facturaCon: unkn
        matricula, legal_name, tax_id, tax_system, email, zip,
        nombreAlumno, CURP, nivelEducativo, autRVOE, factura_con
      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       legal_name = VALUES(legal_name),
-       tax_id = VALUES(tax_id),
-       tax_system = VALUES(tax_system),
-       email = VALUES(email),
-       zip = VALUES(zip),
-       nombreAlumno = VALUES(nombreAlumno),
-       CURP = VALUES(CURP),
-       nivelEducativo = VALUES(nivelEducativo),
-       autRVOE = VALUES(autRVOE),
-       factura_con = VALUES(factura_con),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       legal_name = mysql97_new.legal_name,
+       tax_id = mysql97_new.tax_id,
+       tax_system = mysql97_new.tax_system,
+       email = mysql97_new.email,
+       zip = mysql97_new.zip,
+       nombreAlumno = mysql97_new.nombreAlumno,
+       CURP = mysql97_new.CURP,
+       nivelEducativo = mysql97_new.nivelEducativo,
+       autRVOE = mysql97_new.autRVOE,
+       factura_con = mysql97_new.factura_con,
        updated_at = CURRENT_TIMESTAMP`,
     [
       matricula,

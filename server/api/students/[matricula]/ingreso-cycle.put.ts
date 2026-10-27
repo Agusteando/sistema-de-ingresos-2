@@ -186,10 +186,10 @@ export default defineEventHandler(async (event) =>
           `INSERT INTO student_tipo_ingreso_overrides
              (matricula, override_activo, tipo_forzado, updated_by)
            VALUES (?, 1, ?, ?)
-           ON DUPLICATE KEY UPDATE
-             override_activo = VALUES(override_activo),
-             tipo_forzado = VALUES(tipo_forzado),
-             updated_by = VALUES(updated_by),
+           AS mysql97_new ON DUPLICATE KEY UPDATE
+             override_activo = mysql97_new.override_activo,
+             tipo_forzado = mysql97_new.tipo_forzado,
+             updated_by = mysql97_new.updated_by,
              updated_at = CURRENT_TIMESTAMP`,
           [matricula, overrideValue, user?.email || "sistema"],
         );

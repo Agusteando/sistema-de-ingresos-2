@@ -966,11 +966,11 @@ export const processExternalRowsBatch = async (
       sql: `
         INSERT INTO external_base_sync (matricula, plantel, source_hash, last_synced_at, last_payload, last_error)
         VALUES (?, ?, ?, CURRENT_TIMESTAMP, ?, NULL)
-        ON DUPLICATE KEY UPDATE
-          plantel = VALUES(plantel),
-          source_hash = VALUES(source_hash),
-          last_synced_at = VALUES(last_synced_at),
-          last_payload = VALUES(last_payload),
+        AS mysql97_new ON DUPLICATE KEY UPDATE
+          plantel = mysql97_new.plantel,
+          source_hash = mysql97_new.source_hash,
+          last_synced_at = mysql97_new.last_synced_at,
+          last_payload = mysql97_new.last_payload,
           last_error = NULL
       `,
       params: [entry.matricula, plantel, entry.sourceHash, JSON.stringify({ raw: entry.row, mapped: entry.mapped, syncCiclo: entry.syncCicloKey })]
@@ -988,8 +988,8 @@ export const processExternalRowsBatch = async (
         sql: `
           INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
           VALUES (?, ?)
-          ON DUPLICATE KEY UPDATE
-            successor_matricula = VALUES(successor_matricula),
+          AS mysql97_new ON DUPLICATE KEY UPDATE
+            successor_matricula = mysql97_new.successor_matricula,
             updated_at = CURRENT_TIMESTAMP
         `,
         params: [previousMatricula, entry.matricula]
@@ -1005,8 +1005,8 @@ export const processExternalRowsBatch = async (
         sql: `
           INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
           VALUES (?, ?)
-          ON DUPLICATE KEY UPDATE
-            successor_matricula = VALUES(successor_matricula),
+          AS mysql97_new ON DUPLICATE KEY UPDATE
+            successor_matricula = mysql97_new.successor_matricula,
             updated_at = CURRENT_TIMESTAMP
         `,
         params: [entry.matricula, successorMatricula]

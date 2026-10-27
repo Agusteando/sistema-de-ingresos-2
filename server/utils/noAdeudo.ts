@@ -711,11 +711,11 @@ export const persistNoAdeudoDeudorCartaMark = async ({
     INSERT INTO ${quoteIdentifier(NO_ADEUDO_DEUDOR_TABLE)} (
       plantel, matricula, ciclo, folio, sent_at, sent_by_name, sent_by_email
     ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
-      folio = VALUES(folio),
-      sent_at = VALUES(sent_at),
-      sent_by_name = VALUES(sent_by_name),
-      sent_by_email = VALUES(sent_by_email)
+    AS mysql97_new ON DUPLICATE KEY UPDATE
+      folio = mysql97_new.folio,
+      sent_at = mysql97_new.sent_at,
+      sent_by_name = mysql97_new.sent_by_name,
+      sent_by_email = mysql97_new.sent_by_email
   `, [
     normalizeText(context.student.plantel).toUpperCase(),
     normalizeMatricula(context.student.matricula),

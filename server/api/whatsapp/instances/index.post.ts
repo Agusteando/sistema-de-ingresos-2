@@ -34,7 +34,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
     `INSERT INTO cobranza_whatsapp_clients
       (client_id, integration_id, status, display_name, user_email, endpoint_status, endpoint_qr_status, endpoint_qr_stream, endpoint_send_message, metadata, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())
-     ON DUPLICATE KEY UPDATE integration_id = VALUES(integration_id), status = VALUES(status), display_name = VALUES(display_name), user_email = VALUES(user_email), endpoint_status = VALUES(endpoint_status), endpoint_qr_status = VALUES(endpoint_qr_status), endpoint_qr_stream = VALUES(endpoint_qr_stream), endpoint_send_message = VALUES(endpoint_send_message), metadata = VALUES(metadata), updated_at = NOW()`,
+     AS mysql97_new ON DUPLICATE KEY UPDATE integration_id = mysql97_new.integration_id, status = mysql97_new.status, display_name = mysql97_new.display_name, user_email = mysql97_new.user_email, endpoint_status = mysql97_new.endpoint_status, endpoint_qr_status = mysql97_new.endpoint_qr_status, endpoint_qr_stream = mysql97_new.endpoint_qr_stream, endpoint_send_message = mysql97_new.endpoint_send_message, metadata = mysql97_new.metadata, updated_at = NOW()`,
     [
       instance.clientId || clientId,
       instance.integrationId || null,

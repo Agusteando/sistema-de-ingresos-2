@@ -115,9 +115,9 @@ export const ensureControlBaseSource = async (agentId: string) => {
   await controlEscolarCentralQuery(
     `INSERT INTO control_base_sources (source_id, plantel, bridge_agent_id, status)
      VALUES (?, ?, ?, 'active')
-     ON DUPLICATE KEY UPDATE
-       plantel = VALUES(plantel),
-       bridge_agent_id = VALUES(bridge_agent_id),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       plantel = mysql97_new.plantel,
+       bridge_agent_id = mysql97_new.bridge_agent_id,
        status = 'active',
        updated_at = CURRENT_TIMESTAMP`,
     [sourceId, plantel, plantel],
@@ -325,10 +325,10 @@ const insertStageRows = async (
       `INSERT INTO control_base_scope_cache_stage
          (source_id, scope_key, refresh_token, matricula, plantel, base_payload, row_hash, staged_at)
        VALUES ${placeholders}
-       ON DUPLICATE KEY UPDATE
-         plantel = VALUES(plantel),
-         base_payload = VALUES(base_payload),
-         row_hash = VALUES(row_hash),
+       AS mysql97_new ON DUPLICATE KEY UPDATE
+         plantel = mysql97_new.plantel,
+         base_payload = mysql97_new.base_payload,
+         row_hash = mysql97_new.row_hash,
          staged_at = CURRENT_TIMESTAMP`,
       values,
     );
@@ -369,26 +369,26 @@ const writeValidation = async (
         live_no_inscritos, cached_no_inscritos, live_bajas, cached_bajas,
         live_baja_inscrita, cached_baja_inscrita, last_error, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, DATE_ADD(CURRENT_TIMESTAMP, INTERVAL ? MINUTE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-     ON DUPLICATE KEY UPDATE
-       ciclo_key = VALUES(ciclo_key),
-       previous_ciclo = VALUES(previous_ciclo),
-       concept_hash = VALUES(concept_hash),
-       concept_ids = VALUES(concept_ids),
-       validation_status = VALUES(validation_status),
-       cache_refreshed_at = VALUES(cache_refreshed_at),
-       cache_expires_at = VALUES(cache_expires_at),
-       cache_row_count = VALUES(cache_row_count),
-       live_total = VALUES(live_total),
-       cached_total = VALUES(cached_total),
-       live_inscritos = VALUES(live_inscritos),
-       cached_inscritos = VALUES(cached_inscritos),
-       live_no_inscritos = VALUES(live_no_inscritos),
-       cached_no_inscritos = VALUES(cached_no_inscritos),
-       live_bajas = VALUES(live_bajas),
-       cached_bajas = VALUES(cached_bajas),
-       live_baja_inscrita = VALUES(live_baja_inscrita),
-       cached_baja_inscrita = VALUES(cached_baja_inscrita),
-       last_error = VALUES(last_error),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       ciclo_key = mysql97_new.ciclo_key,
+       previous_ciclo = mysql97_new.previous_ciclo,
+       concept_hash = mysql97_new.concept_hash,
+       concept_ids = mysql97_new.concept_ids,
+       validation_status = mysql97_new.validation_status,
+       cache_refreshed_at = mysql97_new.cache_refreshed_at,
+       cache_expires_at = mysql97_new.cache_expires_at,
+       cache_row_count = mysql97_new.cache_row_count,
+       live_total = mysql97_new.live_total,
+       cached_total = mysql97_new.cached_total,
+       live_inscritos = mysql97_new.live_inscritos,
+       cached_inscritos = mysql97_new.cached_inscritos,
+       live_no_inscritos = mysql97_new.live_no_inscritos,
+       cached_no_inscritos = mysql97_new.cached_no_inscritos,
+       live_bajas = mysql97_new.live_bajas,
+       cached_bajas = mysql97_new.cached_bajas,
+       live_baja_inscrita = mysql97_new.live_baja_inscrita,
+       cached_baja_inscrita = mysql97_new.cached_baja_inscrita,
+       last_error = mysql97_new.last_error,
        updated_at = CURRENT_TIMESTAMP`,
     [
       sourceId,

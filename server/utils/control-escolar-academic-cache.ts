@@ -100,14 +100,14 @@ export const writeCachedAcademicPlacement = async (response: any) => {
     `INSERT INTO ${ACADEMIC_CACHE_TABLE}
       (matricula, ciclo_key, plantel, nivel, grado, grupo, payload_json, generated_at, fresh_until)
      VALUES (?,?,?,?,?,?,?,?,?)
-     ON DUPLICATE KEY UPDATE
-       plantel = VALUES(plantel),
-       nivel = VALUES(nivel),
-       grado = VALUES(grado),
-       grupo = VALUES(grupo),
-       payload_json = VALUES(payload_json),
-       generated_at = VALUES(generated_at),
-       fresh_until = VALUES(fresh_until),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       plantel = mysql97_new.plantel,
+       nivel = mysql97_new.nivel,
+       grado = mysql97_new.grado,
+       grupo = mysql97_new.grupo,
+       payload_json = mysql97_new.payload_json,
+       generated_at = mysql97_new.generated_at,
+       fresh_until = mysql97_new.fresh_until,
        updated_at = CURRENT_TIMESTAMP`,
     [
       matricula,

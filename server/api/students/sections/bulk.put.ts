@@ -76,7 +76,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
         sql: `
           INSERT INTO student_custom_section_memberships (section_id, matricula, created_by)
           VALUES (?, ?, ?)
-          ON DUPLICATE KEY UPDATE created_by = VALUES(created_by)
+          AS mysql97_new ON DUPLICATE KEY UPDATE created_by = mysql97_new.created_by
         `,
         params: [sectionId, matricula, user.name || user.email || null]
       })

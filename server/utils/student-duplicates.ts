@@ -376,7 +376,7 @@ export const ignoreDuplicatePair = async (aValue: unknown, bValue: unknown, user
   await query(`
     INSERT INTO student_duplicate_ignored_pairs (matricula_a, matricula_b, created_by)
     VALUES (?, ?, ?)
-    ON DUPLICATE KEY UPDATE created_by = VALUES(created_by), created_at = CURRENT_TIMESTAMP
+    AS mysql97_new ON DUPLICATE KEY UPDATE created_by = mysql97_new.created_by, created_at = CURRENT_TIMESTAMP
   `, [a, b, clean(userEmail, 255) || null])
   return { success: true }
 }

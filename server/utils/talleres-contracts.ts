@@ -93,7 +93,7 @@ export const saveTalleresContract = async ({ matricula, hasContract, observation
   await controlEscolarCentralQuery(
     `INSERT INTO ${CONTRACTS_TABLE} (matricula, has_contract, observations, updated_by)
      VALUES (?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE has_contract = VALUES(has_contract), observations = VALUES(observations), updated_by = VALUES(updated_by), updated_at = CURRENT_TIMESTAMP`,
+     AS mysql97_new ON DUPLICATE KEY UPDATE has_contract = mysql97_new.has_contract, observations = mysql97_new.observations, updated_by = mysql97_new.updated_by, updated_at = CURRENT_TIMESTAMP`,
     [key, contractValue, notes || null, actor],
   )
   if (schema.history) {

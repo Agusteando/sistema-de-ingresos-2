@@ -13,7 +13,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   await query(
     `INSERT INTO cobranza_email_templates (code, subject, html_template, include_desglose, updated_at, updated_by)
       VALUES ('deudores_recordatorio', ?, ?, ?, NOW(), ?)
-      ON DUPLICATE KEY UPDATE subject = VALUES(subject), html_template = VALUES(html_template), include_desglose = VALUES(include_desglose), updated_at = NOW(), updated_by = VALUES(updated_by)`,
+      AS mysql97_new ON DUPLICATE KEY UPDATE subject = mysql97_new.subject, html_template = mysql97_new.html_template, include_desglose = mysql97_new.include_desglose, updated_at = NOW(), updated_by = mysql97_new.updated_by`,
     [template.subject, template.htmlTemplate, template.includeDesglose ? 1 : 0, user.email || user.name || 'sistema']
   )
 

@@ -229,15 +229,15 @@ const mirrorPolicyToBridge = async (policy: RecargoPolicy, pendingSync = false) 
     `INSERT INTO ${RECARGO_TABLE}
       (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
      VALUES (?, ?, ?, ?, ?, ?, COALESCE(?, CURRENT_TIMESTAMP), ?, ?)
-     ON DUPLICATE KEY UPDATE
-       activo = VALUES(activo),
-       es_servicio = VALUES(es_servicio),
-       porcentaje = VALUES(porcentaje),
-       dia_limite = VALUES(dia_limite),
-       version = VALUES(version),
-       updated_at = VALUES(updated_at),
-       updated_by = VALUES(updated_by),
-       pending_sync = VALUES(pending_sync)`,
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       activo = mysql97_new.activo,
+       es_servicio = mysql97_new.es_servicio,
+       porcentaje = mysql97_new.porcentaje,
+       dia_limite = mysql97_new.dia_limite,
+       version = mysql97_new.version,
+       updated_at = mysql97_new.updated_at,
+       updated_by = mysql97_new.updated_by,
+       pending_sync = mysql97_new.pending_sync`,
     [
       policy.conceptoId,
       policy.activo ? 1 : 0,
@@ -278,14 +278,14 @@ const pushPolicyToCentral = async (policy: RecargoPolicy) => {
     `INSERT INTO ${RECARGO_TABLE}
       (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
      VALUES (?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, ?)
-     ON DUPLICATE KEY UPDATE
-       activo = VALUES(activo),
-       es_servicio = VALUES(es_servicio),
-       porcentaje = VALUES(porcentaje),
-       dia_limite = VALUES(dia_limite),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       activo = mysql97_new.activo,
+       es_servicio = mysql97_new.es_servicio,
+       porcentaje = mysql97_new.porcentaje,
+       dia_limite = mysql97_new.dia_limite,
        version = version + 1,
        updated_at = CURRENT_TIMESTAMP,
-       updated_by = VALUES(updated_by)`,
+       updated_by = mysql97_new.updated_by`,
     [policy.conceptoId, policy.activo ? 1 : 0, policy.esServicio ? 1 : 0, policy.porcentaje, policy.diaLimite, policy.updatedBy],
   ))
   const saved = await readCentralPolicyRow(policy.conceptoId)
@@ -446,11 +446,11 @@ export const setRecargoPolicyActive = async ({
         `INSERT INTO ${RECARGO_TABLE}
           (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
          VALUES (?, ?, 0, ?, ?, 1, CURRENT_TIMESTAMP, ?)
-         ON DUPLICATE KEY UPDATE
-           activo = VALUES(activo),
+         AS mysql97_new ON DUPLICATE KEY UPDATE
+           activo = mysql97_new.activo,
            version = version + 1,
            updated_at = CURRENT_TIMESTAMP,
-           updated_by = VALUES(updated_by)`,
+           updated_by = mysql97_new.updated_by`,
         [id, normalizedActive ? 1 : 0, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
       ))
       const saved = await readCentralPolicyRow(id)
@@ -467,11 +467,11 @@ export const setRecargoPolicyActive = async ({
     `INSERT INTO ${RECARGO_TABLE}
       (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
      VALUES (?, ?, 0, ?, ?, 1, CURRENT_TIMESTAMP, ?, 1)
-     ON DUPLICATE KEY UPDATE
-       activo = VALUES(activo),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       activo = mysql97_new.activo,
        version = version + 1,
        updated_at = CURRENT_TIMESTAMP,
-       updated_by = VALUES(updated_by),
+       updated_by = mysql97_new.updated_by,
        pending_sync = 1`,
     [id, normalizedActive ? 1 : 0, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
   )
@@ -499,12 +499,12 @@ export const markRecargoConceptAsService = async ({
         `INSERT INTO ${RECARGO_TABLE}
           (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by)
          VALUES (?, 1, 1, ?, ?, 1, CURRENT_TIMESTAMP, ?)
-         ON DUPLICATE KEY UPDATE
+         AS mysql97_new ON DUPLICATE KEY UPDATE
            activo = 1,
            es_servicio = 1,
            version = version + 1,
            updated_at = CURRENT_TIMESTAMP,
-           updated_by = VALUES(updated_by)`,
+           updated_by = mysql97_new.updated_by`,
         [id, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
       ))
       const saved = await readCentralPolicyRow(id)
@@ -521,12 +521,12 @@ export const markRecargoConceptAsService = async ({
     `INSERT INTO ${RECARGO_TABLE}
       (concepto_id, activo, es_servicio, porcentaje, dia_limite, version, updated_at, updated_by, pending_sync)
      VALUES (?, 1, 1, ?, ?, 1, CURRENT_TIMESTAMP, ?, 1)
-     ON DUPLICATE KEY UPDATE
+     AS mysql97_new ON DUPLICATE KEY UPDATE
        activo = 1,
        es_servicio = 1,
        version = version + 1,
        updated_at = CURRENT_TIMESTAMP,
-       updated_by = VALUES(updated_by),
+       updated_by = mysql97_new.updated_by,
        pending_sync = 1`,
     [id, DEFAULT_PERCENTAGE, DEFAULT_CUTOFF_DAY, actor],
   )

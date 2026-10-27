@@ -186,8 +186,8 @@ export default defineEventHandler(async (event) =>
             sql: `
             INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
             VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE
-              successor_matricula = VALUES(successor_matricula),
+            AS mysql97_new ON DUPLICATE KEY UPDATE
+              successor_matricula = mysql97_new.successor_matricula,
               updated_at = CURRENT_TIMESTAMP
           `,
             params: [previousMatricula, matricula],
@@ -210,8 +210,8 @@ export default defineEventHandler(async (event) =>
             sql: `
             INSERT INTO alumno_matricula_links (previous_matricula, successor_matricula)
             VALUES (?, ?)
-            ON DUPLICATE KEY UPDATE
-              successor_matricula = VALUES(successor_matricula),
+            AS mysql97_new ON DUPLICATE KEY UPDATE
+              successor_matricula = mysql97_new.successor_matricula,
               updated_at = CURRENT_TIMESTAMP
           `,
             params: [matricula, successorMatricula],

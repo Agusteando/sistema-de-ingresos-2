@@ -1227,7 +1227,7 @@ export const ensureSchema = async (options: EnsureSchemaOptions = {}) => {
           1,
           'system'
         )
-        ON DUPLICATE KEY UPDATE subject = IF(updated_by = 'system', VALUES(subject), subject), html_template = IF(updated_by = 'system', VALUES(html_template), html_template), include_desglose = IF(updated_by = 'system', VALUES(include_desglose), include_desglose);
+        AS mysql97_new ON DUPLICATE KEY UPDATE subject = IF(updated_by = 'system', mysql97_new.subject, subject), html_template = IF(updated_by = 'system', mysql97_new.html_template, html_template), include_desglose = IF(updated_by = 'system', mysql97_new.include_desglose, include_desglose);
       `)
       try {
         const superAdminEmail = 'desarrollo.tecnologico@casitaiedis.edu.mx'

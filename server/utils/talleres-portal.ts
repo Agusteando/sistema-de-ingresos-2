@@ -512,11 +512,11 @@ export const saveTalleresStudentDays = async ({
     `INSERT INTO ${LABELS_TABLE}
       (ciclo, plantel, matricula, servicio_clave, servicio_nombre, dias_json, updated_by)
      VALUES (?, ?, ?, ?, ?, ?, ?)
-     ON DUPLICATE KEY UPDATE
-       plantel = VALUES(plantel),
-       servicio_nombre = VALUES(servicio_nombre),
-       dias_json = VALUES(dias_json),
-       updated_by = VALUES(updated_by),
+     AS mysql97_new ON DUPLICATE KEY UPDATE
+       plantel = mysql97_new.plantel,
+       servicio_nombre = mysql97_new.servicio_nombre,
+       dias_json = mysql97_new.dias_json,
+       updated_by = mysql97_new.updated_by,
        updated_at = CURRENT_TIMESTAMP`,
     [ciclo, plantelValue, matriculaValue, servicioClave, servicioNombre, JSON.stringify(normalizedDays), clean(updatedBy, 255) || null]
   )

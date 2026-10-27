@@ -27,10 +27,10 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
   await query<any>(`
     INSERT INTO student_custom_sections (name, plantel, description, color, sort_order)
     VALUES (?, ?, ?, ?, ?)
-    ON DUPLICATE KEY UPDATE
+    AS mysql97_new ON DUPLICATE KEY UPDATE
       is_active = 1,
-      description = VALUES(description),
-      color = VALUES(color),
+      description = mysql97_new.description,
+      color = mysql97_new.color,
       updated_at = CURRENT_TIMESTAMP
   `, [
     name,
