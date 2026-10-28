@@ -2,6 +2,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { activityFrames, activitySnapshot, calendarWindow, startActivitySnapshots } from '../server/observatory/runtime.mjs'
 import * as source from '../server/observatory/source.mjs'
+import * as finance from '../server/observatory/financial-last-login.mjs'
 
 const now = Date.parse('2026-10-28T08:00:00-06:00')
 const period = calendarWindow(now)
@@ -56,4 +57,27 @@ test('a failed read never emits fabricated hours and shutdown cancels retries', 
   assert.equal(pending[0].delay, 600000)
   stop()
   assert.equal(cancelled.length, 1)
+})
+
+test('financial-only last-login witness is historical and explicitly partial', () => {
+  const query = finance.activityQuery(period)
+  assert.match(query.sql, /^SELECT /)
+  assert.match(query.sql, /MAX_EXECUTION_TIME\(2500\)/)
+  assert.match(query.sql, /MAX\(last_login_at\) AS last_login_at/)
+  assert.match(query.sql, /GROUP BY LOWER\(TRIM\(email\)\)/)
+  assert.match(query.sql, /FIND_IN_SET\('ROLE_ADMON'/)
+  assert.match(query.sql, /FIND_IN_SET\('ROLE_CTRL'/)
+  assert.match(query.sql, /latest.finance_role > 0 AND latest.control_role = 0 AND latest.superadmin_role = 0/)
+  assert.match(query.sql, /latest.last_login_at >= FROM_UNIXTIME\(\?\)/)
+  assert.match(query.sql, /latest.last_login_at < FROM_UNIXTIME\(\?\)/)
+  assert.equal(query.timeout, 4000)
+  assert.deepEqual(query.values, [period.start, period.end])
+  assert.equal((query.sql.match(/\?/g) || []).length, query.values.length)
+  const frames = activityFrames(activitySnapshot({
+    app: finance.app, source: finance.source, kinds: finance.kinds,
+    rows: [{kind: finance.kinds[0], bucket_end: period.start + 3600, count: '3'}], now
+  }), finance.kinds)
+  assert.equal(frames[0].values[0], 3)
+  assert.equal(frames[0].values[1], null)
+  assert.ok(Buffer.byteLength(JSON.stringify(frames[0])) < 12000)
 })
