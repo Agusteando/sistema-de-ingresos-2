@@ -78,6 +78,9 @@
         <NuxtLink v-if="showControlEscolarNav" to="/control-escolar" class="nav-item group" title="Control Escolar" aria-label="Control Escolar">
           <LucideSchool :size="22" stroke-width="2" /> <span class="nav-label">Control Escolar</span>
         </NuxtLink>
+        <NuxtLink v-if="isSuperAdmin" to="/exportacion-control-escolar" class="nav-item group" title="Exportación institucional" aria-label="Exportación institucional">
+          <LucideFileSpreadsheet :size="22" stroke-width="2" /> <span class="nav-label">Exportación institucional</span>
+        </NuxtLink>
         <NuxtLink v-if="showControlEscolarNav" to="/avance-control-escolar" class="nav-item group" title="Reporte Control Escolar" aria-label="Reporte Control Escolar">
           <LucideClipboardList :size="22" stroke-width="2" /> <span class="nav-label">Reporte Control Escolar</span>
         </NuxtLink>
