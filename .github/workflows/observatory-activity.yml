@@ -1,0 +1,29 @@
+name: Observatory activity contract
+
+on:
+  pull_request:
+    paths:
+      - 'server/observatory/**'
+      - 'server/plugins/*observatory-activity*'
+      - 'scripts/verify-observatory-activity.mjs'
+      - '.github/workflows/observatory-activity.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'server/observatory/**'
+      - 'server/plugins/*observatory-activity*'
+      - 'scripts/verify-observatory-activity.mjs'
+      - '.github/workflows/observatory-activity.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  contract:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node --test scripts/verify-observatory-activity.mjs
