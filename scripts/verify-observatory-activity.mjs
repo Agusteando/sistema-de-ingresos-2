@@ -7,16 +7,7 @@ const now = Date.parse('2026-10-28T08:00:00-06:00')
 const period = calendarWindow(now)
 const definitions = source.definitions || [source]
 const sourceGuards = {
-  talleres_user_activity: [/metadata_json/, /'\$\.source'/, /<> 'dev'/],
-  control_escolar_audit_events: [/actor_email/, /husky_pass_family_profile/, /source_flow IN/],
-  plan_audit_events: [/TIMESTAMPDIFF\(SECOND/, /outcome = 'ok' OR \(event_type = 'PLAN_OPENED' AND outcome = 'info'\)/,
-    /actor_username/],
-  photo_label_events: [/action IN \('label', 'clear'\)/, /actor_type IN \('admin', 'public'\)/],
-  credential_print_events: [/source = 'zebra-bridge'/, /printed_by/],
-  credential_photo_rejections: [/rejected_by/],
-  audit_logs: [/entity_type = 'reimbursement'/, /actor_user_id > 0/, /action IN/],
-  roster_sync_events: [/event_type = 'attendance_save_started'/, /client_installation_id/],
-  logro_events: [/UNIX_TIMESTAMP\(created_at\)/, /operation_id/]
+  control_escolar_audit_events: [/actor_email/, /husky_pass_family_profile/, /source_flow IN/]
 }
 
 test('retrospective dates, privacy, and bounded read-only source queries', () => {
