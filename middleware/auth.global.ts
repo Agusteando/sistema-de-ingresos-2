@@ -89,12 +89,15 @@ export default defineNuxtRouteMiddleware(async (to) => {
     return navigateTo('/login')
   }
 
+  let verifiedSuperAdmin = isSuperAdmin
+
   if (email.value && !to.path.startsWith('/print')) {
     try {
       const session = await $fetch('/api/auth/session', {
         retry: 0,
         headers: process.server ? useRequestHeaders(['cookie']) : undefined
       })
+      verifiedSuperAdmin = Boolean(session?.isSuperAdmin)
       if (to.path === '/login' && !isLocalHandoffLogin) return navigateTo(sessionDefaultRoute(session, defaultRoute))
     } catch (error) {
       if (isAuthSessionFailure(error)) {
@@ -115,6 +118,10 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (email.value && planteles.value && to.path === '/onboarding') {
+    return navigateTo(defaultRoute)
+  }
+
+  if (email.value && to.path === '/exportacion-control-escolar' && !verifiedSuperAdmin) {
     return navigateTo(defaultRoute)
   }
 

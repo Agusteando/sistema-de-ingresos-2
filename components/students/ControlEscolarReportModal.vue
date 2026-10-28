@@ -9,7 +9,7 @@
           <div>
             <span>Control Escolar</span>
             <h2 id="control-report-title">Personalizar Excel</h2>
-            <p>{{ plantel }} · {{ cicloLabel }} · {{ totalLabel }}</p>
+            <p>{{ plantel }} · {{ cicloLabel }}<template v-if="total !== undefined"> · {{ totalLabel }}</template></p>
           </div>
           <button type="button" class="report-builder__close" aria-label="Cerrar" @click="$emit('close')">
             <LucideX :size="18" />
@@ -35,6 +35,7 @@
                 <input
                   type="checkbox"
                   :checked="selected.has(field.key)"
+                  :disabled="requiredFields.includes(field.key)"
                   @change="toggleField(field.key)"
                 />
                 <span>{{ field.label }}</span>
@@ -74,6 +75,7 @@ const props = defineProps<{
   plantel?: string
   cicloLabel?: string
   total?: number
+  requiredFields?: string[]
 }>()
 
 const emit = defineEmits<{
@@ -81,18 +83,21 @@ const emit = defineEmits<{
   confirm: [fields: string[]]
 }>()
 
+const requiredFields = computed(() => props.requiredFields || [])
+const withRequired = (values: string[]) => new Set([...values, ...requiredFields.value])
 const selected = ref(new Set<string>(CONTROL_ESCOLAR_REPORT_DEFAULT_FIELDS))
 const fieldGroups = CONTROL_ESCOLAR_REPORT_GROUPS
 
 const totalLabel = computed(() => `${Number(props.total || 0).toLocaleString('es-MX')} ${Number(props.total || 0) === 1 ? 'alumno' : 'alumnos'}`)
 
 watch(() => props.show, (visible) => {
-  if (visible && !selected.value.size) restoreDefaults()
+  if (visible) selected.value = withRequired([...selected.value])
 })
 
 const fieldsForGroup = (group: ControlEscolarReportFieldGroupKey) => CONTROL_ESCOLAR_REPORT_FIELDS.filter((field) => field.group === group)
 
 const toggleField = (key: string) => {
+  if (requiredFields.value.includes(key)) return
   const next = new Set(selected.value)
   if (next.has(key)) next.delete(key)
   else next.add(key)
@@ -100,11 +105,11 @@ const toggleField = (key: string) => {
 }
 
 const restoreDefaults = () => {
-  selected.value = new Set(CONTROL_ESCOLAR_REPORT_DEFAULT_FIELDS)
+  selected.value = withRequired(CONTROL_ESCOLAR_REPORT_DEFAULT_FIELDS)
 }
 
 const selectAll = () => {
-  selected.value = new Set(CONTROL_ESCOLAR_REPORT_FIELDS.map((field) => field.key))
+  selected.value = withRequired(CONTROL_ESCOLAR_REPORT_FIELDS.map((field) => field.key))
 }
 
 const groupSelectionLabel = (group: ControlEscolarReportFieldGroupKey) => {
@@ -116,7 +121,11 @@ const toggleGroup = (group: ControlEscolarReportFieldGroupKey) => {
   const fields = fieldsForGroup(group)
   const remove = fields.every((field) => selected.value.has(field.key))
   const next = new Set(selected.value)
-  fields.forEach((field) => remove ? next.delete(field.key) : next.add(field.key))
+  fields.forEach((field) => {
+    if (requiredFields.value.includes(field.key)) return
+    if (remove) next.delete(field.key)
+    else next.add(field.key)
+  })
   selected.value = next
 }
 
