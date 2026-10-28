@@ -1,5 +1,5 @@
 import { getTrustedAuthUser } from '../../utils/auth-session'
-import { runControlEscolar, fetchControlEscolarExportRows } from '../../utils/control-escolar'
+import { runControlEscolar, fetchControlEscolarExportData } from '../../utils/control-escolar'
 import { attachSectionLabelsToRows } from '../../utils/student-sections'
 import { createXlsxWorkbook } from '../../utils/xlsx'
 import { CONTROL_ESCOLAR_REPORT_DEFAULT_FIELDS, CONTROL_ESCOLAR_REPORT_FIELDS, CONTROL_ESCOLAR_REPORT_FIELD_KEYS } from '../../../shared/constants/controlEscolarReport'
@@ -8,6 +8,7 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { buildConceptosConfigPayload, readCentralConceptosConfig } from '../../utils/conceptos-config'
 import { parseEnrollmentConceptsForScope, parseEnrollmentConceptsForPlantelHistory } from '../../../shared/utils/studentPresentation'
 import { createInstitutionalControlEscolarSheets } from '../../utils/control-escolar-institutional-sheets.mjs'
+import { loadInstitutionalControlEscolarScopes } from '../../utils/control-escolar-institutional-load.mjs'
 
 const STATUS_LABELS: Record<string, string> = {
   inscritos: 'Inscritos', all: 'Toda la población', internos: 'Internos',
@@ -53,42 +54,55 @@ export default defineEventHandler(async (event) => {
       data: { code: 'INSTITUTIONAL_EXPORT_ENROLLMENT_CONFIG_UNAVAILABLE' },
     })
   }
-  const scopes: Array<{ plantel: string; rows: any[] }> = []
-
-  // Limit concurrent reads so all planteles can finish within a reasonable
-  // response window. runWithBridgeAgentId uses AsyncLocalStorage, keeping
-  // every campus query in its own bridge context. Preserve catalog order.
-  for (let offset = 0; offset < PLANTELES_LIST.length; offset += 3) {
-    const batch = PLANTELES_LIST.slice(offset, offset + 3)
-    const loaded = await Promise.all(batch.map(async (plantel) => {
-      try {
-        const concepts = parseEnrollmentConceptsForScope(config, { ciclo, plantel })
-        const tipoConcepts = parseEnrollmentConceptsForPlantelHistory(config, { plantel })
-        const filtros = {
-          ciclo, status, phase: 'enriched',
-          concepts: concepts.join(','),
-          tipoConcepts: (tipoConcepts.length ? tipoConcepts : concepts).join(','),
-        }
-        const rows = await runControlEscolar(event, plantel, async () => {
-          const sourceRows = await fetchControlEscolarExportRows(plantel, filtros)
-          return await attachSectionLabelsToRows(sourceRows, { plantel })
-        })
-        if (!Array.isArray(rows)) throw new Error('Respuesta inválida o incompleta del plantel ' + plantel)
-        return { plantel, rows }
-      } catch (error: any) {
-        console.error('[Control Escolar Export Institucional] Plantel unavailable', {
-          plantel, ciclo, code: error?.data?.code || error?.code || null,
-          message: String(error?.message || error).slice(0, 240),
-        })
-        throw createError({
-          statusCode: 502,
-          message: 'No se pudo completar la lectura de ' + plantel + '. No se generó un reporte parcial.',
-          data: { code: 'INSTITUTIONAL_EXPORT_PLANTEL_UNAVAILABLE', plantel },
-        })
+  // The normal Control Escolar reader already attempts a verified snapshot if
+  // the campus bridge is offline. If neither source exists, retain a
+  // distinguishable unavailable scope rather than aborting other planteles.
+  const scopes = await loadInstitutionalControlEscolarScopes({
+    planteles: PLANTELES_LIST,
+    read: async (plantel: string) => {
+      const concepts = parseEnrollmentConceptsForScope(config, { ciclo, plantel })
+      const tipoConcepts = parseEnrollmentConceptsForPlantelHistory(config, { plantel })
+      const filtros = {
+        ciclo, status, phase: 'enriched',
+        concepts: concepts.join(','),
+        tipoConcepts: (tipoConcepts.length ? tipoConcepts : concepts).join(','),
       }
-    }))
-    scopes.push(...loaded)
+      return await runControlEscolar(event, plantel, async () => {
+        const loaded = await fetchControlEscolarExportData(plantel, filtros)
+        const rows = await attachSectionLabelsToRows(loaded.rows, { plantel })
+        const source = loaded.source || {}
+        const isBackup = source.bridgeFallback === true
+        return {
+          plantel, rows,
+          dataStatus: isBackup
+            ? (String(source.cacheFreshness || '').includes('stale') ? 'backup-stale' : 'backup')
+            : 'live',
+          snapshotAt: isBackup ? (source.cacheRefreshedAt || null) : null,
+        }
+      })
+    },
+    onUnavailable: (plantel: string, error: any) => {
+      console.warn('[Control Escolar Export Institucional] Plantel unavailable', {
+        plantel, ciclo, code: error?.data?.code || error?.code || null,
+        message: String(error?.message || error).slice(0, 240),
+      })
+    },
+  })
+
+  const readable = scopes.filter((scope) => Array.isArray(scope.rows))
+  const unavailable = scopes.filter((scope) => scope.rows === null).map((scope) => scope.plantel)
+  if (!readable.length) {
+    throw createError({
+      statusCode: 503,
+      message: 'No hay datos de planteles disponibles, ni respaldos verificados. Inténtalo cuando alguno esté disponible.',
+      data: { code: 'INSTITUTIONAL_EXPORT_NO_CAMPUS_DATA', unavailable },
+    })
   }
+  console.info('[Control Escolar Export Institucional] Scope coverage', {
+    ciclo, status, available: readable.length, unavailable,
+    backups: scopes.filter((scope) => String(scope.dataStatus).startsWith('backup')).map((scope) => scope.plantel),
+    rows: readable.reduce((sum, scope) => sum + scope.rows.length, 0),
+  })
 
   const cicloLabel = formatCicloLabel(ciclo)
   const generatedAt = new Date()
@@ -102,6 +116,9 @@ export default defineEventHandler(async (event) => {
   setResponseHeader(event, 'Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
   setResponseHeader(event, 'Content-Disposition', 'attachment; filename="' + filename + '"')
   setResponseHeader(event, 'Content-Length', workbook.length)
+  setResponseHeader(event, 'X-Institutional-Export-Partial', unavailable.length ? '1' : '0')
+  setResponseHeader(event, 'X-Institutional-Export-Unavailable', unavailable.join(','))
+  setResponseHeader(event, 'X-Institutional-Export-Available', String(readable.length))
   setResponseHeader(event, 'Cache-Control', 'private, no-store, max-age=0')
   setResponseHeader(event, 'Pragma', 'no-cache')
   setResponseHeader(event, 'Vary', 'Cookie')

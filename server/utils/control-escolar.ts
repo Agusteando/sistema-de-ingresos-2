@@ -3809,10 +3809,20 @@ export const runControlEscolar = async <T>(
   return await runWithBridgeAgentId(agentId, callback);
 };
 
-export const fetchControlEscolarExportRows = async (
+// Keep the per-plantel export API unchanged, while exposing source freshness
+// for the institutional workbook so an offline verified snapshot is explicit.
+export const fetchControlEscolarExportData = async (
   agentId: string,
   filters: any,
 ) => {
   const loaded = await fetchAllNormalizedStudents(agentId, filters);
-  return applyFilters(loaded.students, filters).slice(0, MAX_LOCAL_ROWS);
+  return {
+    rows: applyFilters(loaded.students, filters).slice(0, MAX_LOCAL_ROWS),
+    source: loaded.source,
+  };
 };
+
+export const fetchControlEscolarExportRows = async (
+  agentId: string,
+  filters: any,
+) => (await fetchControlEscolarExportData(agentId, filters)).rows;

@@ -57,6 +57,7 @@
           {{ downloading ? 'Preparando Excel…' : 'Descargar Excel' }}
         </button>
       </section>
+      <p v-if="downloadNotice" class="institutional-export__notice" role="status"><LucideAlertCircle :size="17" /> {{ downloadNotice }}</p>
       <p v-if="downloadError" class="institutional-export__error" role="alert"><LucideAlertCircle :size="17" /> {{ downloadError }}</p>
     </div>
 
@@ -89,6 +90,7 @@ const selectedFields = ref(Array.from(new Set([...CONTROL_ESCOLAR_REPORT_DEFAULT
 const showReportModal = ref(false)
 const downloading = ref(false)
 const downloadError = ref('')
+const downloadNotice = ref('')
 const displayedFields = computed(() => CONTROL_ESCOLAR_REPORT_FIELDS.filter((field) => selectedFields.value.includes(field.key)))
 const containsSensitive = computed(() => displayedFields.value.some((field) => field.sensitive))
 const onCicloChange = (event: Event) => setActiveCiclo((event.target as HTMLSelectElement).value)
@@ -104,6 +106,7 @@ const downloadReport = async () => {
   if (downloading.value || !selectedFields.value.length) return
   downloading.value = true
   downloadError.value = ''
+  downloadNotice.value = ''
   const controller = new AbortController()
   currentDownload = controller
   try {
@@ -115,6 +118,8 @@ const downloadReport = async () => {
       const error = await response.json().catch(() => null)
       throw new Error(String(error?.data?.message || error?.message || error?.statusMessage || 'No se pudo generar el archivo.'))
     }
+    const missing = (response.headers.get('X-Institutional-Export-Unavailable') || '')
+      .split(',').map((name) => name.trim()).filter(Boolean)
     const blob = await response.blob()
     const filename = response.headers.get('Content-Disposition')?.match(/filename="([^"]+)"/)?.[1] || 'control-escolar-institucional.xlsx'
     const url = URL.createObjectURL(blob)
@@ -124,6 +129,10 @@ const downloadReport = async () => {
     document.body.appendChild(anchor)
     anchor.click()
     anchor.remove()
+    if (missing.length) {
+      downloadNotice.value = 'Descarga parcial: ' + missing.join(', ') +
+        ' sin datos disponibles. El Excel los identifica en Resumen; sus cifras no se suman.'
+    }
     window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   } catch (error: any) {
     if (error?.name !== 'AbortError') downloadError.value = String(error?.message || 'No se pudo completar la exportación.')
@@ -168,6 +177,7 @@ onBeforeUnmount(() => currentDownload?.abort())
 .institutional-export__download button{display:flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:0 20px;border:1px solid #00692f;border-radius:11px;background:#00692f;color:white;font-size:13px;font-weight:800}
 .institutional-export__download button:hover:not(:disabled){background:#075b2b}
 .institutional-export__error{display:flex;gap:9px;margin:0;padding:13px 16px;border-radius:11px;background:#fff4f1;color:#9c3529;font-size:13px}
+.institutional-export__notice{display:flex;align-items:flex-start;gap:9px;margin:0;padding:13px 16px;border-radius:11px;background:#fff8e9;color:#855b14;font-size:13px}
 .institutional-export__spin{animation:spin 1s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
 @media(max-width:650px){.institutional-export{padding:20px 14px}.institutional-export__filters{grid-template-columns:1fr}.institutional-export__download button{width:100%}}
 </style>

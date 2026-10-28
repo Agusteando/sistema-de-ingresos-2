@@ -31,11 +31,23 @@ export const createInstitutionalControlEscolarSheets = ({ scopes, fields, select
   const all = []
   const perPlantel = []
   const summary = []
+  const unavailableCount = scopes.filter((scope) => !Array.isArray(scope.rows)).length
+  const coverage = (scopes.length - unavailableCount) + ' de ' + scopes.length + ' planteles'
+  const statusLabels = {
+    live: 'En vivo',
+    backup: 'Respaldo verificado',
+    'backup-stale': 'Respaldo anterior',
+    unavailable: 'No disponible',
+  }
 
   for (const scope of scopes) {
     const plantel = String(scope.plantel).trim().toUpperCase()
-    const rows = scope.rows.map((row) => ({ ...row, plantel }))
+    // Null means not consulted (offline and no verified backup), never 0.
+    const unavailable = !Array.isArray(scope.rows)
+    const rows = (unavailable ? [] : scope.rows).map((row) => ({ ...row, plantel }))
       .sort(compareStudents)
+    const dataStatus = unavailable ? 'unavailable' : (scope.dataStatus || 'live')
+    const snapshotAt = dataStatus.startsWith('backup') ? String(scope.snapshotAt || '') : ''
     all.push(...rows)
     let inscritos = 0
     let internos = 0
@@ -54,8 +66,18 @@ export const createInstitutionalControlEscolarSheets = ({ scopes, fields, select
         noInscritos++
       }
     }
-    summary.push({ plantel, inscritos, internos, externos, noInscritos, bajas, total: rows.length })
-    perPlantel.push({ plantel, rows })
+    summary.push({
+      plantel,
+      dataStatus: statusLabels[dataStatus] || statusLabels.live,
+      snapshotAt,
+      inscritos: unavailable ? null : inscritos,
+      internos: unavailable ? null : internos,
+      externos: unavailable ? null : externos,
+      noInscritos: unavailable ? null : noInscritos,
+      bajas: unavailable ? null : bajas,
+      total: unavailable ? null : rows.length,
+    })
+    perPlantel.push({ plantel, rows, unavailable, dataStatus, snapshotAt })
   }
 
   const normalizedRows = (rows) => rows.map((row) => Object.fromEntries(
@@ -65,16 +87,24 @@ export const createInstitutionalControlEscolarSheets = ({ scopes, fields, select
   const total = summary.reduce((acc, row) => {
     for (const key of ['inscritos', 'internos', 'externos', 'noInscritos', 'bajas', 'total']) acc[key] += row[key]
     return acc
-  }, { plantel: 'Total', inscritos: 0, internos: 0, externos: 0, noInscritos: 0, bajas: 0, total: 0 })
+  }, {
+    plantel: unavailableCount ? 'Subtotal disponible' : 'Total',
+    dataStatus: unavailableCount ? 'Incompleto' : 'Completo',
+    snapshotAt: '',
+    inscritos: 0, internos: 0, externos: 0, noInscritos: 0, bajas: 0, total: 0,
+  })
 
   const details = 'Ciclo ' + cicloLabel + ' · ' + statusLabel + ' · Generado ' + generatedLabel
   return [
     {
       name: 'Resumen',
       title: 'IECS-IEDIS · Control Escolar · Resumen institucional',
-      subtitle: details + ' · ' + scopes.length + ' planteles · ' + all.length + ' registros',
+      subtitle: details + ' · Cobertura: ' + coverage + ' · ' + all.length + ' registros' +
+        (unavailableCount ? ' · PARCIAL: los planteles no disponibles NO están en los totales' : ''),
       columns: [
-        { key: 'plantel', label: 'Plantel', width: 17 },
+        { key: 'plantel', label: 'Plantel', width: 23 },
+        { key: 'dataStatus', label: 'Origen / estado', width: 23 },
+        { key: 'snapshotAt', label: 'Fecha del respaldo (UTC)', width: 27 },
         { key: 'inscritos', label: 'Inscritos', width: 14, type: 'number' },
         { key: 'internos', label: 'Internos', width: 14, type: 'number' },
         { key: 'externos', label: 'Externos', width: 14, type: 'number' },
@@ -88,14 +118,19 @@ export const createInstitutionalControlEscolarSheets = ({ scopes, fields, select
     {
       name: 'General',
       title: 'IECS-IEDIS · Control Escolar · Todos los planteles',
-      subtitle: details + ' · ' + all.length + ' registros',
+      subtitle: details + ' · ' + all.length + ' registros · Cobertura: ' + coverage +
+        (unavailableCount ? ' · PARCIAL' : ''),
       columns,
       rows: normalizedRows(all),
     },
-    ...perPlantel.map(({ plantel, rows }) => ({
+    ...perPlantel.map(({ plantel, rows, unavailable, dataStatus, snapshotAt }) => ({
       name: plantel,
       title: 'IECS-IEDIS · Control Escolar · ' + plantel,
-      subtitle: details + ' · ' + rows.length + ' registros',
+      subtitle: details + (unavailable
+        ? ' · SIN DATOS: plantel no disponible y sin respaldo verificado'
+        : ' · ' + rows.length + ' registros · ' +
+          (statusLabels[dataStatus] || statusLabels.live) +
+          (snapshotAt ? ' · Respaldo UTC: ' + snapshotAt : '')),
       columns,
       rows: normalizedRows(rows),
     })),
