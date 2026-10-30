@@ -23,8 +23,6 @@
       </div>
     </section>
 
-    <SharedConceptLinksManager v-if="isSuperAdmin && activeReport === 'concepto'" :concepts="conceptos" :ciclo="String(state.ciclo)" />
-
     <section v-if="activeReport === 'concepto'" class="report-panel">
       <div class="panel-header concept-panel-header">
         <div class="concept-heading">
@@ -69,6 +67,7 @@
             <LucideDownload v-else :size="16" />
             Excel
           </button>
+          <button v-if="isSuperAdmin" class="btn btn-outline shared-links-trigger" type="button" @click="openSharedLinksDialog"><LucideLink2 :size="16" /> Enlaces públicos</button>
         </div>
       </div>
 
@@ -601,6 +600,14 @@
       </div>
     </section>
 
+    <dialog v-if="isSuperAdmin" ref="sharedLinksDialog" class="shared-links-dialog" aria-label="Administrar enlaces públicos por concepto" @close="sharedLinksOpen = false">
+      <div class="shared-links-modal-heading">
+        <span>Reportes / Concepto</span>
+        <button type="button" class="shared-links-dismiss" aria-label="Cerrar enlaces públicos" @click="closeSharedLinksDialog"><LucideX :size="18" /></button>
+      </div>
+      <SharedConceptLinksManager v-if="sharedLinksOpen" :concepts="conceptos" :ciclo="String(state.ciclo)" />
+    </dialog>
+
     <CorteUserSelectionModal
       v-if="conceptUserSelectorOpen"
       :users="conceptUserOptions"
@@ -636,6 +643,8 @@ import {
   LucideFilter,
   LucideLoader2,
   LucidePrinter,
+  LucideLink2,
+  LucideX,
   LucideReceipt,
   LucideUsers
 } from 'lucide-vue-next'
@@ -666,6 +675,16 @@ const requestedReport = String(route.query.tipo || '').toLowerCase()
 const activeReport = ref(hasFinancialAccess.value && ['corte', 'alumnos', 'recibos'].includes(requestedReport)
   ? requestedReport
   : 'concepto')
+const sharedLinksDialog = ref(null)
+const sharedLinksOpen = ref(false)
+function openSharedLinksDialog() {
+  if (!isSuperAdmin.value || !sharedLinksDialog.value) return
+  sharedLinksDialog.value.showModal()
+  sharedLinksOpen.value = true
+}
+function closeSharedLinksDialog() {
+  sharedLinksDialog.value?.close()
+}
 
 const conceptos = ref([])
 const loadingConceptos = ref(false)
@@ -1436,6 +1455,15 @@ watch(() => route.query.conceptoId, async (conceptoId) => {
 .concept-panel-header {
   align-items: center;
 }
+.shared-links-trigger{white-space:nowrap;color:#416657;border-color:#d8e7dc}
+.shared-links-trigger:hover{background:#f1f7f3}
+.shared-links-dialog{width:min(920px,calc(100vw - 24px));max-height:min(780px,calc(100dvh - 24px));margin:auto;padding:0;overflow-y:auto;border:1px solid #dbe6df;border-radius:18px;background:#f7faf8;box-shadow:0 25px 80px rgba(17,39,30,.22)}
+.shared-links-dialog::backdrop{background:rgba(18,34,30,.46)}
+.shared-links-modal-heading{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 16px 0 20px;color:#6d8076;font-size:11px;font-weight:700}
+.shared-links-dismiss{display:grid;place-items:center;height:34px;width:34px;border-radius:10px;color:#46685a}
+.shared-links-dismiss:hover{background:#e7f0ea}
+.shared-links-dialog :deep(.share-manager){border:0;margin:0;box-shadow:none;background:transparent}
+@media(max-width:620px){.shared-links-dialog{width:calc(100vw - 16px);max-height:calc(100dvh - 16px);border-radius:14px}}
 
 .concept-heading {
   display: flex;

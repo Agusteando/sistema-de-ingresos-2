@@ -15,16 +15,26 @@
         <button type="button" @click="load">Reintentar</button>
       </div>
       <template v-else-if="data">
+        <div v-if="data.cobertura?.parcial" class="public-coverage" role="status">
+          <div class="public-coverage-copy">
+            <LucideAlertTriangle :size="19" aria-hidden="true" />
+            <div>
+              <strong>Consulta parcial · {{ data.cobertura.disponibles }} de {{ data.cobertura.solicitados }} planteles</strong>
+              <p>Sin datos de {{ data.cobertura.noDisponibles.join(', ') }}. Los totales y el Excel solo incluyen los planteles consultados.</p>
+            </div>
+          </div>
+          <button type="button" :disabled="loading" @click="load">Actualizar</button>
+        </div>
         <div class="public-topline">
-          <div class="public-stat"><span>Alumnos</span><strong>{{ data.resumen.alumnos.toLocaleString('es-MX') }}</strong></div>
-          <div class="public-stat"><span>Planteles</span><strong>{{ data.resumen.planteles.length }}</strong></div>
+          <div class="public-stat"><span>{{ data.cobertura?.parcial ? 'Subtotal disponible' : 'Alumnos' }}</span><strong>{{ data.resumen.alumnos.toLocaleString('es-MX') }}</strong></div>
+          <div class="public-stat"><span>Planteles consultados</span><strong>{{ data.cobertura?.disponibles ?? data.resumen.planteles.length }} / {{ data.cobertura?.solicitados ?? data.resumen.planteles.length }}</strong></div>
           <div v-if="data.modo === 'movements'" class="public-stat"><span>Movimientos</span><strong>{{ data.resumen.movimientos.toLocaleString('es-MX') }}</strong></div>
           <div v-else-if="data.modo === 'missing'" class="public-stat"><span>Inscritos revisados</span><strong>{{ data.resumen.inscritos.toLocaleString('es-MX') }}</strong></div>
         </div>
         <div class="public-block">
           <h2>Por plantel</h2>
-          <div class="public-table-scroll"><table><thead><tr><th>Plantel</th><th>Alumnos</th></tr></thead><tbody>
-            <tr v-for="campus in data.resumen.planteles" :key="campus.plantel"><td>{{ campus.plantel }}</td><td class="numeric">{{ campus.alumnos }}</td></tr>
+          <div class="public-table-scroll"><table><thead><tr><th>Plantel</th><th>Alumnos</th><th>Estado</th></tr></thead><tbody>
+            <tr v-for="campus in data.resumen.planteles" :key="campus.plantel"><td>{{ campus.plantel }}</td><td class="numeric">{{ campus.alumnos === null ? '—' : campus.alumnos }}</td><td :class="{ 'public-campus-unavailable': campus.estado === 'unavailable' }">{{ campus.estado === 'unavailable' ? 'No disponible' : 'Consultado' }}</td></tr>
           </tbody></table></div>
         </div>
         <div class="public-block">
@@ -51,7 +61,7 @@
 </template>
 
 <script setup lang="ts">
-import { Download as LucideDownload } from 'lucide-vue-next'
+import { Download as LucideDownload, AlertTriangle as LucideAlertTriangle } from 'lucide-vue-next'
 import { computed, onMounted, ref } from 'vue'
 definePageMeta({ layout: false })
 useHead({ title: 'Reporte institucional · IECS IEDIS', meta:[{name:'robots',content:'noindex,nofollow,noarchive'},{name:'referrer',content:'no-referrer'}] })
@@ -91,6 +101,13 @@ onMounted(load)
 h1{font-size:clamp(24px,4vw,36px);font-family:Fredoka,sans-serif;margin:7px 0 4px;color:#174532;font-weight:600}
 .public-description{font-size:12px;color:#7b8e82;margin-bottom:28px}
 .public-topline{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:19px}
+.public-coverage{display:flex;justify-content:space-between;align-items:center;gap:16px;margin-bottom:16px;padding:14px 17px;border:1px solid #ead9a9;background:#fffaf0;border-radius:13px;color:#765b22}
+.public-coverage-copy{display:flex;align-items:flex-start;gap:10px}
+.public-coverage-copy strong{font-size:13px}
+.public-coverage-copy p{font-size:11px;line-height:1.6;margin:5px 0 0}
+.public-coverage button{padding:8px 12px;border:1px solid #d8bd79;border-radius:8px;font-size:11px;font-weight:700;white-space:nowrap}
+.public-campus-unavailable{color:#9a742b;font-weight:700}
+@media(max-width:520px){.public-coverage{align-items:flex-start;flex-direction:column}.public-coverage button{align-self:flex-end}}
 .public-stat{min-width:150px;flex:1;background:#fff;padding:19px 21px;border-radius:15px;border:1px solid #e5ebe6;display:flex;flex-direction:column;gap:5px}
 .public-stat span{font-size:11px;color:#819589;font-weight:700}
 .public-stat strong{font-family:Fredoka,sans-serif;font-size:28px;line-height:1.2;color:#1e5a42}
