@@ -41,17 +41,17 @@
           <div class="public-list-title">
             <h2>Alumnos <span>{{ filtered.length }}</span></h2>
             <div class="public-actions">
-              <input v-model="search" type="search" aria-label="Buscar alumno o matrícula" placeholder="Buscar alumno o matrícula" />
+              <input v-model="search" type="search" aria-label="Buscar alumno, matrícula o CURP" placeholder="Buscar alumno, matrícula o CURP" />
               <a :href="excelUrl" class="public-excel"><LucideDownload :size="16" /> Excel</a>
             </div>
           </div>
-          <div class="public-table-scroll"><table><thead><tr><th>Matrícula</th><th>Alumno</th><th>Nivel</th><th>Grado</th><th>Grupo</th><th>Sección</th><th>Plantel</th></tr></thead><tbody>
+          <div class="public-table-scroll"><table><thead><tr><th>Matrícula</th><th>CURP</th><th>Alumno</th><th>Nivel</th><th>Grado</th><th>Grupo</th><th>Sección</th><th>Plantel</th></tr></thead><tbody>
             <tr v-for="student in filtered" :key="student.plantel + student.matricula">
-              <td class="mono">{{ student.matricula }}</td><td class="student">{{ student.nombreCompleto }}</td>
+              <td class="mono">{{ student.matricula }}</td><td class="mono">{{ student.curp || '—' }}</td><td class="student">{{ student.nombreCompleto }}</td>
               <td>{{ student.nivel || '—' }}</td><td>{{ student.grado || '—' }}</td>
               <td>{{ student.grupo || '—' }}</td><td>{{ student.seccion || '—' }}</td><td>{{ student.plantel }}</td>
             </tr>
-            <tr v-if="!filtered.length"><td colspan="7" class="public-empty">Sin alumnos para esta búsqueda.</td></tr>
+            <tr v-if="!filtered.length"><td colspan="8" class="public-empty">Sin alumnos para esta búsqueda.</td></tr>
           </tbody></table></div>
         </div>
         <footer>Consulta generada {{ generatedAt }} · Datos sujetos a cambios en los registros institucionales.</footer>
@@ -77,7 +77,7 @@ const reportTitle = computed(() => data.value?.conceptos?.join(', ') || 'Resumen
 const generatedAt = computed(() => data.value?.generatedAt ? new Date(data.value.generatedAt).toLocaleString('es-MX',{timeZone:'America/Mexico_City'}) : '')
 const filtered = computed(() => {
   const q = search.value.trim().toLocaleLowerCase('es')
-  return (data.value?.rows || []).filter((row:any) => !q || [row.matricula,row.nombreCompleto,row.plantel].some(v => String(v || '').toLocaleLowerCase('es').includes(q)))
+  return (data.value?.rows || []).filter((row:any) => !q || [row.matricula,row.curp,row.nombreCompleto,row.plantel].some(v => String(v || '').toLocaleLowerCase('es').includes(q)))
 })
 async function load() {
   loading.value = true

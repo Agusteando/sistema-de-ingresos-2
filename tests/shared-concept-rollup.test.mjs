@@ -15,7 +15,7 @@ test('counts distinct students per campus across duplicate concept movements', (
   assert.equal(output.resumen.movimientos,4)
   assert.deepEqual(output.resumen.planteles.map(x=>x.alumnos),[2,1])
   assert.equal(output.rows.length,3)
-  assert.equal('curp' in output.rows[0],false)
+  assert.equal(output.rows[0].curp,'')
   assert.equal('monto' in output.rows[0],false)
 })
 test('missing concept report retains existing enrolled student population', () => {
