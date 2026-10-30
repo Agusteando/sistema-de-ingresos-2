@@ -4,7 +4,8 @@ import { runWithBridgeAgentId } from './db'
 import { loadConceptReport } from './concept-report'
 import { CONCEPTOS_PLANTELES_LIST } from '../../utils/constants'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
-import { rollupConceptReports } from '../../shared/utils/shared-concept-rollup.mjs'
+import { rollupConceptReports, enrichPublicStudentCurps } from '../../shared/utils/shared-concept-rollup.mjs'
+import { fetchCentralMatriculaOverlays } from './central-matricula-overlay'
 import { collectAvailableConceptReports } from '../../shared/utils/shared-concept-availability.mjs'
 
 const TABLE = 'concept_report_public_links'
@@ -145,6 +146,17 @@ const loadFreshPublicConceptReport = async (link: SharedConceptLink) => {
     throw createError({ statusCode: 503, message: 'No hay planteles disponibles para generar el reporte. Intente nuevamente más tarde.', data: { code: 'PUBLIC_CONCEPT_REPORT_NO_AVAILABLE_CAMPUSES' } })
   }
   const result = rollupConceptReports(available)
+  if (link.modo === 'debtors' && result.rows.length) {
+    try {
+      const overlays = await fetchCentralMatriculaOverlays(result.rows.map(row => row.matricula))
+      enrichPublicStudentCurps(result.rows, overlays)
+    } catch (error: any) {
+      console.warn('[public-concept-report] curp_enrichment_unavailable', {
+        code: error?.code,
+        detail: String(error?.message || 'Central matrícula unavailable').slice(0, 180),
+      })
+    }
+  }
   const byPlantel = new Map(result.resumen.planteles.map((item: any) => [item.plantel, item]))
   const unavailable = failures.map(item => item.plantel)
   const cobertura = {

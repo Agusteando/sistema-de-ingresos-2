@@ -22,9 +22,9 @@ export default defineEventHandler(async event => {
       ...(data.cobertura.parcial ? ['NO DISPONIBLES (no incluidos en el total ni el listado): ' + data.cobertura.noDisponibles.join(', ')] : []),
       'Consulta: ' + data.generatedAt,
     ],
-    headers: ['Matrícula', 'Alumno', 'Nivel', 'Grado', 'Grupo', 'Sección', 'Plantel'],
-    rows: data.rows.map((student:any) => [student.matricula,student.nombreCompleto,student.nivel,student.grado,student.grupo,student.seccion,student.plantel]),
-    columnWidths: [18,42,19,16,15,23,21],
+    headers: ['Matrícula', 'CURP', 'Alumno', 'Nivel', 'Grado', 'Grupo', 'Sección', 'Plantel'],
+    rows: data.rows.map((student:any) => [student.matricula,student.curp || '',student.nombreCompleto,student.nivel,student.grado,student.grupo,student.seccion,student.plantel]),
+    columnWidths: [18,23,42,19,16,15,23,21],
     tableName: 'ResumenConceptoPublico',
   })
   const filename = 'Resumen_institucional_concepto_' + link.conceptoId + '.xlsx'
