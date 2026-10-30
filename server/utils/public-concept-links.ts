@@ -5,6 +5,7 @@ import { loadConceptReport } from './concept-report'
 import { CONCEPTOS_PLANTELES_LIST } from '../../utils/constants'
 import { automaticSchoolCycleKey, normalizeCicloKey } from '../../shared/utils/ciclo'
 import { rollupConceptReports } from '../../shared/utils/shared-concept-rollup.mjs'
+import { collectAvailableConceptReports } from '../../shared/utils/shared-concept-availability.mjs'
 
 const TABLE = 'concept_report_public_links'
 const MODES = new Set(['movements', 'missing', 'debtors'])
@@ -116,28 +117,53 @@ export async function resolveSharedConceptLink(id: string) {
   return link
 }
 
-// This is deliberately sequential: each physical campus bridge owns its own ledger.
-// Never present a partially successful aggregation as a complete institution-wide count.
+// Query each plantel independently with bounded bridge concurrency. The public
+// report may be partial, but an unavailable campus is never counted as zero.
 const loadFreshPublicConceptReport = async (link: SharedConceptLink) => {
-  const reports: Array<{ plantel: string, report: any }> = []
-  for (const plantel of link.planteles) {
+  const { available, failures } = await collectAvailableConceptReports(link.planteles, async (plantel: string) => {
     const scopedUser = { isSuperAdmin: true, hasFinancialAccess: true, active_plantel: plantel }
-    let report: any
-    try {
-      report = await runWithBridgeAgentId(plantel, () => loadConceptReport(scopedUser, {
-        plantel, conceptoId: link.conceptoId, modo: link.modo, ciclo: link.ciclo,
-        inicio: link.inicio || undefined, fin: link.fin || undefined, threshold: link.threshold,
-      }))
-    } catch (error: any) {
-      console.error('[public-concept-report] campus_unavailable', { plantel, status: error?.statusCode, code: error?.code })
-      throw createError({ statusCode: 503, message: 'No fue posible consultar todos los planteles. Intente nuevamente más tarde.', data: { plantel } })
-    }
-    reports.push({ plantel, report })
+    const report = await runWithBridgeAgentId(plantel, () => loadConceptReport(scopedUser, {
+      plantel, conceptoId: link.conceptoId, modo: link.modo, ciclo: link.ciclo,
+      inicio: link.inicio || undefined, fin: link.fin || undefined, threshold: link.threshold,
+    }))
+    if (!report || !Array.isArray(report.rows)) throw new Error('Invalid campus report response')
+    return report
+  })
+  for (const { plantel, error } of failures) {
+    console.error('[public-concept-report] campus_unavailable', {
+      plantel,
+      status: (error as any)?.statusCode || (error as any)?.status,
+      code: (error as any)?.data?.code || (error as any)?.code,
+      detail: String((error as any)?.message || 'Unknown campus query failure').slice(0, 240),
+    })
   }
-  return { ...rollupConceptReports(reports), modo: link.modo, ciclo: link.ciclo, generatedAt: new Date().toISOString() }
+  if (!available.length) {
+    throw createError({ statusCode: 503, message: 'No hay planteles disponibles para generar el reporte. Intente nuevamente más tarde.', data: { code: 'PUBLIC_CONCEPT_REPORT_NO_AVAILABLE_CAMPUSES' } })
+  }
+  const result = rollupConceptReports(available)
+  const byPlantel = new Map(result.resumen.planteles.map((item: any) => [item.plantel, item]))
+  const unavailable = failures.map(item => item.plantel)
+  const cobertura = {
+    solicitados: link.planteles.length,
+    disponibles: available.length,
+    noDisponibles: unavailable,
+    parcial: unavailable.length > 0,
+  }
+  return {
+    ...result,
+    resumen: {
+      ...result.resumen,
+      planteles: link.planteles.map(plantel => byPlantel.get(plantel) || {
+        plantel, alumnos: null, movimientos: null, inscritos: null, estado: 'unavailable',
+      }),
+    },
+    cobertura,
+    modo: link.modo,
+    ciclo: link.ciclo,
+    generatedAt: new Date().toISOString(),
+  }
 }
 
- 
 // Shareable links can have concurrent viewers. Coalesce identical expensive campus
 // bridge queries and bound freshness to 45 seconds; every HTTP request still checks
 // expiry and revocation in the central database before touching this cache.
