@@ -84,6 +84,8 @@ export default defineNuxtRouteMiddleware(async (to) => {
   }
 
   if (isHuskyPassNeutralPath) return
+  // Public bearer-link view must not require or introspect a financial session.
+  if (to.path.startsWith('/compartido/concepto/')) return
 
   if (!email.value && !isPublicPath) {
     return navigateTo('/login')

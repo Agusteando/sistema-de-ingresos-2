@@ -21,6 +21,8 @@ export default defineEventHandler(async (event) => {
 
   if (!url.pathname.startsWith('/api/')) return
   if (url.pathname.startsWith('/api/auth/')) return
+  // Exact public report route: bearer-token access and expiry are enforced in the handler.
+  if (url.pathname.startsWith('/api/public/concept-report/')) return
   if (url.pathname.startsWith('/api/debug/')) return
   if (url.pathname.startsWith('/api/login/')) return
   if (url.pathname === '/api/system/health') return
@@ -80,6 +82,12 @@ export default defineEventHandler(async (event) => {
     /^\/api\/students\/[^/]+\/sections$/.test(url.pathname) ||
     url.pathname === '/api/students/sections/bulk'
 
+
+  // Global reports resolve their campus bridge context per request, not from the admin's active campus.
+  if (url.pathname.startsWith('/api/reports/shared-links')) {
+    if (!user.isSuperAdmin) throw createError({ statusCode: 403, message: 'Solo superadministración puede gestionar estos enlaces.' })
+    return
+  }
 
   if (isPlantelDashboardEndpoint) {
     if (!user.isSuperAdmin) {
