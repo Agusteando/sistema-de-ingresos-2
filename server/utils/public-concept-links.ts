@@ -62,7 +62,11 @@ function formatRow(row: any): SharedConceptLink {
   }
 }
 
-const selectSql = 'SELECT id, concepto_id, modo, ciclo, planteles_json, inicio, fin, threshold, created_by, created_at, expires_at, revoked_at FROM ' + TABLE
+// MySQL DATE columns arrive as JavaScript Date objects with mysql2's default
+// decoding. String(date).slice(0, 10) yields e.g. "Thu Oct 01" instead of
+// "2026-10-01", incorrectly reversing otherwise valid report date ranges.
+// Format at the SQL boundary to preserve calendar dates without timezone drift.
+const selectSql = "SELECT id, concepto_id, modo, ciclo, planteles_json, DATE_FORMAT(inicio, '%Y-%m-%d') AS inicio, DATE_FORMAT(fin, '%Y-%m-%d') AS fin, threshold, created_by, created_at, expires_at, revoked_at FROM " + TABLE
 
 export async function listSharedConceptLinks() {
   const rows = await requiredStorage<any[]>(selectSql + ' ORDER BY created_at DESC LIMIT 150')
