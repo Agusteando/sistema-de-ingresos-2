@@ -23,6 +23,8 @@
       </div>
     </section>
 
+    <SharedConceptLinksManager v-if="isSuperAdmin && activeReport === 'concepto'" :concepts="conceptos" :ciclo="String(state.ciclo)" />
+
     <section v-if="activeReport === 'concepto'" class="report-panel">
       <div class="panel-header concept-panel-header">
         <div class="concept-heading">
