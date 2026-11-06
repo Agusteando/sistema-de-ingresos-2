@@ -701,6 +701,14 @@ export const createOrUpdateMapping = async (input: any, user: AuthSessionUser) =
   const monthsJson = stringifyMonths(input.meses || input.months_json)
   const syncVersion = Date.now()
 
+  // Future cycles may appear in the selector before being explicitly configured.
+  // Register the parent first so the mapping respects its school-cycle foreign key.
+  await controlEscolarCentralQuery(
+    `INSERT IGNORE INTO config_school_cycles (cycle_name, is_current, sync_version, updated_by)
+     VALUES (?, 0, ?, ?)`,
+    [ciclo, syncVersion, user.email || null]
+  )
+
   const exists = conceptoId > 0
     ? await controlEscolarCentralQuery<any[]>(
       `SELECT id FROM config_enrollment_mappings
