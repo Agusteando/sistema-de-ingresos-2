@@ -11,22 +11,45 @@
       </div>
       <div class="sql-hero-controls">
         <div v-if="isSuperAdmin" class="sql-export">
-          <button type="button" class="export-button" :disabled="isExporting" @click="exportFullSql">
+          <button type="button" class="export-button" :disabled="isExporting || isRunning || !targetPlantel" @click="exportFullSql">
             <LucideLoader2 v-if="isExporting" :size="17" class="spin" />
             <LucideDownload v-else :size="17" />
             {{ isExporting ? exportPhase : 'Exportar SQL completo' }}
           </button>
-          <small>Base ingresos · servidor Aurora</small>
+          <small>Base local · {{ targetPlantel || 'elige plantel' }}</small>
         </div>
         <div class="target-card">
           <label for="sql-target-plantel">Destino</label>
-          <select id="sql-target-plantel" v-model="targetPlantel" :disabled="isRunning">
+          <select id="sql-target-plantel" v-model="targetPlantel" :disabled="isRunning || isExporting">
             <option v-for="plantel in targetPlantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
           </select>
-          <small>Activo: {{ activePlantelLabel }}</small>
+          <small>Agente: {{ selectedAgent?.online ? (selectedAgent.commitSha ? selectedAgent.commitSha.slice(0, 10) : 'SHA no reportado') : 'Sin conexión' }}</small>
         </div>
+        <button class="versions-button" type="button" :aria-expanded="showAgentVersions" @click="toggleAgentVersions">
+          <LucideGitCommitHorizontal :size="16" />
+          Versiones
+        </button>
       </div>
     </div>
+
+    <section v-if="isSuperAdmin && showAgentVersions" class="versions-panel" aria-label="Versiones instaladas de agentes por plantel">
+      <div class="versions-head">
+        <strong>Agentes por plantel</strong>
+        <button class="ghost-button" type="button" :disabled="agentsLoading" @click="loadAgents">
+          <LucideRefreshCw :size="14" :class="{ spin: agentsLoading }" /> Actualizar
+        </button>
+      </div>
+      <p v-if="agentsError" class="versions-error">{{ agentsError }}</p>
+      <div v-else class="versions-grid">
+        <div v-for="agent in agents" :key="agent.plantel" class="version-item">
+          <span class="agent-dot" :class="{ 'agent-online': agent.online }" />
+          <strong>{{ agent.plantel }}</strong>
+          <span class="agent-host">{{ agent.online ? (agent.hostname || 'En línea') : 'Sin conexión' }}</span>
+          <button v-if="agent.commitSha" class="agent-sha" type="button" :title="agent.commitSha + ' · Copiar SHA'" @click="copyAgentSha(agent.commitSha)">{{ agent.commitSha.slice(0, 10) }}</button>
+          <span v-else class="agent-sha-muted">{{ agent.online ? 'SHA no reportado' : '—' }}</span>
+        </div>
+      </div>
+    </section>
 
     <div v-if="!isSuperAdmin" class="access-denied">
       <LucideShieldAlert :size="26" />
@@ -224,6 +247,8 @@ import {
   LucideCheckCircle2,
   LucideDownload,
   LucideFileUp,
+  LucideGitCommitHorizontal,
+  LucideRefreshCw,
   LucideListChecks,
   LucideLoader2,
   LucidePlay,
@@ -246,6 +271,10 @@ const isExporting = ref(false)
 const exportPhase = ref('Preparando…')
 const exportMessage = ref('')
 const exportError = ref('')
+const agents = ref([])
+const agentsLoading = ref(false)
+const agentsError = ref('')
+const showAgentVersions = ref(false)
 const continueOnError = ref(false)
 const targetPlantel = ref('')
 const execution = ref(null)
@@ -260,6 +289,26 @@ const isSuperAdmin = computed(() => roleTokens.value.includes('superadmin'))
 const activePlantelLabel = computed(() => activePlantelCookie.value === 'GLOBAL' ? 'CONSOLIDADO' : `PLANTEL ${activePlantelCookie.value || 'ACTIVO'}`)
 const targetPlantelOptions = computed(() => PLANTELES_LIST)
 const targetPlantelLabel = computed(() => targetPlantel.value ? `PLANTEL ${targetPlantel.value}` : activePlantelLabel.value)
+const selectedAgent = computed(() => agents.value.find(a => a.plantel === targetPlantel.value) || null)
+const loadAgents = async () => {
+  agentsLoading.value = true
+  agentsError.value = ''
+  try {
+    const result = await $fetch('/api/admin/sql-console/agents')
+    agents.value = Array.isArray(result?.agents) ? result.agents : []
+  } catch (error) {
+    agentsError.value = error?.data?.message || 'No se pudo consultar el estado de los agentes.'
+  } finally {
+    agentsLoading.value = false
+  }
+}
+const toggleAgentVersions = () => {
+  showAgentVersions.value = !showAgentVersions.value
+  if (showAgentVersions.value) void loadAgents()
+}
+const copyAgentSha = async sha => {
+  await navigator.clipboard?.writeText(sha)
+}
 const estimatedStatements = computed(() => {
   const matches = sqlText.value
     .split(/;\s*(?:\n|$)/)
@@ -289,6 +338,8 @@ onMounted(() => {
 
   if (!isSuperAdmin.value) {
     router.replace('/')
+  } else {
+    void loadAgents()
   }
 })
 
@@ -353,52 +404,64 @@ const executeSql = async () => {
 
 
 const exportFullSql = async () => {
-  if (isExporting.value) return
+  if (isExporting.value || isRunning.value || !targetPlantel.value) return
+  const plantel = targetPlantel.value
   isExporting.value = true
   exportPhase.value = 'Preparando…'
   exportMessage.value = ''
   exportError.value = ''
 
   try {
-    const filename = `ingresos-${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}.sql`
-    // Stream straight to disk in browsers that support it (large backups).
+    // The picker must be opened synchronously from the click event.
+    const suggestedName = plantel + '-respaldo-completo.sql'
     const handle = typeof window.showSaveFilePicker === 'function'
       ? await window.showSaveFilePicker({
-          suggestedName: filename,
+          suggestedName,
           types: [{ description: 'Archivo SQL', accept: { 'application/sql': ['.sql'] } }]
         })
       : null
-
-    const response = await fetch('/api/admin/sql-console/export', {
-      credentials: 'same-origin',
-      cache: 'no-store'
+    const started = await $fetch('/api/admin/sql-console/export/start', {
+      method: 'POST', body: { targetPlantel: plantel }
     })
-    if (!response.ok) {
-      const payload = await response.json().catch(() => null)
-      throw new Error(payload?.message || `No se pudo exportar (HTTP ${response.status}).`)
+    const id = started?.exportId
+    if (!id || started?.targetPlantel !== plantel) throw new Error('El bridge devolvió un respaldo sin identificación del plantel.')
+    exportPhase.value = 'Generando…'
+    let status = null
+    for (let attempt = 0; attempt < 900; attempt++) {
+      status = await $fetch('/api/admin/sql-console/export/status', {
+        query: { targetPlantel: plantel, exportId: id }
+      })
+      if (status.state === 'ready') break
+      if (status.state === 'failed') throw new Error('El respaldo falló en ' + plantel + ': ' + (status.code || 'ERROR'))
+      await new Promise(resolve => window.setTimeout(resolve, 2000))
     }
+    if (status?.state !== 'ready') throw new Error('El respaldo excedió el tiempo de preparación.')
 
-    if (handle && response.body) {
+    const fileUrl = '/api/admin/sql-console/export?' + new URLSearchParams({
+      targetPlantel: plantel, exportId: id
+    }).toString()
+    if (handle) {
       exportPhase.value = 'Guardando…'
+      const response = await fetch(fileUrl, { credentials: 'same-origin', cache: 'no-store' })
+      if (!response.ok || !response.body) {
+        const details = await response.json().catch(() => null)
+        throw new Error(details?.message || 'La descarga del respaldo falló (HTTP ' + response.status + ').')
+      }
       await response.body.pipeTo(await handle.createWritable())
-      exportMessage.value = 'Archivo SQL guardado.'
+      exportMessage.value = 'Respaldo de ' + plantel + ' guardado.'
     } else {
-      // Fallback for browsers without the File System Access API.
       exportPhase.value = 'Descargando…'
-      const blob = await response.blob()
-      const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
-      link.href = url
-      link.download = filename
+      link.href = fileUrl
+      link.download = suggestedName
       document.body.appendChild(link)
       link.click()
       link.remove()
-      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
-      exportMessage.value = 'Descarga iniciada.'
+      exportMessage.value = 'Descarga solicitada para ' + plantel + '.'
     }
   } catch (error) {
     if (error?.name !== 'AbortError') {
-      exportError.value = error?.message || 'No se pudo completar la exportación.'
+      exportError.value = error?.data?.message || error?.message || 'No se pudo completar la exportación.'
     }
   } finally {
     isExporting.value = false
@@ -463,6 +526,86 @@ const copySummary = async () => {
     linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(246, 253, 245, 0.92));
   box-shadow: 0 18px 45px rgba(31, 56, 43, 0.07);
 }
+
+.versions-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  align-self: center;
+  min-height: 38px;
+  padding: 0.45rem 0.7rem;
+  border: 1px solid #d5e2db;
+  border-radius: 11px;
+  background: #fff;
+  color: #375747;
+  font-weight: 750;
+  cursor: pointer;
+}
+.versions-panel {
+  padding: 0.7rem;
+  border: 1px solid #dbe7df;
+  border-radius: 14px;
+  background: #fff;
+}
+.versions-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.versions-head .ghost-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+}
+.versions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(205px, 1fr));
+  gap: 0.35rem;
+}
+.version-item {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  gap: 0.35rem;
+  padding: 0.42rem 0.5rem;
+  border: 1px solid #edf0ed;
+  border-radius: 10px;
+  font-size: 0.74rem;
+}
+.version-item strong { min-width: 40px; }
+.agent-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #aab5b0;
+}
+.agent-dot.agent-online { background: #2c9874; }
+.agent-host {
+  min-width: 0;
+  flex: 1;
+  color: #64746b;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.agent-sha, .agent-sha-muted {
+  flex: none;
+  font-size: 0.67rem;
+  color: #516e5e;
+}
+.agent-sha {
+  border: none;
+  background: #edf6ef;
+  padding: 0.25rem 0.35rem;
+  border-radius: 7px;
+  cursor: pointer;
+  font-family: ui-monospace, monospace;
+}
+.versions-error { color: #a13b3b; font-size: 0.8rem; }
 
 .sql-hero h2 {
   margin: 0.12rem 0 0.22rem;

@@ -10,7 +10,7 @@ RUN npx prisma generate && npm run build && test -f .output/server/index.mjs
 
 FROM node:22-alpine3.24 AS runtime
 RUN apk upgrade --no-cache \
-  && apk add --no-cache openssl ca-certificates libstdc++ mariadb-client \
+  && apk add --no-cache openssl ca-certificates libstdc++ \
   && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
   && rm -f /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack \
   && ! command -v npm
