@@ -9,12 +9,22 @@
           <code>DELIMITER</code> para rutinas/procedimientos.
         </p>
       </div>
-      <div class="target-card">
-        <label for="sql-target-plantel">Destino</label>
-        <select id="sql-target-plantel" v-model="targetPlantel" :disabled="isRunning">
-          <option v-for="plantel in targetPlantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
-        </select>
-        <small>Activo: {{ activePlantelLabel }}</small>
+      <div class="sql-hero-controls">
+        <div v-if="isSuperAdmin" class="sql-export">
+          <button type="button" class="export-button" :disabled="isExporting" @click="exportFullSql">
+            <LucideLoader2 v-if="isExporting" :size="17" class="spin" />
+            <LucideDownload v-else :size="17" />
+            {{ isExporting ? exportPhase : 'Exportar SQL completo' }}
+          </button>
+          <small>Base ingresos · servidor Aurora</small>
+        </div>
+        <div class="target-card">
+          <label for="sql-target-plantel">Destino</label>
+          <select id="sql-target-plantel" v-model="targetPlantel" :disabled="isRunning">
+            <option v-for="plantel in targetPlantelOptions" :key="plantel" :value="plantel">{{ plantel }}</option>
+          </select>
+          <small>Activo: {{ activePlantelLabel }}</small>
+        </div>
       </div>
     </div>
 
@@ -27,6 +37,11 @@
     </div>
 
     <template v-else>
+      <div v-if="exportMessage || exportError" class="result-banner" :class="exportError ? 'result-banner-error' : 'result-banner-running'" role="status" aria-live="polite">
+        <LucideAlertTriangle v-if="exportError" :size="18" />
+        <LucideCheckCircle2 v-else :size="18" />
+        <span>{{ exportError || exportMessage }}</span>
+      </div>
       <div v-if="executionErrorSummary" class="result-banner result-banner-error result-banner-compact">
         <LucideAlertTriangle :size="18" />
         <div>
@@ -206,6 +221,8 @@ import { useCookie, useRouter } from '#app'
 import { PLANTELES_LIST } from '~/utils/constants'
 import {
   LucideAlertTriangle,
+  LucideCheckCircle2,
+  LucideDownload,
   LucideFileUp,
   LucideListChecks,
   LucideLoader2,
@@ -225,6 +242,10 @@ const fileName = ref('')
 const fileMeta = ref('')
 const isDragging = ref(false)
 const isRunning = ref(false)
+const isExporting = ref(false)
+const exportPhase = ref('Preparando…')
+const exportMessage = ref('')
+const exportError = ref('')
 const continueOnError = ref(false)
 const targetPlantel = ref('')
 const execution = ref(null)
@@ -330,6 +351,61 @@ const executeSql = async () => {
   }
 }
 
+
+const exportFullSql = async () => {
+  if (isExporting.value) return
+  isExporting.value = true
+  exportPhase.value = 'Preparando…'
+  exportMessage.value = ''
+  exportError.value = ''
+
+  try {
+    const filename = `ingresos-${new Date().toISOString().replace(/[-:]/g, '').replace('T', '-').slice(0, 15)}.sql`
+    // Stream straight to disk in browsers that support it (large backups).
+    const handle = typeof window.showSaveFilePicker === 'function'
+      ? await window.showSaveFilePicker({
+          suggestedName: filename,
+          types: [{ description: 'Archivo SQL', accept: { 'application/sql': ['.sql'] } }]
+        })
+      : null
+
+    const response = await fetch('/api/admin/sql-console/export', {
+      credentials: 'same-origin',
+      cache: 'no-store'
+    })
+    if (!response.ok) {
+      const payload = await response.json().catch(() => null)
+      throw new Error(payload?.message || `No se pudo exportar (HTTP ${response.status}).`)
+    }
+
+    if (handle && response.body) {
+      exportPhase.value = 'Guardando…'
+      await response.body.pipeTo(await handle.createWritable())
+      exportMessage.value = 'Archivo SQL guardado.'
+    } else {
+      // Fallback for browsers without the File System Access API.
+      exportPhase.value = 'Descargando…'
+      const blob = await response.blob()
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = filename
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000)
+      exportMessage.value = 'Descarga iniciada.'
+    }
+  } catch (error) {
+    if (error?.name !== 'AbortError') {
+      exportError.value = error?.message || 'No se pudo completar la exportación.'
+    }
+  } finally {
+    isExporting.value = false
+    exportPhase.value = 'Preparando…'
+  }
+}
+
 const formatErrorMeta = (error) => {
   if (!error) return ''
   const parts = []
@@ -418,6 +494,53 @@ const copySummary = async () => {
   font-weight: 900;
   letter-spacing: 0.18em;
   text-transform: uppercase;
+}
+
+.sql-hero-controls {
+  display: flex;
+  align-items: stretch;
+  gap: 0.55rem;
+}
+
+.sql-export {
+  display: flex;
+  min-width: 198px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+}
+
+.sql-export small {
+  color: #667085;
+  font-size: 0.67rem;
+  font-weight: 750;
+  text-align: center;
+}
+
+.export-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  min-height: 38px;
+  padding: 0.55rem 0.8rem;
+  border: 1px solid rgba(25, 118, 88, 0.24);
+  border-radius: 12px;
+  background: #e7f5e8;
+  color: #126146;
+  font-size: 0.81rem;
+  font-weight: 900;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.export-button:hover:not(:disabled) {
+  background: #d7efda;
+}
+
+.export-button:disabled {
+  cursor: wait;
+  opacity: 0.65;
 }
 
 .target-card {
@@ -976,7 +1099,13 @@ const copySummary = async () => {
     flex: 1;
   }
 
-  .target-card {
+  .sql-hero-controls {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .sql-export, .target-card {
+    flex: 1 1 190px;
     min-width: 0;
   }
 
