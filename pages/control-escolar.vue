@@ -6880,8 +6880,13 @@ const confirmControlRestore = async () => {
     kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
     pendingRestoreStudent.value = null;
     show("Baja revertida. El alumno vuelve a estar Activo.", "success");
-    await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
-    await loadKpis();
+    try {
+      await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
+      await loadKpis();
+    } catch (refreshError) {
+      console.warn("[Control Escolar] La restauración se guardó, pero falló la actualización visual.", refreshError);
+      show("La baja se revirtió. Actualiza la lista para ver los datos recientes.", "warning");
+    }
   } catch (error) {
     const message = error?.data?.message || error?.message || "No se pudo revertir la baja.";
     show(message, "error");
