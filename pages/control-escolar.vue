@@ -666,7 +666,7 @@
                         />
                       </span>
                       <div class="ce-student-status-select" role="group" aria-label="Estado del alumno. Los cambios se aplican al guardar.">
-                        <button type="button" :aria-pressed="!isStudentBaja" :class="{ active: !isStudentBaja }" :disabled="savingStudent" @click="editForm.baja = 0"><LucideUserCheck :size="14" /> Activo</button>
+                        <button type="button" :aria-pressed="!isStudentBaja && !hasStoredStudentBaja" :class="{ active: !isStudentBaja && !hasStoredStudentBaja }" :disabled="savingStudent || restoreSaving" :title="hasStoredStudentBaja ? 'Restaurar baja en Aurora' : 'Activo'" @click="activateStudentStatus"><LucideUserCheck :size="14" /> {{ hasStoredStudentBaja ? "Restaurar" : "Activo" }}</button>
                         <button type="button" :aria-pressed="isStudentBaja" :class="{ active: isStudentBaja }" :disabled="savingStudent" @click="editForm.baja = 1"><LucideUserX :size="14" /> Baja</button>
                       </div>
                       <span
@@ -2019,6 +2019,13 @@
       </section>
     </div>
   </div>
+  <RestoreStudentModal
+    v-if="pendingRestoreStudent"
+    :student="pendingRestoreStudent"
+    :saving="restoreSaving"
+    @close="closeControlRestore"
+    @confirm="confirmControlRestore"
+  />
 </template>
 
 <script setup>
@@ -2090,6 +2097,7 @@ import ControlEscolarReportModal from "~/components/students/ControlEscolarRepor
 import StudentWhatsappBulkModal from "~/components/students/StudentWhatsappBulkModal.vue";
 import StudentEmailBulkModal from "~/components/students/StudentEmailBulkModal.vue";
 import StudentSectionModal from "~/components/students/StudentSectionModal.vue";
+import RestoreStudentModal from "~/components/RestoreStudentModal.vue";
 import { useStudentSections } from "~/composables/useStudentSections";
 import IngresoCycleModal from "~/components/IngresoCycleModal.vue";
 import { useToast } from "~/composables/useToast";
@@ -2219,6 +2227,8 @@ const saveError = ref("");
 const students = ref([]);
 const controlStudentsIndex = ref([]);
 const selectedStudent = ref(null);
+const pendingRestoreStudent = ref(null);
+const restoreSaving = ref(false);
 const controlBulkSelection = reactive(new Map());
 const showControlWhatsappBulkModal = ref(false);
 const controlWhatsappSent = ref(false);
@@ -2324,6 +2334,11 @@ const toggleControlSectionFilter = (id) => {
 };
 const editForm = reactive({});
 const isStudentBaja = computed(() => Number(editForm.baja || 0) === 1);
+const hasStoredStudentBaja = computed(() =>
+  Number(selectedStudent.value?.baja || 0) === 1 ||
+  ["baja", "baja_inscrita"].includes(String(selectedStudent.value?.enrollmentState || "").toLowerCase()) ||
+  String(selectedStudent.value?.status || "").toLowerCase() === "baja"
+);
 const photoCache = ref({});
 const photoLoadingKeys = ref(new Set());
 let searchTimer = null;
@@ -6820,6 +6835,59 @@ const reconcileControlKpisInBackground = () => {
         error?.message || error,
       );
     });
+};
+
+const activateStudentStatus = () => {
+  if (savingStudent.value || restoreSaving.value) return;
+  if (!hasStoredStudentBaja.value) {
+    editForm.baja = 0;
+    return;
+  }
+  if (hasUnsavedChanges.value) {
+    show("Guarda o descarta los cambios de la ficha antes de restaurar.", "warning");
+    return;
+  }
+  pendingRestoreStudent.value = selectedStudent.value;
+};
+
+const closeControlRestore = () => {
+  if (!restoreSaving.value) pendingRestoreStudent.value = null;
+};
+
+const confirmControlRestore = async () => {
+  const student = pendingRestoreStudent.value;
+  if (!student?.matricula || !selectedAgentId.value || restoreSaving.value) return;
+  restoreSaving.value = true;
+  try {
+    const result = await $fetch(`/api/students/${encodeURIComponent(student.matricula)}/restore`, {
+      method: "POST",
+      query: { source: "control-escolar", agentId: selectedAgentId.value },
+    });
+    if (!result?.success) throw new Error("No se confirmó la restauración.");
+    const restored = buildOptimisticControlStudent(student, {
+      baja: 0, motivoBaja: "", categoriaBaja: "", seguimientoBaja: "",
+    });
+    restored.status = "Activo";
+    restored.enrollmentState = student.enrollmentState === "baja_inscrita"
+      ? "inscrito"
+      : student.enrollmentState === "baja" ? "no_inscrito" : student.enrollmentState;
+    replaceControlStudentInIndex(restored);
+    if (normalizeMatriculaKey(selectedStudent.value?.matricula) === normalizeMatriculaKey(student.matricula)) {
+      selectedStudent.value = restored;
+      resetEditForm(restored, { restoreDraft: false });
+    }
+    persistCurrentControlStudentsCache();
+    kpis.value = buildClientKpisFromStudents(controlStudentsIndex.value);
+    pendingRestoreStudent.value = null;
+    show("Baja revertida. El alumno vuelve a estar Activo.", "success");
+    await loadStudents({ useCache: false, clearExisting: false, forceLoading: false });
+    await loadKpis();
+  } catch (error) {
+    const message = error?.data?.message || error?.message || "No se pudo revertir la baja.";
+    show(message, "error");
+  } finally {
+    restoreSaving.value = false;
+  }
 };
 
 const saveStudent = async () => {
