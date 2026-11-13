@@ -35,7 +35,7 @@ export default defineEventHandler(async (event) => {
           }
           return rows
         },
-        queryCentral: (sql, values) => controlEscolarCentralQuery(sql, values),
+        queryCentral: (sql, values) => controlEscolarCentralQuery<any[]>(sql, values),
         updateCentral: async (studentKey, patch) => {
           if (!studentPlantel || studentPlantel === 'GLOBAL') {
             throw new StudentRestoreError(409, 'No se pudo verificar el plantel del alumno.')
