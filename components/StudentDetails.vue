@@ -1075,6 +1075,7 @@ import {
   LucideUsers,
   LucideX,
   LucideUserX,
+  LucideUserCheck,
   LucideLoader2,
   LucideShieldCheck,
   LucideTags,
@@ -1148,6 +1149,7 @@ const emit = defineEmits([
   "close",
   "switch-student",
   "baja",
+  "restore",
   "photo-loaded",
   "manage-sections",
   "ingreso-cycle-updated",
@@ -2906,7 +2908,9 @@ const showStudentActionsMenu = (event) => {
       action: () => requestDepuracion(selectedDebt),
     }] : []),
     { label: "Ciclo de ingreso", icon: LucideCalendarClock, action: () => { showIngresoCycleModal.value = true; } },
-    ...(props.student.estatus === "Activo" ? [{ label: "Dar de baja", icon: LucideUserX, class: "text-red-700 hover:bg-red-50", action: () => emit("baja", props.student) }] : []),
+    ...(props.student.estatus === "Activo"
+      ? [{ label: "Dar de baja", icon: LucideUserX, class: "text-red-700 hover:bg-red-50", action: () => emit("baja", props.student) }]
+      : [{ label: "Restaurar a Activo", icon: LucideUserCheck, class: "text-emerald-700 hover:bg-emerald-50", action: () => emit("restore", props.student) }]),
     {
       label: "Editar",
       icon: LucideSettings,

@@ -27,6 +27,7 @@
         @switch-student="$emit('switch-student', $event)"
         @photo-loaded="$emit('photo-loaded', $event)"
         @baja="$emit('baja', $event)"
+        @restore="$emit('restore', $event)"
         @manage-sections="$emit('manage-sections', $event)"
         @ingreso-cycle-updated="$emit('ingreso-cycle-updated', $event)"
         @open-operator-info="$emit('open-operator-info', $event)"
@@ -113,6 +114,7 @@ defineEmits([
   'switch-student',
   'photo-loaded',
   'baja',
+  'restore',
   'manage-sections',
   'ingreso-cycle-updated',
   'open-operator-info',
