@@ -144,6 +144,7 @@
             @switch-student="selectStudentByMatricula"
             @photo-loaded="cacheStudentPhoto"
             @baja="bajaAlumno"
+            @restore="restoreAlumno"
             @manage-sections="openSectionModal"
             @ingreso-cycle-updated="handleIngresoCycleUpdated"
             @close-bulk="closeBulkWorkspace"
@@ -216,6 +217,13 @@
       :saving="bulkBajaSaving"
       @close="closeBajaModal"
       @confirm="confirmBaja"
+    />
+    <RestoreStudentModal
+      v-if="pendingRestoreStudent"
+      :student="pendingRestoreStudent"
+      :saving="restoreSaving"
+      @close="closeRestoreModal"
+      @confirm="confirmRestore"
     />
     <StudentOperatorInfoModal
       v-if="operatorInfoStudent"
@@ -421,6 +429,7 @@ import StudentSectionModal from '~/components/students/StudentSectionModal.vue'
 import BulkIngresoCycleModal from '~/components/BulkIngresoCycleModal.vue'
 import StudentFormModal from '~/components/StudentFormModal.vue'
 import BajaReasonModal from '~/components/BajaReasonModal.vue'
+import RestoreStudentModal from '~/components/RestoreStudentModal.vue'
 import StudentOperatorInfoModal from '~/components/students/StudentOperatorInfoModal.vue'
 import NoAdeudoModal from '~/components/NoAdeudoModal.vue'
 import { resolveClientAuthAccess } from '~/utils/authAccess'
@@ -769,6 +778,8 @@ let kpiRefreshTimer = null
 const showStudentModal = ref(false)
 const editingStudent = ref(null)
 const pendingBajaStudent = ref(null)
+const pendingRestoreStudent = ref(null)
+const restoreSaving = ref(false)
 const pendingBulkBajaStudents = ref([])
 const bulkBajaSaving = ref(false)
 const operatorInfoStudent = ref(null)
@@ -2276,6 +2287,55 @@ const selectStudentByMatricula = (matricula) => {
 const bajaAlumno = (student) => {
   pendingBulkBajaStudents.value = []
   pendingBajaStudent.value = student
+}
+
+const restoreAlumno = (student) => {
+  if (restoreSaving.value || !student || String(student.estatus || '').trim().toLowerCase() === 'activo') return
+  pendingRestoreStudent.value = student
+}
+
+const closeRestoreModal = () => {
+  if (!restoreSaving.value) pendingRestoreStudent.value = null
+}
+
+const confirmRestore = async () => {
+  const student = pendingRestoreStudent.value
+  if (!student || restoreSaving.value) return
+  restoreSaving.value = true
+  try {
+    const result = await $fetch(`/api/students/${encodeURIComponent(student.matricula)}/restore`, { method: 'POST' })
+    if (!result?.success) throw new Error('No se confirmó la restauración.')
+
+    const key = normalizeStudentMatricula(student.matricula)
+    const toActive = (candidate) => {
+      const updated = { ...candidate, estatus: 'Activo' }
+      return {
+        ...updated,
+        enrollmentState: hasCurrentEnrollmentConcept(updated) ? 'inscrito' : 'no_inscrito',
+        tipoIngreso: resolveStudentTipoIngreso(updated)
+      }
+    }
+    students.value = students.value.map(candidate =>
+      normalizeStudentMatricula(candidate?.matricula) === key ? toActive(candidate) : candidate
+    )
+    if (selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === key) {
+      selectedStudent.value = toActive(selectedStudent.value)
+    }
+    const refreshedStudent = selectedStudent.value && normalizeStudentMatricula(selectedStudent.value.matricula) === key
+      ? selectedStudent.value
+      : students.value.find(candidate => normalizeStudentMatricula(candidate?.matricula) === key)
+    activeFilter.value = hasCurrentEnrollmentConcept(refreshedStudent) ? 'inscritos' : 'no_inscritos'
+    activeGrado.value = ''
+    activeGrupo.value = ''
+    activeSaldoFilter.value = 'all'
+    pendingRestoreStudent.value = null
+    await refreshAfterStudentMutation()
+    show(result.alreadyActive ? 'El alumno ya estaba Activo.' : 'Estatus Activo restaurado.', 'success')
+  } catch (error) {
+    show(error?.data?.message || error?.message || 'No se pudo restaurar el estatus del alumno.', 'danger')
+  } finally {
+    restoreSaving.value = false
+  }
 }
 
 const openBulkBajaFlow = () => {
