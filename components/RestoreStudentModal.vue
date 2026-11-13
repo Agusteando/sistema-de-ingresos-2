@@ -5,15 +5,15 @@
         <div class="modal-header">
           <div>
             <h2 id="restore-student-title" class="modal-title">Restaurar a Activo</h2>
-            <p class="modal-subtitle">{{ student?.nombreCompleto || 'Alumno seleccionado' }}</p>
+            <p class="modal-subtitle">{{ student?.nombreCompleto || student?.fullName || student?.nombreCompletoAlumno || 'Alumno seleccionado' }}</p>
           </div>
           <button class="modal-icon-button" type="button" aria-label="Cerrar" :disabled="saving" @click="$emit('close')">
             <LucideX :size="18" />
           </button>
         </div>
         <div class="modal-content">
-          <p>El alumno volverá a tener estatus <strong>Activo</strong>.</p>
-          <p>Se conservan el ciclo escolar, los cargos, los pagos y los documentos. Esta acción no genera una inscripción nueva.</p>
+          <p>Se revertirá la baja del alumno en <strong>Alumnos</strong> y <strong>Control Escolar</strong>.</p>
+          <p>Volverá a estar Activo sin generar una nueva inscripción ni modificar sus pagos, cargos o documentos.</p>
         </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" type="button" :disabled="saving" @click="$emit('close')">Cancelar</button>
