@@ -29,7 +29,7 @@ export default defineEventHandler(async (event) => {
         planteles: allowedPlanteles,
         requireBase: !fromControlEscolar,
         queryBase: async (sql, values) => {
-          const rows = await query(sql, values)
+          const rows = await query<any>(sql, values)
           if (sql.startsWith('SELECT matricula, plantel, estatus') && rows?.[0]?.plantel) {
             studentPlantel = String(rows[0].plantel).trim()
           }
