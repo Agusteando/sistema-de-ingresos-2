@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
   if (url.pathname.startsWith('/api/debug/')) return
   if (url.pathname.startsWith('/api/login/')) return
   if (url.pathname === '/api/system/health') return
+  if (url.pathname === '/api/connectivity/ping') return
   if (url.pathname.startsWith('/api/no-adeudo/verify/')) return
   // External API routes are authenticated with their own service-token guard.
   // Do not require a browser session here, otherwise server-to-server requests

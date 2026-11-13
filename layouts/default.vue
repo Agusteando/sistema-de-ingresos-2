@@ -226,6 +226,7 @@
     </aside>
 
     <main class="income-main">
+      <ServerConnectivityNotice />
       <header class="app-header">
         <h1>{{ currentRouteName }}</h1>
 
