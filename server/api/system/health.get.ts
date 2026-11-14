@@ -64,23 +64,21 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, message: 'Sistema Rápido requiere DB_TRANSPORT=direct.' })
   }
 
-  // The agent gives this endpoint a 3.5s availability budget. Probe both
-  // databases concurrently and bound each probe so an unreachable MySQL host
-  // cannot make a healthy runner look like an unresponsive process.
-  const [localProbe, centralProbe] = await Promise.all([
-    runProbe<any[]>('MySQL local', () =>
-      runRawSqlStatement<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName, NOW() AS serverTime')
-    ),
-    runProbe<any[]>('Base central', () =>
-      controlEscolarCentralQuery<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName')
-    )
-  ])
+  // Availability must never wait for the remote tunnel. Central diagnostics
+  // remain opt-in and do not influence HTTP status or local readiness.
+  const localProbe = await runProbe<any[]>('MySQL local', () =>
+    runRawSqlStatement<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName, NOW() AS serverTime')
+  )
+  const checkCentral = String(getQuery(event).central || '') === '1'
+  const centralProbe = checkCentral
+    ? await runProbe<any[]>('Base central', () => controlEscolarCentralQuery<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName'))
+    : { result: null as any[] | null, error: '', latencyMs: 0 }
 
   const localRow = Array.isArray(localProbe.result) ? localProbe.result[0] : null
   const centralRow = Array.isArray(centralProbe.result) ? centralProbe.result[0] : null
   const mysqlOk = Number(localRow?.ok || 0) === 1
   const centralOk = Number(centralRow?.ok || 0) === 1
-  const ok = mysqlOk && centralOk
+  const ok = mysqlOk
 
   if (!ok) setResponseStatus(event, 503)
   setHeader(event, 'Cache-Control', 'no-store')
@@ -90,8 +88,7 @@ export default defineEventHandler(async (event) => {
     message: ok
       ? 'Sistema Rápido está listo.'
       : [
-          !mysqlOk ? `MySQL local: ${localProbe.error || 'sin respuesta válida'}` : '',
-          !centralOk ? `Base central: ${centralProbe.error || 'sin respuesta válida'}` : ''
+          !mysqlOk ? `MySQL local: ${localProbe.error || 'sin respuesta válida'}` : ''
         ].filter(Boolean).join(' · '),
     service: 'sistema-rapido',
     transport,
@@ -108,6 +105,7 @@ export default defineEventHandler(async (event) => {
       error: localProbe.error || null
     },
     central: {
+      checked: checkCentral,
       ok: centralOk,
       database: centralRow?.databaseName || null,
       latencyMs: centralProbe.latencyMs,

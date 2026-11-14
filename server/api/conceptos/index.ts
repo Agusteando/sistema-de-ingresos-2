@@ -4,6 +4,7 @@ import { automaticSchoolCycleKey, normalizeCicloKey } from '../../../shared/util
 import { normalizeEventualFlag } from '../../../shared/utils/conceptEventual'
 import { enrichConceptosWithStock } from '../../utils/conceptos-stock'
 import { createCentralConcepto, readCentralConceptMediaForIds, requireConceptosAdmin } from '../../utils/conceptos-config'
+import { refreshLocalConceptMirror } from '../../utils/local-concept-mirror'
 
 const escapeIdentifier = (value: string) => `\`${String(value).replace(/`/g, '``')}\``
 
@@ -128,6 +129,7 @@ export default defineEventHandler(async (event) => {
 
     try {
       const rows = await readCentralConceptosForCycle(ciclo, search)
+      void refreshLocalConceptMirror().catch((error) => console.warn('[conceptos] local mirror refresh failed', error))
       const enriched = await enrichConceptosWithStock(normalizeConceptSemantics(rows as any[]), stockPlantel)
       return enriched.conceptos
     } catch (error) {
@@ -141,7 +143,9 @@ export default defineEventHandler(async (event) => {
   if (method === 'POST') {
     const user = await requireConceptosAdmin(event)
     const body = await readBody(event)
-    return await createCentralConcepto(body, user)
+    const created = await createCentralConcepto(body, user)
+    void refreshLocalConceptMirror(true).catch((error) => console.warn('[conceptos] local mirror refresh failed', error))
+    return created
   }
 
   throw createError({ statusCode: 405, message: 'Metodo no permitido.' })

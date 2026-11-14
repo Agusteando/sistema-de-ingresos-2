@@ -16,11 +16,13 @@
           />
 
           <div class="brand-copy">
-            <h1>
+            <h1 v-if="localSystemRuntime">Aurora <span>Local</span></h1>
+            <h1 v-else>
               Inicia sesión con tu<br>
               <span>cuenta</span> institucional
             </h1>
-            <p>Accede a AURORA de forma segura con tu cuenta institucional de Google Workspace.</p>
+            <p v-if="localSystemRuntime">Accede a los datos de tu plantel sin conexión a Internet.</p>
+            <p v-else>Accede a AURORA de forma segura con tu cuenta institucional de Google Workspace.</p>
           </div>
 
           <div class="secure-card">
@@ -34,7 +36,7 @@
               <strong>Acceso seguro</strong>
               <small>
                 Tus credenciales están protegidas.<br>
-                Usamos Google para mantener tu información segura.
+                {{ localSystemRuntime ? 'La sesión se valida en esta instalación.' : 'Usamos Google para mantener tu información segura.' }}
               </small>
             </span>
           </div>
@@ -54,7 +56,7 @@
           </div>
 
           <h2>Bienvenido</h2>
-          <p class="auth-subtitle">Continúa con tu cuenta institucional.</p>
+          <p class="auth-subtitle">{{ localSystemRuntime ? 'Ingresa con tu usuario de este equipo.' : 'Continúa con tu cuenta institucional.' }}</p>
 
           <div v-if="!localSystemRuntime" ref="plantelSelectRef" class="plantel-field">
             <span id="plantel-login-label" class="plantel-label">Plantel</span>
@@ -131,11 +133,15 @@
           </div>
 
           <div v-if="localSystemRuntime" class="local-broker-card">
+            <label class="local-login-label" for="aurora-local-username">Usuario local</label>
+            <input id="aurora-local-username" v-model.trim="localUsername" class="local-login-input" autocomplete="username" :disabled="isBusy" maxlength="50" />
+            <label class="local-login-label" for="aurora-local-password">Contraseña</label>
+            <input id="aurora-local-password" v-model="localPassword" class="local-login-input" type="password" autocomplete="current-password" :disabled="isBusy" @keyup.enter="beginLocalLogin" />
             <button
               type="button"
               class="local-broker-button"
               :disabled="isBusy"
-              @click="beginLocalCloudLogin"
+              @click="beginLocalLogin"
             >
               <span v-if="isBusy" class="button-spinner" aria-hidden="true" />
               <span v-else class="local-broker-cloud" aria-hidden="true">
@@ -143,11 +149,9 @@
                   <path d="M7.4 18.5h9.3a4.3 4.3 0 0 0 .5-8.6A6 6 0 0 0 5.8 8.1a5.2 5.2 0 0 0 1.6 10.4Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                 </svg>
               </span>
-              <span>{{ isBusy ? primaryButtonText : 'Continuar con Google Workspace' }}</span>
+              <span>{{ isBusy ? primaryButtonText : 'Entrar a Aurora Local' }}</span>
             </button>
-            <p class="local-broker-note">
-              Tu acceso se valida en Aurora En la nube y regresa automáticamente a este equipo.
-            </p>
+            <p class="local-broker-note">Sin Google Workspace ni servidor central. Se utilizan las credenciales locales del plantel.</p>
           </div>
 
           <div v-else class="google-card">
@@ -388,6 +392,8 @@ const isLocalHandoffMode = computed(() => (
 
 const errorMsg = ref('')
 const authPhase = ref(localSystemRuntime ? 'ready' : 'loadingGoogle')
+const localUsername = ref('')
+const localPassword = ref('')
 const currentStepIndex = ref(0)
 let googleIntentTimer = null
 
@@ -603,11 +609,23 @@ const resetLoginState = () => {
   setPhase(window.google?.accounts?.id ? 'ready' : 'loadingGoogle', 0)
 }
 
-const beginLocalCloudLogin = () => {
-  if (!localSystemRuntime || isBusy.value || typeof window === 'undefined') return
+const beginLocalLogin = async () => {
+  if (!localSystemRuntime || isBusy.value) return
   errorMsg.value = ''
-  setPhase('redirecting', 4)
-  window.location.assign('/api/auth/local-login')
+  setPhase('server', 2)
+  try {
+    const result = await $fetch('/api/auth/local-login', {
+      method: 'POST',
+      body: { username: localUsername.value, password: localPassword.value }
+    })
+    localPassword.value = ''
+    setPhase('redirecting', 4)
+    window.location.assign(result?.redirectTo || '/')
+  } catch (error) {
+    localPassword.value = ''
+    errorMsg.value = getErrorMessage(error)
+    setPhase('error', 0)
+  }
 }
 
 const completeLocalHandoff = async () => {
@@ -718,7 +736,7 @@ onMounted(async () => {
     loadPersistedPlantel()
     loadPlantelStatuses({ force: true, plantel: selectedPlantel.value })
   }
-  loadLoginUpdates()
+  if (!localSystemRuntime) loadLoginUpdates()
 
   if (localSystemRuntime) {
     setPhase('ready', 0)
@@ -761,6 +779,11 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
+.local-login-label { display: block; margin: 10px 0 6px; font-size: .85rem; font-weight: 700; color: #223754; }
+.local-login-input { width: 100%; padding: 13px 15px; border: 1px solid #cbd8e5; border-radius: 13px; background: #fff; font: inherit; color: #14223d; transition: border-color .18s, box-shadow .18s; }
+.local-login-input:focus-visible { outline: none; border-color: #457ac9; box-shadow: 0 0 0 3px rgba(69,122,201,.14); }
+.local-login-input:disabled { opacity: .65; }
+
 .login-page {
   --login-page-y: clamp(10px, 1.65dvh, 18px);
   min-height: 100dvh;
