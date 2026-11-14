@@ -3,7 +3,7 @@ import { requireSqlConsoleAdmin, sqlConsoleRelay } from '../../../utils/sql-cons
 
 // Pinned fleet baseline for this rollout; optional private deployment override.
 // Never infer that the most common SHA is necessarily the newest release.
-const ROLLOUT_AGENT_SHA = 'PENDING_AGENT_MAIN_SHA'
+const ROLLOUT_AGENT_SHA = '0b864d0bfc8a369d3e42ded7d7fe80645c5351b1'
 const validSha = (value: unknown) => /^[a-f0-9]{40}$/i.test(String(value || ''))
   ? String(value).toLowerCase() : null
 
