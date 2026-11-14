@@ -34,7 +34,10 @@
 
     <section v-if="isSuperAdmin && showAgentVersions" class="versions-panel" aria-label="Versiones instaladas de agentes por plantel">
       <div class="versions-head">
-        <strong>Agentes por plantel</strong>
+        <div class="versions-heading">
+          <strong>Agentes por plantel</strong>
+          <NuxtLink to="/estado-equipos" class="versions-detail-link">Ver diagnóstico completo</NuxtLink>
+        </div>
         <button class="ghost-button" type="button" :disabled="agentsLoading" @click="loadAgents">
           <LucideRefreshCw :size="14" :class="{ spin: agentsLoading }" /> Actualizar
         </button>
@@ -44,9 +47,11 @@
         <div v-for="agent in agents" :key="agent.plantel" class="version-item">
           <span class="agent-dot" :class="{ 'agent-online': agent.online }" />
           <strong>{{ agent.plantel }}</strong>
-          <span class="agent-host">{{ agent.online ? (agent.hostname || 'En línea') : 'Sin conexión' }}</span>
+          <span class="agent-host">{{ agent.online ? (agent.hostname || 'En línea') : agent.observed ? 'Desconectado' : 'Sin registro' }}</span>
+          <span class="agent-host">{{ agent.online && agent.telemetry === 'live' ? (agent.diagnostics?.aurora === 'ready' ? 'Aurora local: saludable' : agent.diagnostics?.aurora === 'unavailable' ? 'Aurora local: no disponible' : 'Aurora local: sin verificar') : 'Aurora local: sin verificar' }}</span>
           <button v-if="agent.commitSha" class="agent-sha" type="button" :title="agent.commitSha + ' · Copiar SHA'" @click="copyAgentSha(agent.commitSha)">{{ agent.commitSha.slice(0, 10) }}</button>
           <span v-else class="agent-sha-muted">{{ agent.online ? 'SHA no reportado' : '—' }}</span>
+          <span v-if="agent.online && agent.versionStatus === 'different'" class="agent-sha-muted" style="color:#a57324">Difiere de objetivo</span>
         </div>
       </div>
     </section>
@@ -605,6 +610,9 @@ const copySummary = async () => {
   cursor: pointer;
   font-family: ui-monospace, monospace;
 }
+.versions-heading { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; }
+.versions-detail-link { font-size: .75rem; font-weight: 700; color: #267d65; text-decoration: none; }
+.versions-detail-link:hover { text-decoration: underline; }
 .versions-error { color: #a13b3b; font-size: 0.8rem; }
 
 .sql-hero h2 {
