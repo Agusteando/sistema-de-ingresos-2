@@ -1335,6 +1335,21 @@ const submit = async () => {
         } catch (lookupError) {
           // A transient connectivity failure never turns into a new charge.
         }
+        if (retry === 4 && !recoveryOnly) {
+          // Recover a definitely unacknowledged request using its ORIGINAL
+          // id and immutable payload. The server serializes duplicate commits.
+          try {
+            const retried = await $fetch('/api/payments/pay', {
+              method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
+            })
+            if (retried?.success) {
+              res = retried
+              break
+            }
+          } catch (retryError) {
+            console.warn('[Payments] Automatic retry not acknowledged', { reference })
+          }
+        }
       }
     }
     if (!res?.success) {

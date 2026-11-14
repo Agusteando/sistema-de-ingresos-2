@@ -36,3 +36,22 @@ export const parsePaymentRowReference = (value, id) => {
   const index = Number(match[2])
   return Number.isSafeInteger(index) ? { digest: match[1], index } : null
 }
+
+export const classifyPaymentAttemptRows = (rows, id, matricula, expectedDigest) => {
+  if (!rows.length) return { status: 'missing', folios: [], rows: [] }
+  const parsed = rows.map(row => parsePaymentRowReference(row.referencia, id))
+  const digest = parsed[0]?.digest
+  const indices = parsed.map(row => row?.index)
+  if (!digest || (expectedDigest && expectedDigest !== digest) ||
+      rows.some(row => String(row.matricula) !== String(matricula) ||
+        !Number.isSafeInteger(Number(row.folio)) || Number(row.folio) <= 0) ||
+      parsed.some(row => !row || row.digest !== digest) ||
+      new Set(indices).size !== indices.length ||
+      indices.some((index, position) => index !== position)) {
+    return { status: 'conflict', folios: [], rows: [] }
+  }
+  if (rows.some(row => String(row.estatus).toLowerCase() !== 'vigente')) {
+    return { status: 'cancelled', folios: [], rows: [] }
+  }
+  return { status: 'confirmed', folios: rows.map(row => Number(row.folio)), rows }
+}
