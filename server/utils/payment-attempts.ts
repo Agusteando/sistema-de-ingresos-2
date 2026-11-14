@@ -10,15 +10,15 @@ export type PaymentAttemptRow = {
 }
 
 // Read actual committed rows, never inferred matches based on time, amount or operator.
-export const readPaymentAttempt = async (id: string, matricula: string, expectedDigest?: string) => {
+export const readPaymentAttempt = async (id: string, matricula: string, ciclo: string, expectedDigest?: string) => {
   const reference = validPaymentAttemptId(id)
   if (!reference) return { status: 'missing' as const, folios: [] as number[], rows: [] as PaymentAttemptRow[] }
   const rows = await query<PaymentAttemptRow[]>(`
     SELECT folio, referencia, matricula, estatus, stock_movement_id
     FROM referenciasdepago
-    WHERE referencia LIKE ?
+    WHERE ciclo = ? AND matricula = ? AND referencia LIKE ?
     ORDER BY folio ASC
-  `, [`${reference}:%`])
+  `, [ciclo, matricula, `${reference}:%`])
   if (!rows.length) return { status: 'missing' as const, folios: [] as number[], rows: [] as PaymentAttemptRow[] }
 
   const parsed = rows.map(row => parsePaymentRowReference(row.referencia, reference))

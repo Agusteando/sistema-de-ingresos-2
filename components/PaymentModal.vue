@@ -1325,7 +1325,7 @@ const submit = async () => {
         await new Promise(resolve => setTimeout(resolve, retry < 4 ? 900 : 1600))
         try {
           const status = await $fetch('/api/payments/attempt', {
-            query: { reference, matricula: payload.matricula }
+            query: { reference, matricula: payload.matricula, ciclo: payload.ciclo }
           })
           if (status?.status === 'confirmed' && status.folios?.length) {
             res = { ...status, success: true }

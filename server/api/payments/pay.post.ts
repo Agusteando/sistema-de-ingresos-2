@@ -96,7 +96,7 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  const priorAttempt = await readPaymentAttempt(paymentAttemptRef, matricula, attemptDigest)
+  const priorAttempt = await readPaymentAttempt(paymentAttemptRef, matricula, cicloKey, attemptDigest)
   if (priorAttempt.status === 'confirmed') {
     console.info('[Payments] Confirmed attempt replay', { reference: paymentAttemptRef, count: priorAttempt.folios.length })
     return { success: true, status: 'confirmed', folios: priorAttempt.folios, recovered: true }
@@ -408,9 +408,11 @@ export default defineEventHandler(async (event) => {
           referencia
         ) SELECT ?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ?
         FROM (SELECT 1 AS commit_guard) AS payment_guard
-        LEFT JOIN referenciasdepago AS exact_attempt ON exact_attempt.referencia = ?
+        LEFT JOIN referenciasdepago AS exact_attempt
+          ON exact_attempt.ciclo = ? AND exact_attempt.matricula = ? AND exact_attempt.referencia = ?
         LEFT JOIN referenciasdepago AS mismatched_attempt
-          ON mismatched_attempt.referencia LIKE ? AND mismatched_attempt.referencia NOT LIKE ?
+          ON mismatched_attempt.ciclo = ? AND mismatched_attempt.matricula = ?
+          AND mismatched_attempt.referencia LIKE ? AND mismatched_attempt.referencia NOT LIKE ?
         WHERE exact_attempt.folio IS NULL AND mismatched_attempt.folio IS NULL
       `,
       params: [
@@ -458,7 +460,11 @@ export default defineEventHandler(async (event) => {
         paymentDateChanged ? originalUnix : null,
         paymentDateChangedBy,
         rowReference,
+        cicloKey,
+        matricula,
         rowReference,
+        cicloKey,
+        matricula,
         `${paymentAttemptRef}:%`,
         `${paymentAttemptRef}:${attemptDigest}:%`
       ]
@@ -485,7 +491,7 @@ export default defineEventHandler(async (event) => {
   let results: any[] = []
   let persistedRows: Array<{ folio: number; stock_movement_id?: number | null }> = []
   const recoverCommitted = async () => {
-    const attempt = await readPaymentAttempt(paymentAttemptRef, matricula, attemptDigest)
+    const attempt = await readPaymentAttempt(paymentAttemptRef, matricula, cicloKey, attemptDigest)
     if (attempt.status === 'conflict' || attempt.status === 'cancelled') {
       throw createError({ statusCode: 409, message: 'Este cobro ya fue procesado y no puede registrarse otra vez.' })
     }
