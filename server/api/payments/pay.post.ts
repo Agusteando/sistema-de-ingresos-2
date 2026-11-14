@@ -406,9 +406,12 @@ export default defineEventHandler(async (event) => {
           fecha_modificada_at,
           fecha_modificada_por,
           referencia
-        ) SELECT ?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ? FROM DUAL
-        WHERE NOT EXISTS (SELECT 1 FROM referenciasdepago WHERE referencia = ?)
-          AND NOT EXISTS (SELECT 1 FROM referenciasdepago WHERE referencia LIKE ? AND referencia NOT LIKE ?)
+        ) SELECT ?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ?
+        FROM (SELECT 1 AS commit_guard) AS payment_guard
+        LEFT JOIN referenciasdepago AS exact_attempt ON exact_attempt.referencia = ?
+        LEFT JOIN referenciasdepago AS mismatched_attempt
+          ON mismatched_attempt.referencia LIKE ? AND mismatched_attempt.referencia NOT LIKE ?
+        WHERE exact_attempt.folio IS NULL AND mismatched_attempt.folio IS NULL
       `,
       params: [
         matricula,
