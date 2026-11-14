@@ -139,7 +139,7 @@ let poll: ReturnType<typeof setInterval> | null = null
 
 const onlineCount = computed(() => report.value?.agents.filter(a => a.online).length || 0)
 const readyCount = computed(() => report.value?.agents.filter(a => a.online && a.telemetry === 'live' && a.diagnostics?.aurora === 'ready').length || 0)
-const differentCount = computed(() => report.value?.agents.filter(a => a.online && a.versionStatus === 'different').length || 0)
+const differentCount = computed(() => report.value?.agents.filter(a => a.versionStatus === 'different').length || 0)
 const unknownCount = computed(() => report.value?.agents.filter(a => !a.online || a.telemetry !== 'live').length || 0)
 
 async function load() {
