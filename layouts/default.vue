@@ -90,6 +90,9 @@
         <NuxtLink to="/usuarios" class="nav-item group" v-if="isSuperAdmin" title="Usuarios" aria-label="Usuarios">
           <LucideShield :size="22" stroke-width="2" /> <span class="nav-label">Usuarios</span>
         </NuxtLink>
+        <NuxtLink to="/estado-equipos" class="nav-item group" v-if="isSuperAdmin" title="Estado de equipos" aria-label="Estado de equipos">
+          <LucideMonitorCheck :size="22" stroke-width="2" /> <span class="nav-label">Estado de equipos</span>
+        </NuxtLink>
         <NuxtLink to="/sql-console" class="nav-item group" v-if="isSuperAdmin" title="SQL Console" aria-label="SQL Console">
           <LucideDatabase :size="22" stroke-width="2" /> <span class="nav-label">SQL Console</span>
         </NuxtLink>
@@ -1350,6 +1353,7 @@ const currentRouteName = computed(() => {
   if (route.path === '/conceptos') return 'Conceptos'
   if (route.path === '/facturas') return 'Facturas CFDI'
   if (route.path === '/usuarios') return 'Usuarios'
+  if (route.path === '/estado-equipos') return 'Estado de equipos'
   if (route.path === '/sql-console') return 'SQL Console'
   if (route.path === '/control-escolar') return 'Control Escolar'
   if (route.path === '/avance-control-escolar') return 'Reporte Control Escolar'
