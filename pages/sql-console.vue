@@ -51,7 +51,7 @@
           <span class="agent-host">{{ agent.online && agent.telemetry === 'live' ? (agent.diagnostics?.aurora === 'ready' ? 'Aurora local: saludable' : agent.diagnostics?.aurora === 'unavailable' ? 'Aurora local: no disponible' : 'Aurora local: sin verificar') : 'Aurora local: sin verificar' }}</span>
           <button v-if="agent.commitSha" class="agent-sha" type="button" :title="agent.commitSha + ' · Copiar SHA'" @click="copyAgentSha(agent.commitSha)">{{ agent.commitSha.slice(0, 10) }}</button>
           <span v-else class="agent-sha-muted">{{ agent.online ? 'SHA no reportado' : '—' }}</span>
-          <span v-if="agent.online && agent.versionStatus === 'different'" class="agent-sha-muted" style="color:#a57324">Difiere de objetivo</span>
+          <span v-if="agent.versionStatus === 'different'" class="agent-sha-muted" style="color:#a57324">Difiere de objetivo</span>
         </div>
       </div>
     </section>
