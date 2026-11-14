@@ -1,4 +1,6 @@
 import dayjs from 'dayjs'
+import { paymentPayloadDigest, paymentRowReference, validPaymentAttemptId, newPaymentAttemptId } from '../../utils/payment-attempt-id.mjs'
+import { readPaymentAttempt } from '../../utils/payment-attempts'
 import { runWithBridgeAgentId, executeStatementTransaction, query, type SqlStatement } from '../../utils/db'
 import { numeroALetras } from '../../utils/numberToWords'
 import { resolvePaymentConceptSnapshot } from '../../utils/payment-concept'
@@ -58,7 +60,7 @@ const normalizePaymentDate = (value: unknown) => {
 }
 
 export default defineEventHandler(async (event) => {
-  const paymentAttemptRef = String(getHeader(event, 'x-payment-attempt') || '').replace(/[^A-Za-z0-9-]/g, '').slice(0, 48) || null
+  const paymentAttemptRef = validPaymentAttemptId(getHeader(event, 'x-payment-attempt')) || newPaymentAttemptId()
   try {
     return await runWithBridgeAgentId(event.context.dbBridgeAgentId, async () => {
   const body = await readBody(event)
@@ -68,6 +70,7 @@ export default defineEventHandler(async (event) => {
   const cicloKey = normalizeCicloKey(ciclo)
   const requestedPaymentDate = normalizePaymentDate(fechaPago)
   const user = event.context.user
+  const attemptDigest = paymentPayloadDigest(body)
 
   if (!matricula || !pagos || !pagos.length) {
     throw createError({ statusCode: 400, message: 'Faltan parámetros obligatorios.' })
@@ -91,6 +94,15 @@ export default defineEventHandler(async (event) => {
     if (PLANTELES_LIST.includes(activePlantel) && plantelPago === activePlantel) {
       throw createError({ statusCode: 400, message: 'Ese plantel es el plantel activo. Registra el pago como pago normal.' })
     }
+  }
+
+  const priorAttempt = await readPaymentAttempt(paymentAttemptRef, matricula, attemptDigest)
+  if (priorAttempt.status === 'confirmed') {
+    console.info('[Payments] Confirmed attempt replay', { reference: paymentAttemptRef, count: priorAttempt.folios.length })
+    return { success: true, status: 'confirmed', folios: priorAttempt.folios, recovered: true }
+  }
+  if (priorAttempt.status !== 'missing') {
+    throw createError({ statusCode: 409, message: 'Este cobro ya fue procesado y no puede registrarse otra vez.' })
   }
 
   const [studentRef] = await query<any[]>(
@@ -142,11 +154,15 @@ export default defineEventHandler(async (event) => {
   const userName = user?.name || user?.email || 'Sistema'
   const effectivePaymentMethod = formaDePago
 
-  const statements: SqlStatement[] = []
+  // Lock the student BEFORE evaluating any conditional insert in the payment transaction.
+  // MySQL/InnoDB serializes concurrent requests with the same attempt across app instances.
+  const statements: SqlStatement[] = [
+    { sql: 'SELECT matricula FROM base WHERE matricula = ? FOR UPDATE', params: [matricula] }
+  ]
   const stockReservations: StockReservation[] = []
   const paymentStockReservations: StockReservation[] = []
-  const paymentFolioResultRefs: Array<{ insertIndex: number; selectIndex: number }> = []
-  const paymentReceiptRecoveryKeys: Array<{ documento: number; mes: string; monto: number }> = []
+  const paymentFolioResultRefs: Array<{ selectIndex: number }> = []
+  const paymentRowReferences: string[] = []
   const finalAmountByTarget = new Map<string, number>()
   const resolvedPaymentConcepts = new Map<string, { concepto: string; conceptoNombre: string; eventual: boolean }>()
   const recargoPolicyCache = new Map<number, RecargoPolicy>()
@@ -338,16 +354,17 @@ export default defineEventHandler(async (event) => {
           mes: mesNumber,
           userEmail: user?.email || userName,
           note: paymentConcept.conceptoNombre,
-          idempotencyKey: `payment:${matricula}:${documento}:${mesNumber}:${Date.now()}:${stockReservations.length}`
+          idempotencyKey: `payment:${paymentAttemptRef}:${stockReservations.length}:${Date.now()}:${Math.random().toString(36).slice(2)}`
         })
       : { controlled: false, source: 'bridge' as const, concepto_id: stockConceptoId, plantel, quantity: 0 }
     stockReservations.push(stockReservation)
     paymentStockReservations.push(stockReservation)
 
+    const rowReference = paymentRowReference(paymentAttemptRef, attemptDigest, paymentRowReferences.length)
+    paymentRowReferences.push(rowReference)
     const montoDecimal = Number(requestedAmount.toFixed(2))
     const letra = numeroALetras(montoDecimal)
     // Lock and recheck the exact coverage at commit time, after any concurrent start adjustment.
-    const paymentInsertIndex = statements.length
     statements.push({
       sql: `
         INSERT INTO referenciasdepago (
@@ -387,8 +404,11 @@ export default defineEventHandler(async (event) => {
           fecha,
           fecha_original,
           fecha_modificada_at,
-          fecha_modificada_por
-        ) VALUES (?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?)
+          fecha_modificada_por,
+          referencia
+        ) SELECT ?, (SELECT documento FROM documentos WHERE documento = ? AND plazo <=> ? AND meses <=> ? AND montoFinal <=> ? AND estatus = 'Activo' FOR UPDATE), ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), ?, ?, ?, ?, ?, ?, ?, ?, FROM_UNIXTIME(?), FROM_UNIXTIME(?), FROM_UNIXTIME(?), ?, ? FROM DUAL
+        WHERE NOT EXISTS (SELECT 1 FROM referenciasdepago WHERE referencia = ?)
+          AND NOT EXISTS (SELECT 1 FROM referenciasdepago WHERE referencia LIKE ? AND referencia NOT LIKE ?)
       `,
       params: [
         matricula,
@@ -433,21 +453,22 @@ export default defineEventHandler(async (event) => {
         effectiveUnix,
         originalUnix,
         paymentDateChanged ? originalUnix : null,
-        paymentDateChangedBy
+        paymentDateChangedBy,
+        rowReference,
+        rowReference,
+        `${paymentAttemptRef}:%`,
+        `${paymentAttemptRef}:${attemptDigest}:%`
       ]
     })
 
-    // LAST_INSERT_ID() is read in the same transaction/connection immediately
-    // after the payment insert. This is intentionally redundant with insertId:
-    // some Bridge versions do not expose write metadata consistently, and the
-    // receipt must never disappear after a successful payment.
+    // Always recover by the exact durable row reference, including repeated requests.
+    // LAST_INSERT_ID and 'latest payment' are unsafe when the response is lost.
     const paymentFolioSelectIndex = statements.length
-    statements.push({ sql: 'SELECT LAST_INSERT_ID() AS folio' })
-    paymentFolioResultRefs.push({
-      insertIndex: paymentInsertIndex,
-      selectIndex: paymentFolioSelectIndex,
+    statements.push({
+      sql: 'SELECT folio, stock_movement_id FROM referenciasdepago WHERE referencia = ? LIMIT 1',
+      params: [rowReference]
     })
-    paymentReceiptRecoveryKeys.push({ documento, mes, monto: montoDecimal })
+    paymentFolioResultRefs.push({ selectIndex: paymentFolioSelectIndex })
   }
   } catch (error) {
     await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por validación fallida')))
@@ -459,79 +480,82 @@ export default defineEventHandler(async (event) => {
   }
 
   let results: any[] = []
+  let persistedRows: Array<{ folio: number; stock_movement_id?: number | null }> = []
+  const recoverCommitted = async () => {
+    const attempt = await readPaymentAttempt(paymentAttemptRef, matricula, attemptDigest)
+    if (attempt.status === 'conflict' || attempt.status === 'cancelled') {
+      throw createError({ statusCode: 409, message: 'Este cobro ya fue procesado y no puede registrarse otra vez.' })
+    }
+    if (attempt.status === 'confirmed' && attempt.folios.length === paymentRowReferences.length) {
+      return attempt.rows
+    }
+    return null
+  }
+
   try {
     results = await executeStatementTransaction<any>(statements)
+    persistedRows = paymentFolioResultRefs.map(({ selectIndex }) => {
+      const selected = results[selectIndex]
+      return (Array.isArray(selected) ? selected[0] : selected) || { folio: 0 }
+    })
   } catch (error) {
-    await Promise.all(stockReservations.map((reservation) => releaseStockReservation(reservation, 'Pago no confirmado por error transaccional')))
-    // A simultaneous start-month adjustment must not allow a stale payment into a retired month.
-    if ((error as any)?.code === 'ER_BAD_NULL_ERROR' && /documento/i.test(String((error as any)?.message || ''))) {
-      throw createError({ statusCode: 409, message: 'La tira cambió mientras registraba el pago. Actualice el estado de cuenta e inténtelo de nuevo.' })
-    }
-    throw error
-  }
-
-  const resultFolios = paymentFolioResultRefs.map(({ insertIndex, selectIndex }) => {
-    const selectResult: any = results[selectIndex]
-    const selectedFolio = Array.isArray(selectResult)
-      ? Number(selectResult?.[0]?.folio || 0)
-      : Number(selectResult?.folio || 0)
-    if (Number.isInteger(selectedFolio) && selectedFolio > 0) return selectedFolio
-
-    const insertResult: any = results[insertIndex]
-    const insertedFolio = Number(insertResult?.insertId || 0)
-    return Number.isInteger(insertedFolio) && insertedFolio > 0 ? insertedFolio : 0
-  })
-
-  if (resultFolios.some(folio => !folio) || resultFolios.length !== paymentStockReservations.length) {
-    // The transaction has already committed at this point, so do not pretend
-    // the payment failed. Recover each missing folio by the exact payment row
-    // identity rather than by a broad "latest payments" query.
-    const recoveredFolios: number[] = []
-    for (let index = 0; index < paymentReceiptRecoveryKeys.length; index += 1) {
-      const directFolio = resultFolios[index]
-      if (directFolio) {
-        recoveredFolios.push(directFolio)
-        continue
+    // An SQL rejection is a known rollback. A lost bridge response is NOT.
+    // Never compensate inventory for a transaction whose commit is uncertain.
+    const code = String((error as any)?.code || '')
+    const definitelyRolledBack = /^ER_/.test(code)
+    if (definitelyRolledBack) {
+      await Promise.all(stockReservations.map(reservation => releaseStockReservation(reservation, 'Transacción rechazada')))
+      if (code === 'ER_BAD_NULL_ERROR' && /documento/i.test(String((error as any)?.message || ''))) {
+        throw createError({ statusCode: 409, message: 'La tira cambió. Actualiza el estado de cuenta.' })
       }
-
-      const key = paymentReceiptRecoveryKeys[index]
-      const [row] = await query<any[]>(`
-        SELECT folio
-        FROM referenciasdepago
-        WHERE matricula = ?
-          AND documento = ?
-          AND mes = ?
-          AND ciclo = ?
-          AND UNIX_TIMESTAMP(fecha) = ?
-          AND estatus = 'Vigente'
-          AND usuario = ?
-          AND ABS(monto - ?) < 0.005
-        ORDER BY folio DESC
-        LIMIT 1
-      `, [matricula, key.documento, key.mes, cicloKey, effectiveUnix, userName, key.monto])
-
-      const folio = Number(row?.folio || 0)
-      if (Number.isInteger(folio) && folio > 0) recoveredFolios.push(folio)
+      throw error
     }
-
-    if (recoveredFolios.length === paymentStockReservations.length) {
-      resultFolios.splice(0, resultFolios.length, ...recoveredFolios)
-    } else {
-      console.error('[Payments] Pago confirmado sin folios recuperables para recibo.', {
-        matricula,
-        ciclo: cicloKey,
-        fecha: effectiveTimestamp,
-        expected: paymentStockReservations.length,
-        found: resultFolios.filter(Boolean).length,
-        recovered: recoveredFolios.length,
-      })
+    try {
+      const recovered = await recoverCommitted()
+      if (recovered) persistedRows = recovered
+    } catch (lookupError: any) {
+      if (Number(lookupError?.statusCode || 0) === 409) throw lookupError
+      console.warn('[Payments] Confirmation lookup unavailable', { reference: paymentAttemptRef, code: lookupError?.code })
+    }
+    if (!persistedRows.length) {
+      console.warn('[Payments] Uncertain transaction retained for safe reconciliation', { reference: paymentAttemptRef, matricula })
+      return { success: false, status: 'processing', reference: paymentAttemptRef }
     }
   }
 
-  await Promise.all(paymentStockReservations.map((reservation, index) => finalizeStockReservation(reservation, resultFolios[index])))
+  let resultFolios = persistedRows.map(row => Number(row?.folio || 0))
+  if (resultFolios.length !== paymentRowReferences.length || resultFolios.some(folio => !Number.isInteger(folio) || folio <= 0)) {
+    try {
+      const recovered = await recoverCommitted()
+      if (recovered) {
+        persistedRows = recovered
+        resultFolios = recovered.map(row => Number(row.folio))
+      }
+    } catch (lookupError: any) {
+      if (Number(lookupError?.statusCode || 0) === 409) throw lookupError
+      console.warn('[Payments] Receipt lookup unavailable', { reference: paymentAttemptRef, code: lookupError?.code })
+    }
+  }
+  if (resultFolios.length !== paymentRowReferences.length || resultFolios.some(folio => !folio)) {
+    console.error('[Payments] Committed attempt has no complete receipt result', { reference: paymentAttemptRef })
+    return { success: false, status: 'processing', reference: paymentAttemptRef }
+  }
+
+  // On a serialized replay, the original movement belongs to the payment.
+  // Compensate ONLY the second request's independent stock reservation.
+  await Promise.all(paymentStockReservations.map(async (reservation, index) => {
+    const persistedMovement = Number(persistedRows[index]?.stock_movement_id || 0)
+    const currentMovement = Number(reservation.movement_id || 0)
+    if (reservation.controlled && currentMovement && persistedMovement !== currentMovement) {
+      await releaseStockReservation(reservation, 'Reserva duplicada de un intento confirmado')
+      return
+    }
+    await finalizeStockReservation(reservation, resultFolios[index])
+  }))
 
   return {
     success: true,
+    status: 'confirmed',
     folios: resultFolios,
     fechaEfectiva: effectiveTimestamp,
     fechaOriginal: originalTimestamp,

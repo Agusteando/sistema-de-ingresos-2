@@ -475,11 +475,9 @@
         <p v-if="!processing && (hasBlockingStock || totalCobrar <= 0)" class="mx-4 mb-2 text-xs text-amber-700" role="status">
           {{ hasBlockingStock ? 'No se puede registrar: hay conceptos agotados en este plantel.' : 'No hay un importe pendiente para registrar. Verifica los conceptos seleccionados.' }}
         </p>
-        <div v-if="paymentSubmissionError" class="mx-4 mb-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950" role="alert">
-          <p class="font-semibold">{{ paymentSubmissionError.title }}</p>
-          <p class="mt-1">{{ paymentSubmissionError.message }}</p>
-          <p class="mt-1 text-xs opacity-75">Referencia: {{ paymentSubmissionError.reference }}</p>
-        </div>
+        <p v-if="paymentSubmissionError" class="mx-4 mb-3 text-sm font-medium text-amber-800" role="status">
+          {{ paymentSubmissionError }}
+        </p>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
           <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
@@ -501,7 +499,6 @@ import { ref, watch, computed, onMounted, onBeforeUnmount, markRaw, nextTick } f
 import { LucideBanknote, LucideBuilding2, LucideCalendarDays, LucideCheck, LucideCheckCircle, LucideChevronDown, LucideCreditCard, LucideEye, LucideLandmark, LucideLoader2, LucideLock, LucideMoreHorizontal, LucideReceiptText, LucideSettings2, LucideWalletCards, LucideX, LucideXCircle } from 'lucide-vue-next'
 import { useCookie, useState } from '#app'
 import { useScrollLock } from '~/composables/useScrollLock'
-import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import { useModalDraftPersistence } from '~/composables/useModalDraftPersistence'
 import { normalizeCicloKey } from '~/shared/utils/ciclo'
 import { calculatePromotedGrado, displayGrado } from '~/shared/utils/grado'
@@ -515,7 +512,6 @@ import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNo
 const props = defineProps({ debts: Array, student: Object })
 const emit = defineEmits(['close', 'success'])
 const state = useState('globalState')
-const { executeOptimistic } = useOptimisticSync()
 
 useScrollLock()
 
@@ -1294,16 +1290,46 @@ const submit = async () => {
   const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
   try {
-    const res = await executeOptimistic(
-      () => $fetch('/api/payments/pay', { method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload }),
-      () => {},
-      () => {},
-      {
-        pending: pagoRealizadoEnOtroPlantel.value ? 'Registrando pago en otro plantel...' : 'Registrando pago...',
-        success: pagoRealizadoEnOtroPlantel.value ? 'Pago en otro plantel registrado' : 'Pago exitoso',
-        error: 'Error al registrar'
+    let res = null
+    let requestError = null
+    try {
+      res = await $fetch('/api/payments/pay', {
+        method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
+      })
+    } catch (error) {
+      requestError = error
+      console.warn('[Payments] Payment acknowledgement unavailable; recovering by attempt', {
+        reference, statusCode: Number(error?.statusCode || error?.response?.status || 0) || null
+      })
+    }
+    // A failed HTTP response is not evidence of a failed transaction. Recover
+    // from committed rows using the same attempt id, never a new payment.
+    if (!res?.success) {
+      for (let retry = 0; retry < 9; retry += 1) {
+        await new Promise(resolve => setTimeout(resolve, retry < 4 ? 900 : 1600))
+        try {
+          const status = await $fetch('/api/payments/attempt', {
+            query: { reference, matricula: payload.matricula }
+          })
+          if (status?.status === 'confirmed' && status.folios?.length) {
+            res = { ...status, success: true }
+            break
+          }
+          if (status?.status === 'unavailable') break
+        } catch (lookupError) {
+          // A transient connectivity failure never turns into a new charge.
+        }
       }
-    )
+    }
+    if (!res?.success) {
+      // No receipt and no false confirmation. Only an actionable, nontechnical
+      // message remains when automatic recovery cannot establish the result.
+      if (requestError && Number(requestError?.statusCode || requestError?.response?.status || 0) >= 400 &&
+          Number(requestError?.statusCode || requestError?.response?.status || 0) < 500) {
+        throw requestError
+      }
+      throw new Error('PAYMENT_UNCONFIRMED')
+    }
 
     const folios = Array.isArray(res?.folios) ? res.folios.filter(Boolean) : []
     // The server has committed; browser draft storage can never change this outcome.
@@ -1340,19 +1366,14 @@ const submit = async () => {
   } catch (error) {
     if (receiptWindow && !receiptWindow.closed) receiptWindow.close()
     const statusCode = Number(error?.statusCode || error?.response?.status || error?.data?.statusCode || 0)
-    const rejected = statusCode >= 400 && statusCode < 500
-    console.error('[Payments] Registrar pago did not complete in the UI', {
-      reference,
-      statusCode: statusCode || null,
-      code: String(error?.data?.code || error?.code || 'unknown').slice(0, 80)
+    console.error('[Payments] Operator action could not be completed', {
+      reference, statusCode: statusCode || null,
+      code: String(error?.data?.code || error?.code || error?.message || 'unknown').slice(0, 80)
     })
-    paymentSubmissionError.value = {
-      reference,
-      title: rejected ? 'El pago no fue aceptado' : 'No se pudo confirmar el resultado del pago',
-      message: rejected
-        ? (String(error?.data?.message || error?.data?.statusMessage || '').trim() || 'Revise los datos y vuelva a intentarlo.')
-        : 'Antes de volver a intentarlo, revise el Estado de Cuenta: el servidor pudo haber registrado el pago.'
-    }
+    paymentSubmissionError.value = statusCode >= 400 && statusCode < 500
+      ? (String(error?.data?.message || error?.data?.statusMessage || '').trim() || 'Revisa los datos del cobro.')
+      : 'Este cobro no está disponible para finalizar. No se generó un recibo.'
+
   } finally {
     processing.value = false
   }
