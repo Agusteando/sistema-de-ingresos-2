@@ -541,7 +541,10 @@ export default defineEventHandler(async (event) => {
         resultFolios = recovered.map(row => Number(row.folio))
       }
     } catch (lookupError: any) {
-      if (Number(lookupError?.statusCode || 0) === 409) throw lookupError
+      if (Number(lookupError?.statusCode || 0) === 409) {
+        await Promise.all(stockReservations.map(reservation => releaseStockReservation(reservation, 'Intento incompatible rechazado')))
+        throw lookupError
+      }
       console.warn('[Payments] Receipt lookup unavailable', { reference: paymentAttemptRef, code: lookupError?.code })
     }
   }
