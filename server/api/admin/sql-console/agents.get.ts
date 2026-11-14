@@ -44,7 +44,7 @@ export default defineEventHandler(async (event) => {
         hostname: agent?.hostname || null,
         agentVersion: agent?.agentVersion || null,
         commitSha: sha,
-        versionStatus: !online ? 'unknown' : !sha || !targetSha ? 'unknown' : sha === targetSha ? 'current' : 'different',
+        versionStatus: !sha || !targetSha ? 'unknown' : sha === targetSha ? 'current' : 'different',
         connectedAt: agent?.connectedAt || null,
         lastSeenAt: agent?.lastSeenAt || null,
         reconnectsSinceRelayStart: Number(agent?.reconnectsSinceRelayStart || 0),
