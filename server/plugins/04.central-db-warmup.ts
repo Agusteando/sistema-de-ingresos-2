@@ -1,6 +1,10 @@
+import { isLocalSystemRuntime } from '../utils/local-system-manager'
 import { controlEscolarCentralQuery, warmControlEscolarCentralDb } from '../utils/control-escolar-central'
 
 export default defineNitroPlugin(async () => {
+  // The central database is optional for this installed local runtime. Never
+  // postpone Nitro startup waiting for an external tunnel or server.
+  if (isLocalSystemRuntime()) return
   const startedAt = Date.now()
   try {
     const warm = await warmControlEscolarCentralDb(6)
