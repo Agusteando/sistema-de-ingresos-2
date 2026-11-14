@@ -1286,16 +1286,32 @@ const submit = async () => {
     receiptWindow = null
   }
 
+  // Keep the same financial operation across lost responses, repeated clicks and
+  // reopened modals. Never replay changed amounts with a previous identifier.
+  const attemptStorageKey = `aurora:payment-attempt:${activePlantelCookie.value || ''}:${props.student.matricula}:${payload.ciclo}`
+  const serializedPayload = JSON.stringify(payload)
+  let pendingAttempt = null
+  try {
+    pendingAttempt = JSON.parse(sessionStorage.getItem(attemptStorageKey) || 'null')
+  } catch {}
+  const reference = /^PAY-[A-Z0-9]{4,24}-[A-Z0-9]{4,16}$/.test(String(pendingAttempt?.reference || ''))
+    ? pendingAttempt.reference
+    : `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+  const recoveryOnly = Boolean(pendingAttempt?.reference && pendingAttempt?.payload !== serializedPayload)
+  if (!pendingAttempt?.reference) {
+    try { sessionStorage.setItem(attemptStorageKey, JSON.stringify({ reference, payload: serializedPayload })) } catch {}
+  }
   processing.value = true
-  const reference = `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`
 
   try {
     let res = null
     let requestError = null
     try {
-      res = await $fetch('/api/payments/pay', {
-        method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
-      })
+      if (!recoveryOnly) {
+        res = await $fetch('/api/payments/pay', {
+          method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
+        })
+      }
     } catch (error) {
       requestError = error
       console.warn('[Payments] Payment acknowledgement unavailable; recovering by attempt', {
@@ -1332,6 +1348,8 @@ const submit = async () => {
     }
 
     const folios = Array.isArray(res?.folios) ? res.folios.filter(Boolean) : []
+    // Only a confirmed, durable payment clears the pending client recovery key.
+    try { sessionStorage.removeItem(attemptStorageKey) } catch {}
     // The server has committed; browser draft storage can never change this outcome.
     try {
       markSaved()
@@ -1370,9 +1388,17 @@ const submit = async () => {
       reference, statusCode: statusCode || null,
       code: String(error?.data?.code || error?.code || error?.message || 'unknown').slice(0, 80)
     })
-    paymentSubmissionError.value = statusCode >= 400 && statusCode < 500
-      ? (String(error?.data?.message || error?.data?.statusMessage || '').trim() || 'Revisa los datos del cobro.')
-      : 'Este cobro no está disponible para finalizar. No se generó un recibo.'
+    if (statusCode >= 400 && statusCode < 500 && !recoveryOnly) {
+      // Only a definite business rejection can clear a non-committed attempt.
+      try { sessionStorage.removeItem(attemptStorageKey) } catch {}
+    }
+    paymentSubmissionError.value = statusCode === 403
+      ? 'No fue posible autorizar este cobro.'
+      : statusCode === 404
+        ? 'No se encontró al alumno.'
+        : statusCode === 400 || statusCode === 409
+          ? 'Revisa los datos del cobro y actualiza el estado de cuenta.'
+          : 'Este cobro no está disponible para finalizar. No se generó un recibo.'
 
   } finally {
     processing.value = false
