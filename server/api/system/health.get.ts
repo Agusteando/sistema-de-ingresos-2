@@ -1,6 +1,7 @@
 import { timingSafeEqual } from 'node:crypto'
 import { getDbTransport, runRawSqlStatement } from '../../utils/db'
 import { controlEscolarCentralQuery } from '../../utils/control-escolar-central'
+import { shouldCheckCentralForLocalHealth } from '../../utils/local-system-health-compat.mjs'
 
 const DEFAULT_PROBE_TIMEOUT_MS = 2500
 const MAX_PROBE_TIMEOUT_MS = 3000
@@ -64,12 +65,14 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 503, message: 'Sistema Rápido requiere DB_TRANSPORT=direct.' })
   }
 
-  // Availability must never wait for the remote tunnel. Central diagnostics
-  // remain opt-in and do not influence HTTP status or local readiness.
+  // Legacy Windows managers require real central.ok evidence to approve releases;
+  // they call this endpoint without a query. Modern managers pass ?central=0
+  // to preserve immediate offline checks. In either case, only local MySQL
+  // determines the HTTP readiness status (no fabricated central success).
   const localProbe = await runProbe<any[]>('MySQL local', () =>
     runRawSqlStatement<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName, NOW() AS serverTime')
   )
-  const checkCentral = String(getQuery(event).central || '') === '1'
+  const checkCentral = shouldCheckCentralForLocalHealth(getQuery(event).central)
   const centralProbe = checkCentral
     ? await runProbe<any[]>('Base central', () => controlEscolarCentralQuery<any[]>('SELECT 1 AS ok, DATABASE() AS databaseName'))
     : { result: null as any[] | null, error: '', latencyMs: 0 }
