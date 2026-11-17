@@ -59,7 +59,7 @@ export default defineEventHandler(async (event) => {
   event.context.user = user
   event.context.auroraStage = 'authorization'
 
-  const isPlantelDashboardEndpoint = url.pathname === '/api/dashboard/plantel-collections'
+  const isPlantelDashboardEndpoint = url.pathname === '/api/dashboard/plantel-collections' || url.pathname === '/api/dashboard/enrollment-summary'
   const isSystemEndpoint = url.pathname.startsWith('/api/system/')
   const isControlEscolarEndpoint = url.pathname.startsWith('/api/control-escolar/')
   const isBuscadorEndpoint = url.pathname === '/api/buscador' || url.pathname.startsWith('/api/buscador/')
