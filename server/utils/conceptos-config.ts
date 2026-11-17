@@ -538,6 +538,9 @@ const LOCAL_CONCEPTO_MIRROR_COLUMNS = [
 ] as const
 
 const localConceptMirrorValue = (column: string, row: ConceptRow) => {
+  // A central NULL plantel means a shared concept. Campus MySQL schemas can
+  // require NOT NULL, so use the canonical GLOBAL sentinel for the local mirror.
+  if (column === 'plantel') return normalizePlantel(row.plantel) || 'GLOBAL'
   if (column === 'ciclo' || column === 'ciclo_escolar') return row.ciclo_escolar || null
   if (column === 'montoFinal' || column === 'monto_final') return row.montoFinal ?? null
   if (['image_url', 'imagen_url', 'imagen', 'foto_url'].includes(column)) return row.image_url || null
