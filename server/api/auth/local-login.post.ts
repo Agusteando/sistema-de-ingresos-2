@@ -1,5 +1,5 @@
 import bcrypt from 'bcryptjs'
-import { query, getDbTransport } from '../../utils/db'
+import { runRawSqlStatement, getDbTransport } from '../../utils/db'
 import { isLocalSystemRuntime } from '../../utils/local-system-manager'
 import { normalizePlantel, normalizeAuthRole, isSuperAdminRole, hasFinancialAccessForPlantel, hasControlEscolarRole } from '../../utils/auth-session'
 import { clearImpersonationCookies } from '../../utils/impersonation-session'
@@ -33,7 +33,11 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 429, message: 'Demasiados intentos. Intenta nuevamente en unos minutos.' })
   }
 
-  const rows = await query<any[]>('SELECT * FROM users WHERE username = ? LIMIT 1', [username])
+  // Authentication must never run Aurora's general-purpose schema initializer
+  // against an existing campus database. The startup health probe already
+  // establishes that direct local MySQL is reachable; use the same raw,
+  // parameterized read path for legacy accounts.
+  const rows = await runRawSqlStatement<any[]>('SELECT * FROM users WHERE username = ? LIMIT 1', [username])
   const account = rows[0]
   const hash = String(account?.password || '')
   // Never restore the legacy default-password provisioning or plaintext bypass.
