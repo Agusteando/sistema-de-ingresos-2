@@ -6,10 +6,15 @@
         <h2>Estado de los equipos</h2>
         <p>DB Bridge, Aurora Local y versiones instaladas. Información recibida directamente de cada equipo, sin interrumpir su operación.</p>
       </div>
-      <button class="fleet-refresh" type="button" :disabled="loading" @click="load">
+      <div class="fleet-actions">
+        <button class="fleet-copy" type="button" :disabled="!report" @click="copyDiagnostics">
+          <LucideCopy :size="17" /> {{ copied ? 'Diagnóstico copiado' : 'Copiar diagnóstico JSON' }}
+        </button>
+        <button class="fleet-refresh" type="button" :disabled="loading" @click="load">
         <LucideRefreshCw :size="17" :class="{ spin: loading }" />
         {{ loading ? 'Consultando' : 'Actualizar' }}
-      </button>
+        </button>
+      </div>
     </header>
 
     <div v-if="error" class="fleet-error" role="alert">
@@ -134,6 +139,7 @@ const authorized = computed(() => String(roleCookie.value || '').split(',').some
 const report = ref<Report | null>(null)
 const loading = ref(false)
 const error = ref('')
+const copied = ref(false)
 const checkedAt = ref('')
 let poll: ReturnType<typeof setInterval> | null = null
 
@@ -148,11 +154,28 @@ async function load() {
   error.value = ''
   try {
     report.value = await $fetch<Report>('/api/admin/sql-console/agents', { retry: 0 })
+    copied.value = false
     checkedAt.value = new Date().toISOString()
   } catch (cause: any) {
     error.value = cause?.data?.message || 'No se pudo consultar el DB Relayer. Los datos anteriores se conservan.'
   } finally {
     loading.value = false
+  }
+}
+
+async function copyDiagnostics() {
+  if (!report.value) return
+  const evidence = {
+    schemaVersion: 1,
+    collectedAt: new Date().toISOString(),
+    source: 'aurora-superadmin-estado-equipos',
+    ...report.value
+  }
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(evidence, null, 2))
+    copied.value = true
+  } catch {
+    error.value = 'No se pudo copiar el diagnóstico. Verifica los permisos del portapapeles.'
   }
 }
 
@@ -188,6 +211,9 @@ onUnmounted(() => { if (poll) clearInterval(poll) })
 .fleet-eyebrow { display: inline-flex; align-items: center; gap: 7px; font-weight: 700; letter-spacing: .07em; text-transform: uppercase; font-size: 11px; color: #3e8b74; }
 .fleet-hero h2 { font-family: Fredoka, Montserrat, sans-serif; font-size: clamp(28px,3vw,38px); font-weight: 600; margin: 9px 0 7px; color: #254a3f; }
 .fleet-hero p { line-height: 1.65; max-width: 610px; color: #607772; margin: 0; font-size: 13px; }
+.fleet-actions { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+.fleet-copy { display:inline-flex; align-items:center; gap:8px; border:1px solid #bedbcc; border-radius:15px; background:white; color:#286f59; padding:12px 15px; font-family:inherit; font-size:12px; font-weight:700; cursor:pointer; }
+.fleet-copy:disabled { opacity:.55; cursor:not-allowed; }
 .fleet-refresh { display: inline-flex; align-items: center; gap: 9px; border: 0; border-radius: 15px; background: #286f59; color: white; padding: 13px 17px; font-weight: 700; font-size: 12px; cursor: pointer; white-space: nowrap; transition: transform .2s, box-shadow .2s; }
 .fleet-refresh:not(:disabled):hover { transform: translateY(-2px); box-shadow: 0 8px 20px #286f5933; } .fleet-refresh:disabled { opacity: .6; cursor: wait; }
 .fleet-stats { display:grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 13px; margin: 20px 0 29px; }
