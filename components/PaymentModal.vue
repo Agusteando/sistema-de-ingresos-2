@@ -343,7 +343,7 @@
                           pending: isRecargoTogglePending(debt),
                           attention: isRecargoAttentionActive(debt),
                         }"
-                        :disabled="isRecargoTogglePending(debt) || !isRecargoEligibleDebt(debt) || (debtHasRecargoForDate(debt) && !canOmitRecargo(debt))"
+                        :disabled="isRecargoTogglePending(debt) || !isRecargoEligibleDebt(debt) || (debtHasRecargoForDate(debt) && !canOmitRecargo(debt) && !canRequestRecargoAuthorization)"
                         :aria-pressed="debtHasRecargoForDate(debt) ? 'true' : 'false'"
                         :aria-label="recargoActionAriaLabel(debt)"
                         :title="recargoActionAriaLabel(debt)"
@@ -478,15 +478,47 @@
         <p v-if="paymentSubmissionError" class="mx-4 mb-3 text-sm font-medium text-amber-800" role="status">
           {{ paymentSubmissionError }}
         </p>
+        <div v-if="requiresRecargoAuthorization" class="mx-4 mb-3 rounded-xl border border-amber-200 bg-amber-50/70 p-4" role="group" aria-label="Autorización de recargos">
+          <div class="flex items-start gap-3">
+            <LucideLock :size="18" class="mt-0.5 shrink-0 text-amber-700" />
+            <div class="min-w-0 flex-1">
+              <p class="text-sm font-bold text-gray-800">Retiro excepcional de recargo</p>
+              <p class="mt-1 text-xs leading-5 text-gray-600">Este pago necesita un código del grupo institucional de Telegram. No modifica la política general.</p>
+              <template v-if="!isWaiverRequestCurrent">
+                <label for="payment-waiver-reason" class="mt-3 block text-xs font-semibold text-gray-700">Motivo</label>
+                <textarea id="payment-waiver-reason" v-model="waiverReason" maxlength="400" rows="2"
+                  class="mt-1 w-full rounded-lg border border-amber-200 bg-white px-3 py-2 text-sm outline-none focus:border-brand-campus"
+                  placeholder="Motivo para retirar este recargo"></textarea>
+                <button type="button" class="btn btn-outline mt-2 text-xs"
+                  :disabled="waiverRequesting || waiverReason.trim().length < 8 || processing"
+                  @click="requestRecargoAuthorization">
+                  <LucideLoader2 v-if="waiverRequesting" :size="14" class="animate-spin" />
+                  {{ waiverRequesting ? 'Solicitando...' : 'Solicitar código por Telegram' }}
+                </button>
+              </template>
+              <template v-else>
+                <label for="payment-waiver-code" class="mt-3 block text-xs font-semibold text-gray-700">Código de autorización · 10 minutos</label>
+                <div class="mt-1 flex flex-wrap items-center gap-2">
+                  <input id="payment-waiver-code" v-model="waiverCode" inputmode="numeric" type="text"
+                    autocomplete="one-time-code" maxlength="5" placeholder="00000"
+                    class="h-10 w-32 rounded-lg border border-amber-200 bg-white px-3 text-center text-lg font-bold tracking-widest outline-none focus:border-brand-campus"
+                    @input="waiverCode = waiverCode.replace(/\D/g, '').slice(0, 5)" />
+                  <button type="button" class="text-xs font-semibold text-brand-campus hover:underline" @click="resetWaiverAuthorization">Nueva solicitud</button>
+                </div>
+              </template>
+              <p v-if="waiverError" class="mt-2 text-xs font-semibold text-red-600" role="alert">{{ waiverError }}</p>
+            </div>
+          </div>
+        </div>
         <div class="modal-footer">
           <button class="btn btn-ghost" @click="requestClose" :disabled="processing">Cancelar</button>
           <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
-          <button class="btn btn-primary" type="button" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock" :title="hasBlockingStock ? 'Hay un concepto agotado' : totalCobrar <= 0 ? 'No hay saldo a registrar' : 'Registrar pago'">
+          <button class="btn btn-primary" type="button" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock || (requiresRecargoAuthorization && (!isWaiverRequestCurrent || waiverCode.length !== 5))" :title="hasBlockingStock ? 'Hay un concepto agotado' : totalCobrar <= 0 ? 'No hay saldo a registrar' : 'Registrar pago'">
             <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
             <LucideCheckCircle v-else :size="16"/>
-            {{ processing ? 'Registrando...' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago') }}
+            {{ processing ? 'Registrando...' : (requiresRecargoAuthorization ? 'Autorizar y registrar pago' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago')) }}
           </button>
         </div>
       </div>
@@ -544,6 +576,15 @@ let recargoAttentionTimer = null
 let lastAutomaticRecargoKeys = new Set()
 const activePlantelCookie = useCookie('auth_active_plantel')
 const canRemoveRecargo = ref(false)
+const canRequestRecargoAuthorization = ref(false)
+const waiverReason = ref('')
+const waiverCode = ref('')
+const waiverRequestId = ref('')
+const waiverReference = ref('')
+const waiverRequestedPayload = ref('')
+const waiverRequestedReason = ref('')
+const waiverRequesting = ref(false)
+const waiverError = ref('')
 const canManageGlobalRecargoOverride = ref(false)
 const globalRecargoRemovalOverride = ref(false)
 const globalRecargoOverrideUpdating = ref(false)
@@ -770,7 +811,7 @@ const recargoCalculationForDebt = (debt) => {
     balanceBeforeLateFee: baseAmount - pagosPrevios,
   }
   const omitted = Boolean(debt?.recargoOmitidoAhora)
-    && canRemoveRecargo.value
+    && (canRemoveRecargo.value || canRequestRecargoAuthorization.value)
     && isRecargoEligibleDebt(debt)
   const automatic = !omitted && shouldApplyLateFee({
     ...decision,
@@ -790,13 +831,14 @@ const recargoCalculationForDebt = (debt) => {
 }
 const debtHasRecargoForDate = (debt) => recargoCalculationForDebt(debt).applies
 const debtRecargoOmitted = (debt) => Boolean(debt?.recargoOmitidoAhora)
-  && canRemoveRecargo.value
+  && (canRemoveRecargo.value || canRequestRecargoAuthorization.value)
   && isRecargoEligibleDebt(debt)
 const canOmitRecargo = (debt) => canRemoveRecargo.value
   && isRecargoEligibleDebt(debt)
 const recargoActionLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'No aplica'
   if (debtRecargoOmitted(debt)) return 'Restaurar recargo'
+  if (debtHasRecargoForDate(debt) && !canOmitRecargo(debt) && canRequestRecargoAuthorization.value) return 'Solicitar autorización'
   if (debtHasRecargoForDate(debt)) return canOmitRecargo(debt) ? 'Quitar recargo' : 'Recargo aplicado'
   return 'Aplicar recargo'
 }
@@ -804,6 +846,7 @@ const recargoActionAriaLabel = (debt) => {
   if (!isRecargoEligibleDebt(debt)) return 'Los conceptos financieros eventuales no generan recargos'
   if (debtRecargoOmitted(debt)) return 'Restaurar recargo para este pago'
   if (debtHasRecargoForDate(debt) && canOmitRecargo(debt)) return 'Quitar recargo de este pago'
+  if (debtHasRecargoForDate(debt) && canRequestRecargoAuthorization.value) return 'Quitar recargo mediante código de Telegram'
   if (debtHasRecargoForDate(debt)) return 'Recargo aplicado; no está disponible para quitar en este momento'
   return 'Aplicar recargo'
 }
@@ -899,7 +942,7 @@ const writePaymentDraft = (draft) => {
       montoFinalInput: montoFinalTouched && Number.isFinite(montoFinalInput) ? montoFinalInput : debt.montoFinalInput,
       montoFinalTouched,
       recargoAplicadoAhora: isRecargoEligibleDebt(debt) && Boolean(restored.recargoAplicadoAhora),
-      recargoOmitidoAhora: canRemoveRecargo.value
+      recargoOmitidoAhora: (canRemoveRecargo.value || canRequestRecargoAuthorization.value)
         && isRecargoEligibleDebt(debt)
         && Boolean(restored.recargoOmitidoAhora)
     }
@@ -1035,12 +1078,14 @@ const refreshRecargoPolicies = async () => {
     })
     const policies = Array.isArray(response?.policies) ? response.policies : []
     canRemoveRecargo.value = Boolean(response?.capabilities?.canRemoveRecargo)
+    canRequestRecargoAuthorization.value = Boolean(response?.capabilities?.canRequestRecargoAuthorization)
     canManageGlobalRecargoOverride.value = Boolean(response?.capabilities?.canManageGlobalRemovalOverride)
     globalRecargoRemovalOverride.value = Boolean(response?.capabilities?.globalRemovalOverride)
     policies.forEach(policy => applyRecargoPolicyToConcept(Number(policy?.conceptoId || 0), policy))
     await syncAutomaticRecargoState()
   } catch {
     canRemoveRecargo.value = false
+    canRequestRecargoAuthorization.value = false
     canManageGlobalRecargoOverride.value = false
     // The debt payload already carries the latest available Bridge projection.
     // A policy refresh is best-effort so offline payments stay frictionless.
@@ -1117,7 +1162,7 @@ const toggleRecargo = async (debt) => {
   }
 
   if (debtHasRecargoForDate(debt)) {
-    if (!canOmitRecargo(debt)) return
+    if (!canOmitRecargo(debt) && !canRequestRecargoAuthorization.value) return
     debt.recargoOmitidoAhora = true
     repriceUntouchedPayments()
     return
@@ -1148,6 +1193,8 @@ const stockClass = (stock) => {
 const isDebtStockBlocked = (debt) => Boolean(Number(debt?.montoPagado || 0) > 0 && debt?.stock?.controlled && debt?.stock?.status === 'out' && !debt?.stock?.allow_negative)
 const hasBlockingStock = computed(() => processedDebts.value.some(isDebtStockBlocked))
 
+const requiresRecargoAuthorization = computed(() => !canRemoveRecargo.value && canRequestRecargoAuthorization.value
+  && processedDebts.value.some(debt => isRecargoEligibleDebt(debt) && debtRecargoOmitted(debt) && paymentAmountForDebt(debt) > 0))
 const paymentRows = () => processedDebts.value
   .map((d) => ({ debt: d, montoPagado: paymentAmountForDebt(d) }))
   .filter(({ montoPagado }) => montoPagado > 0)
@@ -1248,6 +1295,56 @@ const previewReceipt = () => {
   window.open('/print/recibo?preview=true', '_blank', 'width=850,height=800')
 }
 
+const buildPaymentPayload = () => ({
+  matricula: props.student.matricula,
+  formaDePago: formaDePago.value,
+  ciclo: normalizeCicloKey(state.value.ciclo),
+  fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
+  pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
+  plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
+  pagos: paymentRows()
+})
+const isWaiverRequestCurrent = computed(() => Boolean(waiverRequestId.value && waiverReference.value)
+  && waiverRequestedPayload.value === JSON.stringify(buildPaymentPayload())
+  && waiverRequestedReason.value === waiverReason.value.trim())
+const resetWaiverAuthorization = () => {
+  waiverRequestId.value = ''
+  waiverCode.value = ''
+  waiverRequestedPayload.value = ''
+  waiverRequestedReason.value = ''
+  waiverError.value = ''
+}
+const requestRecargoAuthorization = async () => {
+  if (!requiresRecargoAuthorization.value || waiverRequesting.value || processing.value) return
+  const motivo = waiverReason.value.trim()
+  if (motivo.length < 8 || motivo.length > 400) {
+    waiverError.value = 'Indica un motivo de 8 a 400 caracteres.'
+    return
+  }
+  waiverRequesting.value = true
+  resetWaiverAuthorization()
+  const payload = buildPaymentPayload()
+  const serialized = JSON.stringify(payload)
+  const attemptKey = `aurora:payment-attempt:${activePlantelCookie.value || ''}:${props.student.matricula}:${payload.ciclo}`
+  let pending = null
+  try { pending = JSON.parse(sessionStorage.getItem(attemptKey) || 'null') } catch {}
+  const reference = pending?.payload === serialized && /^PAY-[A-Z0-9]{4,24}-[A-Z0-9]{4,16}$/.test(String(pending.reference || ''))
+    ? pending.reference
+    : `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+  try {
+    const response = await $fetch('/api/payments/recargo-authorization', {
+      method: 'POST', body: { payload, reference, motivo }
+    })
+    waiverReference.value = reference
+    waiverRequestId.value = response.requestId
+    waiverRequestedPayload.value = serialized
+    waiverRequestedReason.value = motivo
+  } catch (error) {
+    waiverError.value = error?.data?.message || 'No se pudo solicitar el código de Telegram.'
+  } finally {
+    waiverRequesting.value = false
+  }
+}
 const submit = async () => {
   if (processing.value) return
   paymentSubmissionError.value = null
@@ -1262,15 +1359,11 @@ const submit = async () => {
     return
   }
 
-  const payload = {
-    matricula: props.student.matricula,
-    formaDePago: formaDePago.value,
-    ciclo: normalizeCicloKey(state.value.ciclo),
-    fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
-    pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
-    plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
-    pagos: paymentRows()
+  if (requiresRecargoAuthorization.value && (!isWaiverRequestCurrent.value || waiverCode.value.length !== 5)) {
+    paymentSubmissionError.value = 'Solicita el código de Telegram para registrar este pago.'
+    return
   }
+  const payload = buildPaymentPayload()
 
   // Open the receipt window while the action is still inside the operator's click.
   // Browsers may block a window opened only after the asynchronous payment request finishes.
@@ -1296,10 +1389,19 @@ const submit = async () => {
   } catch {}
   const reference = /^PAY-[A-Z0-9]{4,24}-[A-Z0-9]{4,16}$/.test(String(pendingAttempt?.reference || ''))
     ? pendingAttempt.reference
-    : `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`
+    : (requiresRecargoAuthorization.value && isWaiverRequestCurrent.value
+      ? waiverReference.value
+      : `PAY-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).slice(2, 10).toUpperCase()}`)
   const recoveryOnly = Boolean(pendingAttempt?.reference && pendingAttempt?.payload !== serializedPayload)
   if (!pendingAttempt?.reference) {
     try { sessionStorage.setItem(attemptStorageKey, JSON.stringify({ reference, payload: serializedPayload })) } catch {}
+  }
+  const submissionHeaders = {
+    'x-payment-attempt': reference,
+    ...(requiresRecargoAuthorization.value ? {
+      'x-recargo-request-id': waiverRequestId.value,
+      'x-recargo-code': waiverCode.value,
+    } : {}),
   }
   processing.value = true
 
@@ -1309,7 +1411,7 @@ const submit = async () => {
     try {
       if (!recoveryOnly) {
         res = await $fetch('/api/payments/pay', {
-          method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
+          method: 'POST', headers: submissionHeaders, body: payload
         })
       }
     } catch (error) {
@@ -1320,7 +1422,7 @@ const submit = async () => {
     }
     // A failed HTTP response is not evidence of a failed transaction. Recover
     // from committed rows using the same attempt id, never a new payment.
-    if (!res?.success) {
+    if (!res?.success && !(requiresRecargoAuthorization.value && Number(requestError?.statusCode || requestError?.response?.status || 0) === 403)) {
       for (let retry = 0; retry < 9; retry += 1) {
         await new Promise(resolve => setTimeout(resolve, retry < 4 ? 900 : 1600))
         try {
@@ -1340,7 +1442,7 @@ const submit = async () => {
           // id and immutable payload. The server serializes duplicate commits.
           try {
             const retried = await $fetch('/api/payments/pay', {
-              method: 'POST', headers: { 'x-payment-attempt': reference }, body: payload
+              method: 'POST', headers: submissionHeaders, body: payload
             })
             if (retried?.success) {
               res = retried
@@ -1407,8 +1509,9 @@ const submit = async () => {
       // Only a definite business rejection can clear a non-committed attempt.
       try { sessionStorage.removeItem(attemptStorageKey) } catch {}
     }
+    if (requiresRecargoAuthorization.value && /bloqueado|expirad/i.test(String(error?.data?.message || ''))) resetWaiverAuthorization()
     paymentSubmissionError.value = statusCode === 403
-      ? 'No fue posible autorizar este cobro.'
+      ? (requiresRecargoAuthorization.value ? (error?.data?.message || 'Código de Telegram inválido.') : 'No fue posible autorizar este cobro.')
       : statusCode === 404
         ? 'No se encontró al alumno.'
         : statusCode === 400 || statusCode === 409

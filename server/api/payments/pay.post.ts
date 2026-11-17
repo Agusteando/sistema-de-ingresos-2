@@ -11,7 +11,9 @@ import { PLANTELES_LIST } from '../../../utils/constants'
 import { finalizeStockReservation, releaseStockReservation, reserveStockForPayment, type StockReservation } from '../../utils/conceptos-stock'
 import { isPlaceholderConceptName, resolveFinancialConcept } from '../../utils/financial-concept'
 import { loadActiveCobranzaConvention } from '../../utils/cobranza-convenio'
-import { canRemoveLateFee, resolveLateFeeBalance } from '../../../shared/utils/recargo'
+import { canRemoveLateFee, hasLateFeeRemovalAccess, resolveLateFeeBalance } from '../../../shared/utils/recargo'
+import { consumeRecargoTelegramAuthorization } from '../../utils/recargo-telegram-authorization.mjs'
+import { notifyDocumentAmountCorrection } from '../../utils/telegram-document-audit'
 import { loadGlobalRecargoSettings, loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
 import { parseDocumentMonths } from '../../../shared/utils/documentMonths'
@@ -137,6 +139,33 @@ export default defineEventHandler(async (event) => {
     currentDateValue: originalDateKey,
     allowAnyTime: globalRecargoSettings.allowRemovalAnyTime,
   })
+  // An explicit Telegram code is an exception for this *payment only*.
+  // No global policy or historical payment is modified.
+  const waiverTargets = new Set<string>()
+  let appliedWaiver: { targets: Set<string>; reason: string; requestId: string } | null = null
+  if (!canRemoveRecargo && pagos.some((p: any) => truthyFlag(p?.omitirRecargo))) {
+    const roles = user?.roles || user?.role
+    if (!user?.hasFinancialAccess || !hasLateFeeRemovalAccess({ roles })) {
+      throw createError({ statusCode: 403, message: 'No tienes permisos para retirar recargos.' })
+    }
+    try {
+      appliedWaiver = consumeRecargoTelegramAuthorization({
+        requestId: getHeader(event, 'x-recargo-request-id'),
+        code: getHeader(event, 'x-recargo-code'),
+        actor: String(user?.email || '').trim().toLowerCase(),
+        agent: String(event.context.dbBridgeAgentId || user?.active_plantel || '').trim().toUpperCase(),
+        reference: paymentAttemptRef,
+        payload: body,
+      })
+      for (const target of appliedWaiver.targets) waiverTargets.add(target)
+      console.info('[RecargoTelegram] Authorization consumed', {
+        actor: String(user?.email || '').toLowerCase(), reference: paymentAttemptRef,
+        targets: [...waiverTargets], trace: String(event.context.auroraRequestId || ''),
+      })
+    } catch (error: any) {
+      throw createError({ statusCode: error?.statusCode || 403, message: error?.message || 'Autorización de recargo inválida.' })
+    }
+  }
   const originalTime = originalTimestamp.slice(11, 19) || '00:00:00'
   const effectiveUnix = requestedPaymentDate
     ? mexicoCityDateTimeToUnix(requestedPaymentDate, originalTime)
@@ -292,7 +321,7 @@ export default defineEventHandler(async (event) => {
     if (applyLateFeeRequested && isEventual) {
       throw createError({ statusCode: 400, message: 'Los conceptos eventuales no admiten recargos.' })
     }
-    if (omitLateFeeRequested && !isEventual && !canRemoveRecargo) {
+    if (omitLateFeeRequested && !isEventual && !canRemoveRecargo && !waiverTargets.has(paymentDuplicateKey)) {
       throw createError({
         statusCode: 403,
         message: 'No está permitido quitar este recargo en este momento.',
@@ -310,6 +339,7 @@ export default defineEventHandler(async (event) => {
     const hasRecargoManual = !isEventual && pagosDelMes.some(row => String(row.recargo) === '1')
     const hasPayment = pagosDelMes.some(row => Number(row.monto || 0) > 0)
     const omitLateFeeNow = !isEventual && omitLateFeeRequested && canRemoveRecargo
+      || !isEventual && omitLateFeeRequested && waiverTargets.has(paymentDuplicateKey)
     const lateFee = resolveLateFeeBalance({
       baseAmount: finalAmount,
       paidAmount: resuelto,
@@ -564,6 +594,21 @@ export default defineEventHandler(async (event) => {
     }
     await finalizeStockReservation(reservation, resultFolios[index])
   }))
+
+  if (appliedWaiver) {
+    const report = await notifyDocumentAmountCorrection(
+      '*Recargo retirado en pago*\n' +
+      'Operador: ' + String(user?.name || user?.email || 'Sistema') +
+      ' · Alumno: ' + String(nombreCompleto) + ' (' + String(matricula) + ')' +
+      ' · Plantel: ' + String(plantel) +
+      '\nDocumentos/meses: ' + [...waiverTargets].join(', ') +
+      '\nMotivo: ' + appliedWaiver.reason +
+      '\nFolios: ' + resultFolios.join(', ') + ' · Ref: ' + paymentAttemptRef
+    )
+    if (!report.delivered) console.error('[RecargoTelegram] Post-payment audit notification failed', {
+      reference: paymentAttemptRef, folios: resultFolios, report,
+    })
+  }
 
   return {
     success: true,

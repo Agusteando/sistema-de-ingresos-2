@@ -27,6 +27,7 @@ export default defineEventHandler(async (event) => runWithBridgeAgentId(event.co
       currentDateValue: currentDateKey,
       allowAnyTime: globalSettings.allowRemovalAnyTime,
     }),
+    canRequestRecargoAuthorization: hasLateFeeRemovalAccess({ roles, financialPlanteles }),
     canManageGlobalRemovalOverride: hasLateFeeRemovalAccess({ roles, financialPlanteles }),
     globalRemovalOverride: globalSettings.allowRemovalAnyTime,
     globalRemovalOverridePendingSync: globalSettings.pendingSync,
