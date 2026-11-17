@@ -20,9 +20,18 @@
         >
           Ritmo
         </button>
+        <button
+          type="button"
+          role="tab"
+          :aria-selected="viewMode === 'enrollment'"
+          :class="{ active: viewMode === 'enrollment' }"
+          @click="viewMode = 'enrollment'"
+        >
+          Inscripción
+        </button>
       </div>
 
-      <div class="toolbar-period">
+      <div v-if="viewMode !== 'enrollment'" class="toolbar-period">
         <button type="button" aria-label="Mes anterior" @click="shiftMonth(-1)">‹</button>
         <label class="month-input-wrap">
           <span>{{ monthLabel }}</span>
@@ -31,7 +40,7 @@
         <button type="button" aria-label="Mes siguiente" :disabled="selectedMonth >= currentMonth" @click="shiftMonth(1)">›</button>
       </div>
 
-      <div class="refresh-control">
+      <div v-if="viewMode !== 'enrollment'" class="refresh-control">
         <time v-if="lastGeneratedLabel" :datetime="dashboard?.generatedAt">
           Generado {{ lastGeneratedLabel }}
         </time>
@@ -71,7 +80,7 @@
       />
     </template>
 
-    <template v-else>
+    <template v-else-if="viewMode === 'timeline'">
       <section class="dashboard-panel timeline-panel day-panel">
         <header class="panel-heading">
           <div>
@@ -113,7 +122,9 @@
       </section>
     </template>
 
-    <div v-if="loadError" class="dashboard-error" role="alert">
+    <EnrollmentInstitutionalTable v-else />
+
+    <div v-if="loadError && viewMode !== 'enrollment'" class="dashboard-error" role="alert">
       <span />
       No disponible
     </div>
@@ -125,6 +136,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { LucideRefreshCw } from 'lucide-vue-next'
 import PlantelLineChart from '~/components/dashboard/PlantelLineChart.vue'
 import DashboardMetricSection from '~/components/dashboard/DashboardMetricSection.vue'
+import EnrollmentInstitutionalTable from '~/components/dashboard/EnrollmentInstitutionalTable.vue'
 import { DASHBOARD_PLANTELES } from '~/utils/constants'
 
 type PlantelCollection = {
@@ -168,7 +180,7 @@ const mexicoCityParts = () => {
 const clock = mexicoCityParts()
 const currentMonth = clock.month
 const selectedMonth = ref(currentMonth)
-const viewMode = ref<'totals' | 'timeline'>('totals')
+const viewMode = ref<'totals' | 'timeline' | 'enrollment'>('totals')
 const dashboard = ref<DashboardPayload | null>(null)
 const loading = ref(true)
 const loadError = ref(false)
@@ -334,7 +346,7 @@ onMounted(() => {
 
 .view-switch {
   display: inline-grid;
-  grid-template-columns: repeat(2, minmax(88px, 1fr));
+  grid-template-columns: repeat(3, minmax(88px, 1fr));
   gap: 4px;
   padding: 4px;
   border-radius: 14px;
