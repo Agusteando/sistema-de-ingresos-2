@@ -57,7 +57,9 @@ export default defineNitroPlugin((nitroApp) => {
 
     state.running = true
     try {
-      const status = await requestLocalSystemManager<ManagerStatus>('/status', { refresh: true })
+      // The manager refreshes its remote-head cache independently; polling
+      // here must never wait on GitHub or make the local app depend on Internet.
+      const status = await requestLocalSystemManager<ManagerStatus>('/status')
       const targetSha = String(status?.available?.sha || '').trim()
       const operationRunning = Boolean(status?.operation?.running)
       if (!status?.updateAvailable || !targetSha || operationRunning) return
