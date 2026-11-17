@@ -11,8 +11,8 @@
           <LucideCopy :size="17" /> {{ copied ? 'Diagnóstico copiado' : 'Copiar diagnóstico JSON' }}
         </button>
         <button class="fleet-refresh" type="button" :disabled="loading" @click="load">
-        <LucideRefreshCw :size="17" :class="{ spin: loading }" />
-        {{ loading ? 'Consultando' : 'Actualizar' }}
+          <LucideRefreshCw :size="17" :class="{ spin: loading }" />
+          {{ loading ? 'Consultando' : 'Actualizar' }}
         </button>
       </div>
     </header>
