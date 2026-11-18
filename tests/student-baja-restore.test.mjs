@@ -119,3 +119,29 @@ test('restores a legacy central row without optional withdrawal columns', async 
     baja: 0, motivoBaja: null,
   })
 })
+
+test('both entry points restore using the scoped Bridge record when central matricula has no plantel', async () => {
+  for (const requireBase of [true, false]) {
+    const f = fixture({ central: { matricula: 'PM100', baja: 1, motivo_baja: 'Cambio' } })
+    f.options.getCentralColumns = async () => new Set(['matricula', 'baja', 'motivo_baja'])
+    const queryCentral = f.options.queryCentral
+    f.options.queryCentral = async (sql, params) => {
+      if (/\bplantel\b/.test(sql)) throw new Error("Unknown column 'plantel' in 'field list'")
+      return queryCentral(sql, params)
+    }
+    const result = await restoreAuroraStudentBaja({ ...f.options, requireBase })
+    assert.equal(result.restoredBase, true)
+    assert.equal(result.restoredCentral, true)
+    assert.deepEqual(f.updates.find(update => update.table === 'central-write').patch, {
+      baja: 0, motivoBaja: null,
+    })
+  }
+})
+
+test('a central-only record without verifiable plantel is rejected before any write', async () => {
+  const f = fixture({ base: null, central: { matricula: 'PM100', baja: 1 } })
+  f.options.getCentralColumns = async () => new Set(['matricula', 'baja'])
+  await assert.rejects(restoreAuroraStudentBaja({ ...f.options, requireBase: false }),
+    error => error.statusCode === 403)
+  assert.equal(f.updates.filter(update => update.table === 'central-write').length, 0)
+})
