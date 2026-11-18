@@ -51,7 +51,9 @@ export const restoreAuroraStudentBaja = async ({
   }
   const metadata = (Object.keys(withdrawalColumns) as WithdrawalField[])
     .filter(field => columns.has(withdrawalColumns[field]))
-  const projection = ['matricula', 'plantel', 'baja', ...metadata.map(field => withdrawalColumns[field])]
+  // The scoped Bridge row establishes campus ownership on legacy central schemas.
+  const campusColumn = columns.has('plantel') ? ['plantel'] : []
+  const projection = ['matricula', 'baja', ...campusColumn, ...metadata.map(field => withdrawalColumns[field])]
   const [central] = await queryCentral(
     `SELECT ${projection.join(', ')} FROM matricula WHERE UPPER(TRIM(matricula)) = ? LIMIT 1`,
     [key.toUpperCase()],
