@@ -14,6 +14,7 @@ const fixture = ({ base = { matricula:'PM100', plantel:'PMA', estatus:'Baja' }, 
       updates.push({table:'base',sql,params})
       return {affectedRows:1}
     },
+    getCentralColumns: async () => new Set(['matricula', 'plantel', 'baja', 'motivo_baja', 'categoria_baja', 'seguimiento_baja']),
     queryCentral: async (sql, params) => { updates.push({table:'central-read',sql,params}); return central ? [central] : [] },
     updateCentral: async (key, patch) => {
       updates.push({table:'central-write',key,patch})
@@ -100,4 +101,21 @@ test('empty campus authorization fails closed',async()=>{
   const f=fixture({campus:[]})
   await assert.rejects(restoreAuroraStudentBaja(f.options),/plantel autorizado/)
   assert.equal(f.bridgeCalls,0)
+})
+
+test('restores a legacy central row without optional withdrawal columns', async () => {
+  const f = fixture({ central: { matricula: 'PM100', plantel: 'PMA', baja: 1, motivo_baja: 'Cambio' } })
+  f.options.getCentralColumns = async () => new Set(['matricula', 'plantel', 'baja', 'motivo_baja'])
+  const queryCentral = f.options.queryCentral
+  f.options.queryCentral = async (sql, params) => {
+    if (/categoria_baja|seguimiento_baja/.test(sql)) throw new Error('ER_BAD_FIELD_ERROR')
+    return queryCentral(sql, params)
+  }
+
+  const result = await restoreAuroraStudentBaja(f.options)
+  assert.equal(result.restoredBase, true)
+  assert.equal(result.restoredCentral, true)
+  assert.deepEqual(f.updates.find(update => update.table === 'central-write').patch, {
+    baja: 0, motivoBaja: null,
+  })
 })
