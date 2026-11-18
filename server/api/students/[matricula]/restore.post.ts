@@ -1,6 +1,6 @@
 import { getDbTransport, query, runWithBridgeAgentId } from '../../../utils/db'
 import { plantelCandidatesForProjectedScope } from '../../../../shared/utils/grado'
-import { controlEscolarCentralQuery } from '../../../utils/control-escolar-central'
+import { controlEscolarCentralQuery, getCentralTableColumns } from '../../../utils/control-escolar-central'
 import { resolveControlEscolarAuth, updateControlEscolarStudent } from '../../../utils/control-escolar'
 import { StudentRestoreError, restoreStudentActiveStatus } from '../../../utils/student-status-restore'
 import { restoreAuroraStudentBaja } from '../../../utils/student-baja-restore'
@@ -26,31 +26,43 @@ export default defineEventHandler(async (event) => {
       user?.active_plantel !== 'GLOBAL' ? String(user?.active_plantel || '') : ''
     )
     let centralReadFailed = false
+    const requestId = event.context.auroraRequestId
+    const markStage = (stage: string) => { event.context.auroraStage = `student_restore_${stage}` }
+    const readCentral = async <T>(read: () => Promise<T>) => {
+      try { return await read() }
+      catch (error) { centralReadFailed = true; throw error }
+    }
     try {
       const result = await restoreAuroraStudentBaja({
         matricula,
         planteles: allowedPlanteles,
         requireBase: !fromControlEscolar,
         queryBase: async (sql, values) => {
+          markStage(sql.startsWith('SELECT') ? 'base_read' : 'base_write')
           const rows = await query<any>(sql, values)
           if (sql.startsWith('SELECT matricula, plantel, estatus') && rows?.[0]?.plantel) {
             studentPlantel = String(rows[0].plantel).trim()
           }
           return rows
         },
-        queryCentral: async (sql, values) => {
-          try { return await controlEscolarCentralQuery<any[]>(sql, values) }
-          catch (error) { centralReadFailed = true; throw error }
+        getCentralColumns: () => {
+          markStage('central_schema')
+          return readCentral(() => getCentralTableColumns('matricula'))
+        },
+        queryCentral: (sql, values) => {
+          markStage('central_read')
+          return readCentral(() => controlEscolarCentralQuery<any[]>(sql, values))
         },
         updateCentral: async (studentKey, patch) => {
           if (!studentPlantel || studentPlantel === 'GLOBAL') {
             throw new StudentRestoreError(409, 'No se pudo verificar el plantel del alumno.')
           }
-          await updateControlEscolarStudent(studentPlantel, studentKey, patch, user)
+          markStage(patch.baja ? 'central_compensation' : 'central_write')
+          await updateControlEscolarStudent(studentPlantel, studentKey, patch, user, { auditRequestId: requestId })
         },
         onCompensationFailure: (error) => {
           console.error('[students.restore] central-compensation-failed', {
-            matricula, plantel: studentPlantel, error: String((error as Error)?.message || error),
+            requestId, matricula, plantel: studentPlantel, error: String((error as Error)?.message || error),
           })
         },
       })
@@ -58,6 +70,7 @@ export default defineEventHandler(async (event) => {
         await clearQueuedStudentRestore(matricula, studentPlantel).catch((error) => console.warn('[students.restore] outbox-cleanup-failed', error))
       }
       console.info('[students.restore]', {
+        requestId,
         matricula,
         plantel: studentPlantel,
         actor: user?.email || '',
