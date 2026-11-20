@@ -1,6 +1,6 @@
-import { fetchCentralMatriculaOverlay } from '../../../../utils/central-matricula-overlay'
-import { getTrustedAuthUser } from '../../../../utils/auth-session'
-import { parseCurp } from '../../../../../shared/utils/curp'
+import { fetchCentralMatriculaOverlay } from '../../../utils/central-matricula-overlay'
+import { getTrustedAuthUser } from '../../../utils/auth-session'
+import { parseCurp } from '../../../../shared/utils/curp'
 
 // SIAG remains authoritative for historical daycare presence. This is optional
 // student metadata, never a dependency of financial or Control Escolar reads.
