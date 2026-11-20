@@ -34,6 +34,7 @@ export default defineEventHandler(async (event) => {
 
   // The SAME existing Aurora token is reused by SIAG. Never send it to the browser.
   const token = String(process.env.AURORA_API_TOKEN || '').trim()
+    .replace(/^['\"]|['\"]$/g, '').replace(/^Bearer\s+/i, '').trim()
   if (!token) {
     console.warn('[DAYCARE_HISTORY] Aurora API token missing; optional enrichment disabled')
     return { ok: false, found: false, unidades: [], code: 'TOKEN_NOT_CONFIGURED' }
