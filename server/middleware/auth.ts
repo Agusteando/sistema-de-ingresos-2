@@ -69,6 +69,7 @@ export default defineEventHandler(async (event) => {
   const isCentralMatriculaOverlayEndpoint =
     url.pathname === '/api/students/matricula-overlays' ||
     /^\/api\/students\/[^/]+\/matricula-overlay$/.test(url.pathname) ||
+    /^\/api\/students\/[^/]+\/daycare-history$/.test(url.pathname) ||
     /^\/api\/students\/[^/]+\/operator-info$/.test(url.pathname)
   const isControlEscolarAcademicMutation =
     url.pathname === '/api/students/bulk-ingreso-cycle' ||
