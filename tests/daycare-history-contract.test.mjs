@@ -11,6 +11,8 @@ test('Aurora historical daycare integration resolves identity server-side, not f
   assert.match(route, /!user\.isSuperAdmin/)
   assert.match(route, /AURORA_API_TOKEN/)
   assert.match(route, /x-aurora-token/)
+  assert.match(route, /method: 'POST'/)
+  assert.match(route, /JSON.stringify\(\{ curp: parsed.normalized \}\)/)
   assert.match(route, /AbortSignal\.timeout\(6000\)/)
   assert.match(route, /redirect: 'error'/)
   assert.match(route, /UNITS\[code\]/)

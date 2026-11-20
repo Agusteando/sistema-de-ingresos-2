@@ -4,7 +4,7 @@ import { parseCurp } from '../../../../shared/utils/curp'
 
 // SIAG remains authoritative for historical daycare presence. This is optional
 // student metadata, never a dependency of financial or Control Escolar reads.
-const SIAG_HISTORY_URL = 'https://siag.casitaapps.com/api/daycare-history/curp/'
+const SIAG_HISTORY_URL = 'https://siag.casitaapps.com/api/daycare-history/lookup'
 const UNITS: Record<string, string> = {
   'U-0837': 'Casita Toluca',
   'U-1763': 'Desarrollo Calimaya',
@@ -40,8 +40,10 @@ export default defineEventHandler(async (event) => {
   }
 
   try {
-    const response = await fetch(SIAG_HISTORY_URL + encodeURIComponent(parsed.normalized), {
-      headers: { Accept: 'application/json', 'x-aurora-token': token },
+    const response = await fetch(SIAG_HISTORY_URL, {
+      method: 'POST',
+      headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'x-aurora-token': token },
+      body: JSON.stringify({ curp: parsed.normalized }),
       redirect: 'error',
       signal: AbortSignal.timeout(6000)
     })
