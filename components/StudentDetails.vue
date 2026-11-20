@@ -163,6 +163,10 @@
                     <LucideGlobe2 v-else :size="12" :stroke-width="2.4" />
                     {{ resolvedTipoIngresoLabel }}
                   </span>
+                  <span v-if="daycareUnitLabel" class="tipo-ingreso-badge inscrito" :title="'Origen guardería: ' + daycareUnitLabel">
+                    <LucideBuilding2 :size="12" :stroke-width="2.4" />
+                    Guardería · {{ daycareHistory?.unidades?.[0]?.nombre }}{{ daycareHistory?.unidades?.length > 1 ? ' +' + (daycareHistory.unidades.length - 1) : '' }}
+                  </span>
                   <span
                     v-for="servicio in serviciosTags.slice(0, 5)"
                     :key="`service-inline-${servicio.clave}`"
@@ -1352,6 +1356,24 @@ const accountFatherLabel = computed(() =>
       accountOverlaySource.value.padre,
   ),
 );
+const daycareHistory = ref(null);
+let daycareRequestId = 0;
+const daycareUnitLabel = computed(() => (daycareHistory.value?.unidades || [])
+  .map((item) => item.nombre).filter(Boolean).join(" · "));
+watch(
+  [() => props.student?.matricula, accountCurpLabel],
+  ([matricula, curp]) => {
+    const requestId = ++daycareRequestId;
+    daycareHistory.value = null;
+    if (!matricula || !curp) return;
+    void $fetch(`/api/students/${encodeURIComponent(matricula)}/daycare-history`)
+      .then((payload) => {
+        if (requestId === daycareRequestId && payload?.ok === true && payload?.found === true)
+          daycareHistory.value = payload;
+      }).catch(() => { /* Optional enrichment never blocks Estado de Cuenta. */ });
+  },
+  { immediate: true },
+);
 const accountMotherLabel = computed(() =>
   compactAccountText(
     accountJoinedName(
@@ -1368,6 +1390,7 @@ const accountMetaItems = computed(() =>
     { label: "CURP", value: accountCurpLabel.value },
     { label: "Padre", value: accountFatherLabel.value },
     { label: "Madre", value: accountMotherLabel.value },
+    { label: "Origen guardería", value: daycareUnitLabel.value },
   ].filter((item) => item.value),
 );
 
