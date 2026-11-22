@@ -1,0 +1,24 @@
+name: Inspect institutional deudores proof
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-deudores-institutional-run.yml'
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    env:
+      TARGET_SHA: 18c1dfeb899c87eb26f99535f13181ed50d2163d
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: List workflow runs for merged commit
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs?head_sha=${TARGET_SHA}&per_page=20" \
+            --jq '.workflow_runs[] | "RUN id=\(.id) name=\(.name) event=\(.event) status=\(.status) conclusion=\(.conclusion) url=\(.html_url)"'
