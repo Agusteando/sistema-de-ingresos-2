@@ -47,25 +47,18 @@
           <span class="liquid-loader" aria-hidden="true"><i></i><i></i><i></i></span>
           Cargando estudiantes...
         </div>
-        <section v-else-if="sourceUnavailable" class="student-source-unavailable" aria-live="polite">
+        <section v-else-if="sourceUnavailable" class="student-source-unavailable">
           <figure class="source-visual" aria-hidden="true">
             <img src="/brand/plantel-offline-visual.png" alt="" />
           </figure>
 
-          <div class="source-copy">
-            <span class="source-eyebrow">Conexión temporalmente pausada</span>
-            <h3>Intenta hacer un Refresh en unos momentos más</h3>
-            <p>Verifica tu Internet y que el equipo central esté despierto.</p>
+          <div class="source-copy" role="status">
+            <h3>Por favor habilita los servicios locales</h3>
           </div>
 
-          <p class="source-contingency-copy">
-            O puedes usar tu <strong>Sistema de Contingencia</strong> mientras lo intentas nuevamente.
-          </p>
-
-          <div class="source-retry-status" role="status">
-            <LucideRotateCcw :size="15" aria-hidden="true" />
-            <span>Reintentando automáticamente en <strong>{{ retryCountdown }} s</strong></span>
-          </div>
+          <time v-if="sourceTimestamp" class="source-timestamp" :datetime="sourceTimestamp.toISOString()">
+            {{ sourceTimestampFormatter.format(sourceTimestamp) }}
+          </time>
 
           <div class="source-actions">
             <button type="button" class="source-retry" @click="retryNow">
@@ -237,6 +230,14 @@ const emit = defineEmits([
   'restart-session'
 ])
 
+const sourceTimestamp = ref(null)
+const sourceTimestampFormatter = new Intl.DateTimeFormat('es-MX', {
+  timeZone: 'America/Mexico_City',
+  dateStyle: 'long',
+  timeStyle: 'medium',
+  hourCycle: 'h23'
+})
+
 const RETRY_INTERVAL_SECONDS = 20
 const retryCountdown = ref(RETRY_INTERVAL_SECONDS)
 let retryTimer = null
@@ -244,6 +245,7 @@ let retryTimer = null
 const stopAutoRetry = () => {
   if (retryTimer) clearInterval(retryTimer)
   retryTimer = null
+  sourceTimestamp.value = null
 }
 
 const startAutoRetry = () => {
@@ -251,7 +253,9 @@ const startAutoRetry = () => {
   retryCountdown.value = RETRY_INTERVAL_SECONDS
   if (!process.client) return
 
+  sourceTimestamp.value = new Date()
   retryTimer = window.setInterval(() => {
+    sourceTimestamp.value = new Date()
     retryCountdown.value -= 1
     if (retryCountdown.value > 0) return
 
@@ -270,9 +274,12 @@ watch(
   (unavailable) => {
     if (unavailable) startAutoRetry()
     else stopAutoRetry()
-  },
-  { immediate: true }
+  }
 )
+
+onMounted(() => {
+  if (props.sourceUnavailable) startAutoRetry()
+})
 
 onBeforeUnmount(stopAutoRetry)
 
@@ -418,8 +425,8 @@ function activeStudentPhotoUrl(student) {
 .source-visual {
   position: relative;
   z-index: 1;
-  width: min(48%, 220px);
-  margin: -12px auto 4px;
+  width: min(48%, 180px);
+  margin: 0 auto 6px;
 }
 
 .source-visual img {
@@ -436,23 +443,8 @@ function activeStudentPhotoUrl(student) {
   max-width: 720px;
 }
 
-.source-eyebrow {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid rgba(47, 125, 56, 0.14);
-  border-radius: 999px;
-  background: rgba(235, 248, 236, 0.84);
-  padding: 7px 12px;
-  color: #2f7d38;
-  font-size: 0.72rem;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
 .source-copy h3 {
-  margin: 14px 0 8px;
+  margin: 8px 0 0;
   color: #16213b;
   font-size: clamp(1.55rem, 2.8vw, 2.35rem);
   font-weight: 950;
@@ -460,53 +452,22 @@ function activeStudentPhotoUrl(student) {
   line-height: 1.08;
 }
 
-.source-copy p {
-  margin: 0 auto;
-  color: #64748b;
-  font-size: clamp(0.92rem, 1.15vw, 1.06rem);
-  font-weight: 650;
-  line-height: 1.55;
-}
-
-.source-contingency-copy {
+.source-timestamp {
   position: relative;
   z-index: 1;
-  max-width: 680px;
-  margin: 16px 0 0;
+  display: block;
+  max-width: 100%;
+  margin-top: 16px;
+  border: 1px solid rgba(47, 125, 56, 0.18);
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.84);
+  padding: 10px 14px;
   color: #40566b;
   font-size: 0.92rem;
-  line-height: 1.5;
-}
-
-.source-contingency-copy strong {
-  color: #285f35;
-  font-weight: 900;
-}
-
-.source-retry-status {
-  position: relative;
-  z-index: 1;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  margin-top: 16px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
-  padding: 7px 12px;
-  color: #667788;
-  font-size: 0.78rem;
   font-weight: 700;
-  box-shadow: inset 0 0 0 1px rgba(193, 211, 198, 0.75);
-}
-
-.source-retry-status svg {
-  color: #4d8c53;
-}
-
-.source-retry-status strong {
-  color: #2f6d39;
   font-variant-numeric: tabular-nums;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
 }
 
 .source-actions {
@@ -577,7 +538,7 @@ function activeStudentPhotoUrl(student) {
   }
 
   .source-visual {
-    width: min(68%, 190px);
+    width: min(60%, 160px);
   }
 
   .source-copy h3 {
