@@ -235,10 +235,10 @@
           <h1>{{ currentRouteName }}</h1>
           <span
             class="internet-status"
-            :class="{ 'is-offline': internetOnline === false, 'is-pending': internetOnline === null }"
+            :class="{ 'is-offline': centralReachable === false, 'is-pending': centralReachable === null }"
             role="img"
-            :aria-label="internetOnline === false ? 'Sin conexión a internet' : 'Con conexión a internet'"
-            :title="internetOnline === false ? 'Sin conexión a internet' : 'Con conexión a internet'"
+            :aria-label="centralReachable === false ? 'Sin conexión al servidor central' : centralReachable === true ? 'Con conexión al servidor central' : 'Verificando conexión al servidor central'"
+            :title="centralReachable === false ? 'Sin conexión al servidor central' : centralReachable === true ? 'Con conexión al servidor central' : 'Verificando conexión al servidor central'"
           >
             <LucideWifi :size="16" aria-hidden="true" />
           </span>
@@ -485,6 +485,7 @@ import {
   LucideHistory,
   LucideWifi
 } from 'lucide-vue-next'
+import { centralPingUrl, probeCentralConnectivity } from '~/utils/centralConnectivity.mjs'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
 import ContextMenu from '~/components/ContextMenu.vue'
@@ -499,20 +500,31 @@ import { authCookieFlagEnabled, resolveClientAuthAccess } from '~/utils/authAcce
 const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
-const internetOnline = ref(null)
-const syncInternetStatus = () => {
-  internetOnline.value = window.navigator.onLine
+const centralReachable = ref(null)
+let centralProbeTimer = null
+let centralProbeController = null
+let centralProbeStopped = false
+const pollCentralConnectivity = async () => {
+  if (centralProbeStopped || centralProbeController) return
+  const controller = new AbortController()
+  centralProbeController = controller
+  const deadline = window.setTimeout(() => controller.abort(), 3000)
+  try {
+    const url = centralPingUrl(localSystemRuntime, runtimeConfig.public.localSystemCloudUrl)
+    const reachable = await probeCentralConnectivity(url, controller.signal)
+    if (!centralProbeStopped) centralReachable.value = reachable
+  } finally {
+    window.clearTimeout(deadline)
+    centralProbeController = null
+    if (!centralProbeStopped) centralProbeTimer = window.setTimeout(pollCentralConnectivity, 5000)
+  }
 }
 
-onMounted(() => {
-  window.addEventListener('online', syncInternetStatus)
-  window.addEventListener('offline', syncInternetStatus)
-  syncInternetStatus()
-})
-
+onMounted(pollCentralConnectivity)
 onBeforeUnmount(() => {
-  window.removeEventListener('online', syncInternetStatus)
-  window.removeEventListener('offline', syncInternetStatus)
+  centralProbeStopped = true
+  if (centralProbeTimer !== null) window.clearTimeout(centralProbeTimer)
+  centralProbeController?.abort()
 })
 
 const SIDEBAR_WIDTH = 220

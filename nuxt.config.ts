@@ -89,7 +89,8 @@ export default defineNuxtConfig({
 
     public: {
       googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-      localSystemMode: process.env.LOCAL_SYSTEM_MODE || ''
+      localSystemMode: process.env.LOCAL_SYSTEM_MODE || '',
+      localSystemCloudUrl: process.env.LOCAL_SYSTEM_CLOUD_URL || 'https://aurora.casitaiedis.edu.mx'
     }
   },
   app: {
