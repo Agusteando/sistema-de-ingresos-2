@@ -231,7 +231,18 @@
     <main class="income-main">
       <ServerConnectivityNotice />
       <header class="app-header">
-        <h1>{{ currentRouteName }}</h1>
+        <div class="header-title">
+          <h1>{{ currentRouteName }}</h1>
+          <span
+            class="internet-status"
+            :class="{ 'is-offline': internetOnline === false, 'is-pending': internetOnline === null }"
+            role="img"
+            :aria-label="internetOnline === false ? 'Sin conexión a internet' : 'Con conexión a internet'"
+            :title="internetOnline === false ? 'Sin conexión a internet' : 'Con conexión a internet'"
+          >
+            <LucideWifi :size="16" aria-hidden="true" />
+          </span>
+        </div>
 
         <div class="header-actions">
           <div v-if="isControlEscolarPage" class="control-header-tools" aria-label="Acciones de Control Escolar">
@@ -471,7 +482,8 @@ import {
   LucideCloud,
   LucideFileSpreadsheet,
   LucideUpload,
-  LucideHistory
+  LucideHistory,
+  LucideWifi
 } from 'lucide-vue-next'
 import { useToast } from '~/composables/useToast'
 import { useOptimisticSync } from '~/composables/useOptimisticSync'
@@ -487,6 +499,21 @@ import { authCookieFlagEnabled, resolveClientAuthAccess } from '~/utils/authAcce
 const { toasts, show } = useToast()
 const { syncState, syncMessage } = useOptimisticSync()
 const route = useRoute()
+const internetOnline = ref(null)
+const syncInternetStatus = () => {
+  internetOnline.value = window.navigator.onLine
+}
+
+onMounted(() => {
+  window.addEventListener('online', syncInternetStatus)
+  window.addEventListener('offline', syncInternetStatus)
+  syncInternetStatus()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('online', syncInternetStatus)
+  window.removeEventListener('offline', syncInternetStatus)
+})
 
 const SIDEBAR_WIDTH = 220
 const SIDEBAR_COLLAPSED_WIDTH = 72
@@ -2324,6 +2351,31 @@ const logout = async () => {
   font-size: 1.32rem;
   font-weight: 850;
   letter-spacing: -0.01em;
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.header-title h1 {
+  min-width: 0;
+}
+
+.internet-status {
+  display: inline-flex;
+  flex: 0 0 16px;
+  color: #15803d;
+}
+
+.internet-status.is-offline {
+  color: #dc2626;
+}
+
+.internet-status.is-pending {
+  visibility: hidden;
 }
 
 .header-actions {
