@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="modal-overlay" @click.self="requestClose">
-      <div class="modal-container payment-modal relative">
+    <div class="modal-overlay" @click.self="!paymentConfirmation && requestClose()">
+      <div class="modal-container payment-modal relative" :inert="Boolean(paymentConfirmation)">
         <div class="modal-header modal-header-with-status relative">
           <h2 class="text-lg font-bold text-gray-800">Recibir Pago</h2>
           <ModalDraftStatus :restored="draftRestored" :status="draftSaveState" :dirty="hasUnsavedChanges" error-message="Sin respaldo local. Puedes registrar el pago; evita recargar." />
@@ -515,12 +515,21 @@
           <button v-if="!pagoRealizadoEnOtroPlantel" class="btn btn-outline" type="button" @click="previewReceipt" :disabled="processing || totalCobrar <= 0">
             <LucideEye :size="16"/> Previa
           </button>
-          <button class="btn btn-primary" type="button" @click="submit" :disabled="processing || totalCobrar <= 0 || hasBlockingStock || (requiresRecargoAuthorization && (!isWaiverRequestCurrent || waiverCode.length !== 5))" :title="hasBlockingStock ? 'Hay un concepto agotado' : totalCobrar <= 0 ? 'No hay saldo a registrar' : 'Registrar pago'">
+          <button class="btn btn-primary" type="button" @click="requestPaymentConfirmation" :disabled="processing || totalCobrar <= 0 || hasBlockingStock || (requiresRecargoAuthorization && (!isWaiverRequestCurrent || waiverCode.length !== 5))" :title="hasBlockingStock ? 'Hay un concepto agotado' : totalCobrar <= 0 ? 'No hay saldo a registrar' : 'Registrar pago'">
             <LucideLoader2 v-if="processing" class="animate-spin" :size="16"/>
             <LucideCheckCircle v-else :size="16"/>
             {{ processing ? 'Registrando...' : (requiresRecargoAuthorization ? 'Autorizar y registrar pago' : (pagoRealizadoEnOtroPlantel ? 'Registrar pago' : 'Registrar Pago')) }}
           </button>
         </div>
+      </div>
+      <div v-if="paymentConfirmation" class="payment-confirmation-overlay" @keydown.esc.stop.prevent="cancelPaymentConfirmation">
+        <section class="payment-confirmation-dialog" role="alertdialog" aria-modal="true" aria-labelledby="payment-confirmation-title" @keydown.tab.prevent="cycleConfirmationFocus($event)">
+          <h2 id="payment-confirmation-title" class="payment-confirmation-heading">CONFIRMA PAGO POR <span>{{ confirmationMoney }}</span></h2>
+          <div class="payment-confirmation-actions">
+            <button ref="confirmationCancelButton" type="button" class="btn btn-outline" @click="cancelPaymentConfirmation">Cancelar</button>
+            <button ref="confirmationConfirmButton" type="button" class="btn btn-primary" :disabled="!confirmationReady || processing" @click="confirmPayment">Confirmar</button>
+          </div>
+        </section>
       </div>
     </div>
   </Teleport>
@@ -538,6 +547,7 @@ import { institutionFlagForPlantel, normalizePlantelCode } from '~/shared/utils/
 import { studentNivelLabel } from '~/shared/utils/studentPresentation'
 import { calculateLateFeeSubtotal, resolveLateFeeTiming, shouldApplyLateFee } from '~/shared/utils/recargo'
 import { dedupePaymentTargets } from '~/shared/utils/paymentTarget'
+import { createPaymentConfirmation, confirmationPayloadMatches, preserveManualPaymentAmounts, speakPaymentConfirmation } from '~/shared/utils/payment-confirmation.mjs'
 import { PLANTELES_LIST } from '~/utils/constants'
 import { requestPaymentActionAuthorizationCode, sendPaymentActionAuthorizationNotice } from '~/utils/paymentActionAuthorization'
 
@@ -549,6 +559,14 @@ useScrollLock()
 
 const formaDePago = ref('Efectivo')
 const processing = ref(false)
+const paymentConfirmation = ref(null)
+const confirmationReady = ref(false)
+const confirmationCancelButton = ref(null)
+const confirmationConfirmButton = ref(null)
+let confirmationTimer = null
+let stopConfirmationSpeech = () => {}
+let confirmationReturnFocus = null
+const confirmationMoney = computed(() => '$' + ((paymentConfirmation.value?.totalCents || 0) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2, maximumFractionDigits: 2 }))
 const paymentSubmissionError = ref(null)
 const processedDebts = ref([])
 const paymentOptionsRef = ref(null)
@@ -875,8 +893,14 @@ const buildProcessedDebts = () => dedupePaymentTargets(Array.isArray(props.debts
   }
 })
 
-watch(() => props.debts, () => {
-  processedDebts.value = buildProcessedDebts()
+let processedPaymentScope = ''
+watch(() => [props.debts, props.student?.matricula, normalizeCicloKey(state.value.ciclo)], () => {
+  const scope = JSON.stringify([props.student?.matricula, normalizeCicloKey(state.value.ciclo)])
+  const fresh = buildProcessedDebts()
+  processedDebts.value = processedPaymentScope === scope
+    ? preserveManualPaymentAmounts(fresh, processedDebts.value, paymentDebtKey)
+    : fresh
+  processedPaymentScope = scope
   if (recargoExperienceReady.value) void syncAutomaticRecargoState()
 }, { immediate: true })
 
@@ -990,11 +1014,13 @@ const {
 
 onMounted(() => {
   initializeDraft()
+  try { window.speechSynthesis?.getVoices() } catch {}
   document.addEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
   void initializeRecargoExperience()
 })
 
 onBeforeUnmount(() => {
+  clearPaymentConfirmation()
   document.removeEventListener('pointerdown', closePaymentOptionsOnOutsideClick)
   if (recargoAttentionTimer) window.clearTimeout(recargoAttentionTimer)
 })
@@ -1302,6 +1328,7 @@ const buildPaymentPayload = () => ({
   fechaPago: hasCustomPaymentDate.value ? paymentDate.value : null,
   pagoRealizadoEnOtroPlantel: pagoRealizadoEnOtroPlantel.value,
   plantelPago: pagoRealizadoEnOtroPlantel.value ? plantelPago.value : null,
+  confirmarImporte: true,
   pagos: paymentRows()
 })
 const isWaiverRequestCurrent = computed(() => Boolean(waiverRequestId.value && waiverReference.value)
@@ -1345,8 +1372,8 @@ const requestRecargoAuthorization = async () => {
     waiverRequesting.value = false
   }
 }
-const submit = async () => {
-  if (processing.value) return
+const requestPaymentConfirmation = () => {
+  if (processing.value || paymentConfirmation.value) return
   paymentSubmissionError.value = null
   if (hasBlockingStock.value) {
     window.alert('Uno o más conceptos seleccionados están agotados para este plantel.')
@@ -1364,6 +1391,61 @@ const submit = async () => {
     return
   }
   const payload = buildPaymentPayload()
+  const snapshot = createPaymentConfirmation(payload)
+  if (!Number.isSafeInteger(snapshot.totalCents) || snapshot.totalCents <= 0) return
+  confirmationReturnFocus = document.activeElement
+  confirmationReady.value = false
+  paymentConfirmation.value = snapshot
+  confirmationTimer = window.setTimeout(() => {
+    confirmationReady.value = true
+    confirmationTimer = null
+  }, 2000)
+  // Audio is optional and never controls the timer or the confirmation state.
+  stopConfirmationSpeech = speakPaymentConfirmation(window, snapshot.totalCents)
+  nextTick(() => confirmationCancelButton.value?.focus())
+}
+
+const clearPaymentConfirmation = () => {
+  if (confirmationTimer !== null) window.clearTimeout(confirmationTimer)
+  confirmationTimer = null
+  confirmationReady.value = false
+  paymentConfirmation.value = null
+  stopConfirmationSpeech()
+  stopConfirmationSpeech = () => {}
+}
+const cancelPaymentConfirmation = () => {
+  clearPaymentConfirmation()
+  const previous = confirmationReturnFocus
+  confirmationReturnFocus = null
+  nextTick(() => previous?.focus?.())
+}
+const cycleConfirmationFocus = (event) => {
+  if (!confirmationReady.value) {
+    confirmationCancelButton.value?.focus()
+    return
+  }
+  const onCancel = document.activeElement === confirmationCancelButton.value
+  const next = onCancel ? confirmationConfirmButton.value : confirmationCancelButton.value
+  next?.focus()
+}
+const confirmPayment = () => {
+  if (!paymentConfirmation.value || !confirmationReady.value || processing.value) return
+  const snapshot = paymentConfirmation.value
+  const payload = buildPaymentPayload()
+  if (!confirmationPayloadMatches(snapshot, payload) || hasBlockingStock.value ||
+      (requiresRecargoAuthorization.value && (!isWaiverRequestCurrent.value || waiverCode.value.length !== 5))) {
+    cancelPaymentConfirmation()
+    paymentSubmissionError.value = 'El cobro cambió. Revisa el importe y vuelve a confirmar.'
+    return
+  }
+  clearPaymentConfirmation()
+  confirmationReturnFocus = null
+  // Submit the exact captured payload, not a new calculation after confirmation.
+  void submit(JSON.parse(snapshot.serialized))
+}
+
+const submit = async (payload) => {
+  if (processing.value) return
 
   // Open the receipt window while the action is still inside the operator's click.
   // Browsers may block a window opened only after the asynchronous payment request finishes.
@@ -1525,6 +1607,49 @@ const submit = async () => {
 </script>
 
 <style scoped>
+.payment-confirmation-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  background: rgba(20, 30, 42, .62);
+}
+.payment-confirmation-dialog {
+  width: min(100%, 28rem);
+  max-height: calc(100dvh - 2rem);
+  overflow: auto;
+  padding: clamp(1.25rem, 4vw, 2rem);
+  border: 1px solid #fecaca;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 24px 72px rgba(15, 23, 42, .32);
+}
+.payment-confirmation-heading {
+  margin: 0;
+  color: #b42318;
+  font-size: clamp(1.1rem, 4vw, 1.5rem);
+  font-weight: 900;
+  text-align: center;
+  line-height: 1.25;
+}
+.payment-confirmation-heading span {
+  display: block;
+  margin-top: .55rem;
+  font-size: clamp(2rem, 8vw, 3rem);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.payment-confirmation-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: .75rem;
+  margin-top: 1.5rem;
+}
+.payment-confirmation-actions button { min-height: 44px; }
+.payment-confirmation-actions button:disabled { opacity: .45; cursor: not-allowed; }
+
 .payment-modal {
   max-width: 64rem;
 }
