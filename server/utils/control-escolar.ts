@@ -22,6 +22,7 @@ import {
   parseEnrollmentConceptIds,
 } from "./enrollment-evidence";
 import { controlEscolarCentralQuery, getControlEscolarCentralDb } from "./control-escolar-central";
+import { financialEnrollmentEvidenceJoins, financialTipoIngresoOverrideFields, financialTipoIngresoOverrideJoin } from "./financial-enrollment-evidence-sql";
 import {
   fetchVerifiedControlEscolarScopeRows,
   maybeRefreshVerifiedControlEscolarScopeCache,
@@ -90,6 +91,9 @@ export type ControlEscolarStudentRow = {
   tipoIngreso: string;
   tipoIngresoValue: string;
   tipoIngresoSource: string;
+  tipoIngresoOverrideActivo?: number;
+  tipoIngresoOverride?: string;
+  tipoIngresoEvidence?: { targetCiclo: string; previousCiclo: string; targetConceptIds: string[]; previousConceptIds: string[]; allConceptIds: string[] };
   huskyPassUsername: string;
   huskyPassPlaintext: string;
   huskyPassAvailable: boolean;
@@ -766,28 +770,21 @@ const applyOperatorProjection = async (
         : historicalEnrollmentEvidence.get(
             String(row.matricula || "").trim(),
           ) || "";
+    // Classify with the exact financial evidence, independently of the legacy
+    // Control Escolar enrollment-state query (whose semantics stay unchanged).
+    const tipoIngresoEvidence = {
+      targetCiclo: scope.cicloKey,
+      previousCiclo: scope.previousCiclo,
+      targetConceptIds: [row.financialPaidConceptIds || "", row.financialChargedConceptIds || ""],
+      previousConceptIds: [row.financialPreviousPaidConceptIds || "", row.financialPreviousChargedConceptIds || ""],
+      allConceptIds: [historicalConceptIds],
+    };
     const tipoIngreso = resolveTipoIngreso(
       {
-        ...row,
-        plantel: sourcePlantel,
-        plantelBase: sourcePlantel,
         cicloBase: row.baseCiclo,
-        ciclo: row.baseCiclo,
-        tipoIngresoEvidence: {
-          targetCiclo: scope.cicloKey,
-          previousCiclo: scope.previousCiclo,
-          targetConceptIds: [
-            row.conceptoIdsPagados,
-            row.conceptoIdsCargados,
-            row.conceptoIdsCicloActual,
-          ],
-          previousConceptIds: [
-            row.conceptoIdsPagadosPrevios,
-            row.conceptoIdsCargadosPrevios,
-            row.conceptoIdsCicloPrevio,
-          ],
-          allConceptIds: [historicalConceptIds],
-        },
+        tipoIngresoOverrideActivo: row.tipoIngresoOverrideActivo,
+        tipoIngresoOverride: row.tipoIngresoOverride,
+        tipoIngresoEvidence,
       },
       scope.cicloKey,
       {
@@ -814,6 +811,7 @@ const applyOperatorProjection = async (
           scope,
           historicalConceptIds,
         ),
+        tipoIngresoEvidence,
         operatorTipoIngreso: tipoIngreso.value,
         operatorTipoIngresoSource: tipoIngreso.source,
       },
@@ -949,8 +947,20 @@ const fetchLocalBaseRows = async (
   const scope = resolveOperatorScope(filters);
   const fields = buildLocalBaseSelect(agentId, schema.base);
   fields.push(selectAs(expr(schema.base, "b", "ciclo", "NULL"), "baseCiclo"));
+  fields.push(...financialTipoIngresoOverrideFields);
+  const hasFinancialEvidence = Boolean(scope.enrollmentConceptIds.length || scope.tipoIngresoConceptIds.length);
+  if (hasFinancialEvidence) {
+    fields.push(
+      "FPaid.conceptoIdsPagados AS financialPaidConceptIds",
+      "FCharged.conceptoIdsCargados AS financialChargedConceptIds",
+      "FPrevPaid.conceptoIdsPagadosPrevios AS financialPreviousPaidConceptIds",
+      "FPrevCharged.conceptoIdsCargadosPrevios AS financialPreviousChargedConceptIds",
+    );
+  }
 
-  const params: any[] = [];
+  const params: any[] = hasFinancialEvidence
+    ? [scope.cicloKey, scope.cicloKey, scope.previousCiclo, scope.previousCiclo]
+    : [];
   const whereParts = [
     "1=1",
     `NOT EXISTS (
@@ -992,6 +1002,8 @@ const fetchLocalBaseRows = async (
     `
     SELECT ${fields.join(",\n      ")}
     FROM base b
+    ${financialTipoIngresoOverrideJoin("b")}
+    ${hasFinancialEvidence ? financialEnrollmentEvidenceJoins("b", false) : ""}
     WHERE ${whereParts.join(" AND ")}
     ORDER BY baseEstatus = 'Activo' DESC, baseNombreCompleto ASC, b.matricula ASC
     LIMIT ${MAX_LOCAL_ROWS + 1}
@@ -1044,29 +1056,18 @@ const fetchLocalBaseRows = async (
     }
   }
 
-  const [currentEvidence, previousEvidence] = await Promise.all([
-    fetchCycleConceptEvidence(
-      rows.map((row) => row.matricula),
-      scope.cicloKey,
-      scope.enrollmentConceptIds,
-    ),
-    fetchCycleConceptEvidence(
-      rows.map((row) => row.matricula),
-      scope.previousCiclo,
-      scope.tipoIngresoConceptIds.length
-        ? scope.tipoIngresoConceptIds
-        : scope.enrollmentConceptIds,
-    ),
-  ]);
+  const currentEvidence = await fetchCycleConceptEvidence(
+    rows.map((row) => row.matricula),
+    scope.cicloKey,
+    scope.enrollmentConceptIds,
+  );
 
   const rowsWithEvidence = rows.map((row) => {
     const matricula = normalizeText(row.matricula, 64);
     const conceptoIdsPagados = currentEvidence.paid.get(matricula) || "";
     const conceptoIdsCargados = currentEvidence.charged.get(matricula) || "";
-    const conceptoIdsPagadosPrevios =
-      previousEvidence.paid.get(matricula) || "";
-    const conceptoIdsCargadosPrevios =
-      previousEvidence.charged.get(matricula) || "";
+    const conceptoIdsPagadosPrevios = row.financialPreviousPaidConceptIds || "";
+    const conceptoIdsCargadosPrevios = row.financialPreviousChargedConceptIds || "";
 
     return {
       ...row,
@@ -1623,6 +1624,11 @@ const overlayStudentRow = (
     inscritoCicloActual: Boolean(base.inscritoCicloActual),
     inSections: Boolean(base.externalSectionMember),
     tipoIngresoSource: normalizeText(base.operatorTipoIngresoSource),
+    ...(base.tipoIngresoOverrideActivo !== undefined ? {
+      tipoIngresoOverrideActivo: Number(base.tipoIngresoOverrideActivo),
+      tipoIngresoOverride: normalizeText(base.tipoIngresoOverride),
+    } : {}),
+    ...(base.tipoIngresoEvidence ? { tipoIngresoEvidence: base.tipoIngresoEvidence } : {}),
     tipoIngresoValue:
       normalizeText(base.operatorTipoIngreso || "").toLowerCase() === "interno"
         ? "interno"
