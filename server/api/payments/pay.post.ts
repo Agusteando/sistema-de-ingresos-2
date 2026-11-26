@@ -16,6 +16,7 @@ import { consumeRecargoTelegramAuthorization } from '../../utils/recargo-telegra
 import { notifyDocumentAmountCorrection } from '../../utils/telegram-document-audit'
 import { loadGlobalRecargoSettings, loadRecargoPolicies, type RecargoPolicy } from '../../utils/recargo-config'
 import { paymentTargetKey } from '../../../shared/utils/paymentTarget'
+import { confirmedPaymentMatches } from '../../../shared/utils/payment-confirmation.mjs'
 import { parseDocumentMonths } from '../../../shared/utils/documentMonths'
 import {
   formatMexicoCityDateKeyFromUnix,
@@ -201,6 +202,9 @@ export default defineEventHandler(async (event) => {
   for (const p of pagos) {
     const requestedAmountFromClient = Number(p.montoPagado || 0)
     const automaticAmount = truthyFlag(p?.montoAutomatico)
+    if (body.confirmarImporte === true && !confirmedPaymentMatches(requestedAmountFromClient, requestedAmountFromClient)) {
+      throw createError({ statusCode: 400, message: 'El importe confirmado no es válido.' })
+    }
     if (!automaticAmount && requestedAmountFromClient <= 0) continue
 
     const documento = Number(p.documento)
@@ -366,6 +370,12 @@ export default defineEventHandler(async (event) => {
     // amount after the canonical recargo policy has already increased the debt.
     // Explicitly edited/partial amounts continue to be honored unchanged.
     const requestedAmount = automaticAmount ? saldoAntes : requestedAmountFromClient
+    // New confirmation-aware clients must never register a recalculated amount.
+    // Older clients and bulk payment behavior are intentionally unchanged.
+    if (body.confirmarImporte === true && !confirmedPaymentMatches(requestedAmountFromClient, requestedAmount)) {
+      console.warn('[Payments] Confirmed amount changed before registration', { reference: paymentAttemptRef, documento, mes, confirmed: requestedAmountFromClient, canonical: requestedAmount })
+      throw createError({ statusCode: 409, message: 'El importe confirmado cambió. Actualiza el estado de cuenta y vuelve a confirmar.' })
+    }
     if (requestedAmount <= 0) continue
 
     if (requestedAmount > saldoAntes + 0.009) {
